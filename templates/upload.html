@@ -373,11 +373,17 @@
     <label for="fileEventDate">Event Date (DD-MM-YYYY):</label>
     <input type="date" id="fileEventDate" class="date-input">
     </div>
+
+    <div class="form-group">
+        <label for="filePortal">Add to Portal (optional):</label>
+        <select id="filePortal" class="select-tags">
+            <option value="none">(No portal)</option>
+        </select>
+    </div>
       <div class="form-group">
         <label for="fileTags">Tags:</label>
         <div class="select-tags-container">
-
-        <!-- Ajoutez cette section après les autres menus déroulants de tags -->
+    
           <span class="tag-category">Region:</span>
           <select class="select-tags" id="regionTags" onchange="addTagFromSelect(this)">
             <option value="">(No Value)</option>
@@ -758,21 +764,24 @@
 
     saveBtn.addEventListener("click", () => {
       if (currentFileIndex >= 0 && currentFileIndex < filesToUpload.length) {
-        const file = filesToUpload[currentFileIndex];
-        const description = fileDescription.value.trim();
-        const eventDate = fileEventDate.value;
-        const tags = Array.from(tagsContainer.querySelectorAll(".tag"))
-          .map(tag => tag.textContent.replace("×", "").trim());
-        
-        fileDetails[file.name] = {
-            description,
-            tags,
-            eventDate
-        };
+    const file = filesToUpload[currentFileIndex];
+    const description = fileDescription.value.trim();
+    const eventDate = fileEventDate.value;
+    const portalId = document.getElementById('filePortal').value;
+    const tags = Array.from(tagsContainer.querySelectorAll(".tag"))
+        .map(tag => tag.textContent.replace("×", "").trim());
+    
+    fileDetails[file.name] = {
+        description,
+        tags,
+        eventDate,
+        portalId
+    };
 
-        updateFileListItem(currentFileIndex, description, tags, eventDate);
-      }
-      modal.style.display = "none";
+    // CORRECTION: Passer tous les paramètres nécessaires
+    updateFileListItem(currentFileIndex, description, tags, eventDate, portalId);
+  }
+  modal.style.display = "none";
     });
 
     addTagBtn.addEventListener("click", addTag);
@@ -784,7 +793,6 @@
 
     function addTagFromSelect(selectElement) {
       if (selectElement.value) {
-        // Check if tag already exists
         const existingTags = Array.from(tagsContainer.querySelectorAll('.tag'))
           .map(tag => tag.textContent.replace('×', '').trim());
         
@@ -935,12 +943,10 @@
         currentFileIndex = index;
         const file = filesToUpload[index];
         
-        // Reset modal
         fileDescription.value = "";
         tagsContainer.innerHTML = "";
         fileTags.value = "";
         
-        // Set preview
         if (file.type.startsWith("image/")) {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -952,7 +958,6 @@
           filePreview.alt = "No preview available";
         }
         
-        // Set existing details if any
         if (fileDetails[file.name]) {
           fileDescription.value = fileDetails[file.name].description || "";
           fileEventDate.value = fileDetails[file.name]?.eventDate || "";
@@ -973,31 +978,41 @@
 
     function updateFileListItem(index, description, tags) {
       const listItems = fileList.querySelectorAll("li");
-      if (index >= 0 && index < listItems.length) {
+    if (index >= 0 && index < listItems.length) {
         const fileNameContainer = listItems[index].querySelector(".file-name-container");
         
-        // Add description icon if description exists
         if (description) {
-          let descIcon = fileNameContainer.querySelector(".desc-icon");
-          if (!descIcon) {
-            descIcon = document.createElement("span");
-            descIcon.className = "desc-icon";
-            descIcon.innerHTML = " 📝";
-            fileNameContainer.insertBefore(descIcon, fileNameContainer.firstChild);
-          }
+            let descIcon = fileNameContainer.querySelector(".desc-icon");
+            if (!descIcon) {
+                descIcon = document.createElement("span");
+                descIcon.className = "desc-icon";
+                descIcon.innerHTML = " 📝";
+                fileNameContainer.insertBefore(descIcon, fileNameContainer.firstChild);
+            }
         }
         
-        // Add tags icon if tags exist
         if (tags && tags.length > 0) {
-          let tagsIcon = fileNameContainer.querySelector(".tags-icon");
-          if (!tagsIcon) {
-            tagsIcon = document.createElement("span");
-            tagsIcon.className = "tags-icon";
-            tagsIcon.innerHTML = " 🏷️";
-            fileNameContainer.insertBefore(tagsIcon, fileNameContainer.firstChild);
-          }
+            let tagsIcon = fileNameContainer.querySelector(".tags-icon");
+            if (!tagsIcon) {
+                tagsIcon = document.createElement("span");
+                tagsIcon.className = "tags-icon";
+                tagsIcon.innerHTML = " 🏷️";
+                fileNameContainer.insertBefore(tagsIcon, fileNameContainer.firstChild);
+            }
         }
-      }
+        
+        // Icône de portail
+        if (portalId && portalId !== "none") {
+            let portalIcon = fileNameContainer.querySelector(".portal-icon");
+            if (!portalIcon) {
+                portalIcon = document.createElement("span");
+                portalIcon.className = "portal-icon";
+                portalIcon.innerHTML = " 🌐";
+                portalIcon.title = "Will be added to a portal";
+                fileNameContainer.insertBefore(portalIcon, fileNameContainer.firstChild);
+            }
+        }
+    }
     }
 
     function renderFileList() {
@@ -1043,7 +1058,6 @@
         li.appendChild(removeBtn);
         fileList.appendChild(li);
 
-        // Show icons if details exist
         if (fileDetails[file.name]) {
           updateFileListItem(index, fileDetails[file.name].description, fileDetails[file.name].tags);
         }
@@ -1073,77 +1087,91 @@
 
     sendBtn.addEventListener("click", async () => {
       const filesToSend = filesToUpload.slice(0, MAX_FILES);
-      if (filesToSend.length === 0) return;
+  if (filesToSend.length === 0) return;
 
-      const formData = new FormData();
-      const url = `/upload?token=${encodeURIComponent("superTokenOps2025")}`;
-      filesToSend.forEach((file, index) => {
+  const formData = new FormData();
+  const url = `/upload`;
+  
+  filesToSend.forEach((file, index) => {
       formData.append("files", file);
       const details = fileDetails[file.name] || {};
       formData.append("descriptions", details.description || "");
       formData.append("tags", JSON.stringify(details.tags || []));
       
-      // Convertir la date de YYYY-MM-DD (format input date) vers DD-MM-YYYY
       let formattedDate = "";
       if (details.eventDate) {
           const [year, month, day] = details.eventDate.split('-');
           formattedDate = `${day}-${month}-${year}`;
       }
       formData.append("date_events", formattedDate);
+      
+      formData.append("portal_ids", details.portalId || "");
   });
 
+  try {
+      loadingSpinner.style.display = "block";
+      sendBtn.disabled = true;
+      msg.className = "message";
+      msg.textContent = "sending ...";
+
+      const response = await fetch(url, {
+          method: "POST",
+          body: formData
+      });
+
+      if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Server error: ${response.status} - ${errorText.substring(0, 100)}`);
+      }
+
       try {
-          loadingSpinner.style.display = "block";
-          sendBtn.disabled = true;
-          msg.className = "message";
-          msg.textContent = "sending ...";
-
-          const response = await fetch(url, {
-              method: "POST",
-              body: formData
-          });
-
-          const contentType = response.headers.get("content-type");
-          if (!contentType || !contentType.includes("application/json")) {
-              const text = await response.text();
-              console.error("Réponse non-JSON reçue:", text.substring(0, 200));
-              throw new Error("Le serveur a renvoyé une réponse inattendue");
-          }
-
           const result = await response.json();
-
-          if (!response.ok) {
-              throw new Error(result.message || "Échec de l'upload");
+          if (result.status === "success") {
+              filesToUpload = [];
+              fileDetails = {};
+              renderFileList();
+              msg.className = "message success";
+              msg.textContent = "✅ Upload successful !";
+          } else {
+              throw new Error(result.message || "Upload failed");
           }
-          
-          filesToUpload = [];
-          fileDetails = {};
-          renderFileList();
-          msg.className = "message success";
-          msg.textContent = "✅ Upload successful !";
-          
-      } catch (error) {
-          console.error("Erreur d'upload:", error);
-          msg.className = "message error";
-          msg.textContent = `❌ Error: ${error.message || "An error has occurred"}`;
-          
-          console.error("Détails de l'erreur:", {
-              name: error.name,
-              message: error.message,
-              stack: error.stack
-          });
-      } finally {
-          loadingSpinner.style.display = "none";
-          sendBtn.disabled = false;
+      } catch (jsonError) {
+          const textResponse = await response.text();
+          console.log("Raw server response:", textResponse);
+          throw new Error("Server returned unexpected response format");
       }
+      
+  } catch (error) {
+      console.error("Erreur d'upload:", error);
+      msg.className = "message error";
+      msg.textContent = `❌ Error: ${error.message || "An error has occurred"}`;
+  } finally {
+      loadingSpinner.style.display = "none";
+      sendBtn.disabled = false;
+  }
     });
 
-    // Close modal when clicking outside
-    window.addEventListener("click", (e) => {
-      if (e.target === modal) {
-        modal.style.display = "none";
-      }
-    });
+    document.addEventListener('DOMContentLoaded', function() {
+    fetch('/get_portals_list')
+        .then(response => response.json())
+        .then(data => {
+            const portalSelect = document.getElementById('filePortal');
+            //option par défaut
+            const defaultOption = document.createElement('option');
+            defaultOption.value = "none";
+            defaultOption.textContent = "(No portal)";
+            portalSelect.appendChild(defaultOption);
+            
+            // tous les portails
+            data.portals.forEach(portal => {
+                const option = document.createElement('option');
+                option.value = portal.id;
+                option.textContent = portal.name;
+                portalSelect.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Error loading portals:', error));
+});
   </script>
 </body>
 </html>

@@ -1,12 +1,51 @@
-# Ne pas versionner le fichier contenant les clés secrètes
+### Secrets ###
 .env
+*.env.local
+.env*.local
+secrets.json
+appsettings.json
 
-# Cache Python
+### Python ###
 __pycache__/
+*.py[cod]
+*.egg-info/
+*.pickle
+.python-version
+venv/
+env/
+.venv/
+ENV/
 
-# Dossiers spécifiques à certains éditeurs
+### Azure/Deployment ###
+.azure/
+.terraform/
+terraform.tfstate*
+*.terraform.lock.hcl
+
+### Editors ###
 .vscode/
+.idea/
 *.code-workspace
+*.swp
+*.swo
 
-# Fichiers système
+### System ###
 *.DS_Store
+Thumbs.db
+
+### Logs ###
+*.log
+logs/
+
+### Flask ###
+instance/
+.flaskenv
+
+### Database ###
+*.sqlite3
+migrations/
+
+### Tests ###
+.coverage
+htmlcov/
+.pytest_cache/
