@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta name="robots" content="noarchive, nofollow">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Media Library</title>
+  
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/canto_style.css') }}">
+</head>
+<body>
+
+  {% include 'components/header.html' %}
+  
+  <button class="sidebar-toggle" id="sidebarToggle">❯</button>
+
+  <div class="content-wrapper">
+    {% include 'components/sidebar.html' %}
+
+    <div class="main-content" id="mainContent">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+  {% include 'components/modals.html' %}
+
+  <script src="{{ url_for('static', filename='js/canto_logic.js') }}"></script>
+</body>
+</html>

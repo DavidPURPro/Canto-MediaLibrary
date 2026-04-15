@@ -1,0 +1,58 @@
+<header>
+  <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
+  <h1>Media Library</h1>
+  
+  <div class="controls">
+    <a href="https://purprojet.sharepoint.com/sites/AdminToolKit/SitePages/PUR-Admin-ToolKit.aspx" class="back-btn" target="_blank" rel="noopener noreferrer" title="🔙 Back to Admin Toolkit">🔙 Back to Admin Toolkit</a>
+    
+    <div class="sort-dropdown">
+      <button class="sort-btn" id="sortDropdownBtn">⮃ Sort</button>
+      <div class="sort-dropdown-content">
+        <button id="ascSortBtn">A-Z</button>
+        <button id="descSortBtn">Z-A</button>
+        <button id="sortByDateBtn">By Date</button>
+      </div>
+    </div>
+    
+    <button id="toggleViewBtn">List View</button>
+    <button id="togglePaginationBtn" class="{% if not show_all %}active{% endif %}">
+      {% if show_all %}Pagination Mode{% else %}Show All Files{% endif %}
+    </button>
+    <a href="{{ url_for('portals') }}" class="back-btn">🌐 Portals</a>
+    
+    <div class="filter-dropdown">
+      <button class="filter-btn" id="filterDropdownBtn">All Files</button>
+      <div class="filter-dropdown-content">
+        <button data-filter="all">All Files</button>
+        <button data-filter="images">Images</button>
+        <button data-filter="videos">Videos</button>
+        <button data-filter="audio">Audios</button>
+        <button data-filter="documents">Documents</button>
+        <button data-filter="presentations">Presentations</button>
+        <button data-filter="exclusive">Exclusive Files</button>
+        <button data-filter="others">Others</button>
+      </div>
+    </div>
+
+    {% if is_admin %}
+    <a href="{{ url_for('upload_page') }}" class="upload-btn" title="Upload files"> + Upload</a>
+    <a href="{{ url_for('delete_page') }}" class="delete-btn" title="Delete files"> - Delete</a>
+    {% endif %}
+  </div>
+  
+  <div class="profile-container">
+    <button class="profile-btn" id="profileBtn">
+      {% set parts = session.get('user_email', '').split('@')[0].split('.') %}
+      {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+    </button>
+    <div class="profile-dropdown" id="profileDropdown">
+      <div class="profile-email" id="profileEmail">{{ session.get('user_email', '') }}</div>
+      {% if is_admin %}
+      <div class="profile-admin-badge">Admin</div>
+      {% endif %}
+      <div class="profile-logout" id="profileLogout">
+        <span>Log Out</span>
+      </div>
+    </div>
+  </div>
+</header>

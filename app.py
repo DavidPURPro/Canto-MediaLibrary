@@ -1,3 +1,5 @@
+from email.message import EmailMessage
+
 from flask import Flask, jsonify, render_template, send_file, request, redirect, url_for, session, flash
 import psycopg2
 import requests
@@ -477,11 +479,6 @@ def update_file_folder():
         # maj dans documents
         cur.execute(
             "UPDATE documents SET folder_id = %s WHERE nom_fichier = %s;",
-            (folder_id if folder_id else None, filename),
-        )
-        
-        cur.execute(
-            "UPDATE portal_files SET folder_id = %s WHERE filename = %s;",
             (folder_id if folder_id else None, filename),
         )
         
@@ -1486,10 +1483,6 @@ def remove_file_from_folder():
             (filename,),
         )
         
-        cur.execute(
-            "UPDATE portal_files SET folder_id = NULL WHERE filename = %s;",
-            (filename,),
-        )
         
         conn.commit()
         return jsonify({"status": "success"})
@@ -1519,11 +1512,6 @@ def sync_file_folder():
         )
         result = cur.fetchone()
         current_folder_id = result[0] if result else None
-        
-        cur.execute(
-            "UPDATE portal_files SET folder_id = %s WHERE filename = %s;",
-            (current_folder_id, filename),
-        )
         
         conn.commit()
         return jsonify({
@@ -1635,7 +1623,7 @@ def portal_login(portal_id):
             
             if user:
                 token = secrets.token_urlsafe(32)
-                expiry = datetime.now() + timedelta(hours=1)
+                expiry = datetime.now() + timedelta(hours=24)
                 
                 cur.execute("""
                     UPDATE portal_users 
@@ -1655,7 +1643,7 @@ def portal_login(portal_id):
 
                 {reset_url}
 
-                This link will expire in 1 hour.
+                This link will expire in 24 hours.
 
                 Sincerely,
                 The Media Library Team
@@ -1731,7 +1719,7 @@ def portal_request_reset(portal_id):
         
         if user:
             token = secrets.token_urlsafe(32)
-            expiry = datetime.now() + timedelta(hours=1)
+            expiry = datetime.now() + timedelta(hours=24)
             
             cur.execute("""
                 UPDATE portal_users 
@@ -1751,7 +1739,7 @@ def portal_request_reset(portal_id):
 
             {reset_url}
 
-            This link will expire in 1 hour.
+            This link will expire in 24 hours.
 
             Sincerely,
             The Media Library Team
@@ -1983,6 +1971,45 @@ def get_portal_slug(portal_id):
         return jsonify({"status": "success", "slug": result[0]})
     return jsonify({"status": "error", "message": "Slug not found"}), 404
 
+def send_reset_email(user_email, reset_link):
+    msg = EmailMessage()
+    msg.set_content(f"Cliquez ici pour réinitialiser : {reset_link}")
+    msg['Subject'] = "Réinitialisation de mot de passe"
+    msg['From'] = os.getenv('SMTP_USERNAME')
+    msg['To'] = user_email
+
+    try:
+        server = smtplib.SMTP(os.getenv('SMTP_SERVER'), int(os.getenv('SMTP_PORT')))
+        server.starttls() 
+        server.login(os.getenv('SMTP_USERNAME'), os.getenv('SMTP_PASSWORD'))
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Erreur d'envoi d'email: {e}")
+        return False
+    
+from flask import jsonify
+
+@app.route('/get_all_portals', methods=['GET'])
+def api_get_all_portals():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name FROM portals ORDER BY name ASC;")
+    portals = [{"id": row[0], "name": row[1]} for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify({"portals": portals})
+
+@app.route('/get_folders', methods=['GET'])
+def api_get_folders():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name FROM folders ORDER BY name ASC;")
+    folders = [{"id": row[0], "name": row[1]} for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify({"folders": folders})
 
 if __name__ == '__main__':
     app.run(debug=True)

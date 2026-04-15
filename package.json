@@ -1,0 +1,24 @@
+{
+  "name": "app_service",
+  "version": "1.0.0",
+  "description": "��#\u0000 \u0000T\u0000r\u0000i\u0000g\u0000g\u0000e\u0000r\u0000\r\u0000 \u0000",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/D4VID93/pur-flaskapi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/D4VID93/pur-flaskapi/issues"
+  },
+  "homepage": "https://github.com/D4VID93/pur-flaskapi#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

@@ -49,3 +49,6 @@ migrations/
 .coverage
 htmlcov/
 .pytest_cache/
+
+### Node.js ###
+node_modules/

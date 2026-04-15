@@ -4,263 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connexion - PUR Projet Media Library</title>
+    
+    <link rel="icon" href="{{ url_for('static', filename='icon/favicon.ico') }}" type="image/x-icon">
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" href="icon/favicon.ico" type="image/x-icon">
-    <style>
-        :root {
-            --primary-color: #3498db;
-            --primary-hover: #2980b9;
-            --transition-speed: 0.3s;
-        }
-        
-        body {
-            margin: 0;
-            padding: 0;
-            background: linear-gradient(to bottom, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.2) 100%), 
-                        url('static/foret.jpg') no-repeat center center fixed;
-            background-size: cover;
-            min-height: 100vh;
-            font-family: 'Montserrat', Arial, sans-serif;
-            overflow-x: hidden;
-            position: relative;
-        }
-        
-        /* Animation d'arrière-plan subtile */
-        @keyframes backgroundShift {
-            0% { background-position: center center; }
-            50% { background-position: center 55%; }
-            100% { background-position: center center; }
-        }
-        
-        body {
-            animation: backgroundShift 20s ease-in-out infinite;
-        }
-        
-        .pur-logo-container {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background-color: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
-            transition: all var(--transition-speed);
-            z-index: 100;
-        }
-        
-        .pur-logo-container:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        .pur-logo {
-            height: 50px;
-            display: block;
-            transition: transform var(--transition-speed);
-        }
-        
-        .login-container {
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-            padding-top: 120px;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeInUp 0.8s ease forwards;
-            animation-delay: 0.3s;
-            position: relative;
-            z-index: 50;
-        }
-        
-        @keyframes fadeInUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .login-card {
-            border: none;
-            border-radius: 12px;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            background-color: rgba(255,255,255,0.95);
-            transition: all var(--transition-speed);
-            transform: translateY(0);
-        }
-        
-        .login-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
-        }
-        
-        .login-header {
-            background-color: white;
-            padding: 25px;
-            border-bottom: 1px solid #eee;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .login-header::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), #2ecc71);
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.5s ease;
-        }
-        
-        .login-card:hover .login-header::after {
-            transform: scaleX(1);
-        }
-        
-        .login-title {
-            color: #2c3e50;
-            font-weight: 700;
-            margin-bottom: 0;
-            text-align: center;
-            font-size: 1.5rem;
-            letter-spacing: -0.5px;
-            position: relative;
-        }
-        
-        .login-title::after {
-            content: '';
-            display: block;
-            width: 40px;
-            height: 3px;
-            background: var(--primary-color);
-            margin: 10px auto;
-            border-radius: 2px;
-            transform: scaleX(0);
-            transition: transform 0.5s ease;
-            transition-delay: 0.2s;
-        }
-        
-        .login-card:hover .login-title::after {
-            transform: scaleX(1.5);
-        }
-        
-        .card-body {
-            padding: 25px;
-        }
-        
-        .login-btn {
-            background-color: var(--primary-color);
-            border: none;
-            padding: 12px;
-            font-weight: 600;
-            border-radius: 8px;
-            transition: all 0.3s;
-            font-size: 1rem;
-            margin-top: 10px;
-            position: relative;
-            overflow: hidden;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .login-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            transition: left 0.7s ease;
-            z-index: -1;
-        }
-        
-        .login-btn:hover {
-            background-color: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
-        }
-        
-        .login-btn:hover::before {
-            left: 100%;
-        }
-        
-        .login-btn i {
-            transition: transform 0.3s ease;
-        }
-        
-        .login-btn:hover i {
-            transform: translateX(3px);
-        }
-        
-        /* Particules flottantes en arrière-plan - uniquement en bleu */
-        .floating-particles {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 5;
-        }
-        
-        .particle {
-            position: absolute;
-            border-radius: 50%;
-            animation: float 15s infinite linear;
-            opacity: 0.7;
-            filter: blur(1px);
-            background: rgba(52, 152, 219, 0.6); /* Bleu par défaut */
-        }
-        
-        @keyframes float {
-            0% {
-                transform: translateY(110vh) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 0.7;
-            }
-            90% {
-                opacity: 0.7;
-            }
-            100% {
-                transform: translateY(-20vh) rotate(360deg);
-                opacity: 0;
-            }
-        }
-        
-        /* Responsive adjustments */
-        @media (max-width: 576px) {
-            .pur-logo-container {
-                top: 10px;
-                left: 10px;
-                padding: 8px;
-            }
-            
-            .pur-logo {
-                height: 40px;
-            }
-            
-            .login-container {
-                padding: 100px 15px 0;
-            }
-        }
-    </style>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login_style.css') }}">
 </head>
 <body>
-    <!-- Particules flottantes en arrière-plan - uniquement en bleu -->
     <div class="floating-particles" id="particles"></div>
 
     <div class="pur-logo-container">
-        <img src="static/01_New_PUR_LOGO_Color.png" alt="PUR Logo" class="pur-logo">
+        <img src="{{ url_for('static', filename='01_New_PUR_LOGO_Color.png') }}" alt="PUR Logo" class="pur-logo">
     </div>
 
     <div class="login-container">
@@ -279,6 +36,7 @@
                         {% endfor %}
                     {% endif %}
                 {% endwith %}
+                
                 <a href="{{ url_for('start_auth') }}" class="btn btn-primary w-100 login-btn" id="loginButton">
                     Log in <i class="fas fa-arrow-right"></i>
                 </a>
@@ -286,75 +44,7 @@
         </div>
     </div>
 
-    <script>
-        // Création des particules flottantes - uniquement en bleu
-        document.addEventListener('DOMContentLoaded', function() {
-            const particlesContainer = document.getElementById('particles');
-            const particleCount = 30;
-            
-            for (let i = 0; i < particleCount; i++) {
-                createParticle();
-            }
-            
-            function createParticle() {
-                const particle = document.createElement('div');
-                particle.classList.add('particle');
-                
-                // Taille aléatoire
-                const size = Math.random() * 15 + 5;
-                particle.style.width = `${size}px`;
-                particle.style.height = `${size}px`;
-                
-                // Position horizontale aléatoire
-                const posX = Math.random() * 100;
-                particle.style.left = `${posX}vw`;
-                
-                // Nuances de bleu uniquement
-                const blueShades = [
-                    'rgba(30, 139, 195, 0.7)',   // Bleu foncé
-                    'rgba(52, 152, 219, 0.7)',   // Bleu principal
-                    'rgba(92, 151, 191, 0.7)',   // Bleu moyen
-                    'rgba(133, 193, 233, 0.7)',  // Bleu clair
-                    'rgba(174, 214, 241, 0.7)',  // Bleu très clair
-                    'rgba(208, 228, 242, 0.7)'   // Bleu pastel
-                ];
-                const randomBlue = blueShades[Math.floor(Math.random() * blueShades.length)];
-                particle.style.backgroundColor = randomBlue;
-                
-                // Délai d'animation aléatoire
-                const delay = Math.random() * 15;
-                particle.style.animationDelay = `${delay}s`;
-                
-                // Durée d'animation aléatoire
-                const duration = 15 + Math.random() * 15;
-                particle.style.animationDuration = `${duration}s`;
-                
-                particlesContainer.appendChild(particle);
-                
-                // Recréer la particule après la fin de l'animation
-                setTimeout(() => {
-                    particle.remove();
-                    createParticle();
-                }, (duration + delay) * 1000);
-            }
-            
-            // Effet de clic sur le bouton de connexion avec redirection instantanée
-            const loginBtn = document.getElementById('loginButton');
-            if (loginBtn) {
-                loginBtn.addEventListener('click', function(e) {
-                    // Animation visuelle de clic sans empêcher la redirection
-                    this.style.transform = 'scale(0.98)';
-                    
-                    // Réinitialiser l'effet après un court instant
-                    setTimeout(() => {
-                        this.style.transform = '';
-                    }, 150);
-                    
-                    // La redirection se fait normalement via le lien
-                });
-            }
-        });
-    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/login_logic.js') }}"></script>
 </body>
 </html>

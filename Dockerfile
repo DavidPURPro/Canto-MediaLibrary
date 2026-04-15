@@ -15,3 +15,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Définit la commande de lancement avec Gunicorn via startup.sh
 CMD ["./startup.sh"]
+
+

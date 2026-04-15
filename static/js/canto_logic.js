@@ -1,0 +1,1504 @@
+/*
+const ADMIN_EMAILS = JSON.parse('{{ admin_emails | safe }}');
+let currentUserEmail = "{{ session.get('user_email', '') }}"; // mail utilisateur actuel
+let isAdmin = ADMIN_EMAILS.includes(currentUserEmail.toLowerCase());
+*/
+//let isAdmin = JSON.parse('{{ is_admin|lower }}');
+//let isAdmin = JSON.parse('{{ is_admin | tojson }}');
+const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+let isListView = false;
+let isSortedByDate = false;
+let isAuthenticated = false;
+
+const searchInput = document.getElementById("searchInput");
+const gallery = document.getElementById("gallery");
+const ascSortBtn = document.getElementById("ascSortBtn");
+const descSortBtn = document.getElementById("descSortBtn");
+const sortByDateBtn = document.getElementById("sortByDateBtn");
+const toggleViewBtn = document.getElementById("toggleViewBtn");
+const togglePaginationBtn = document.getElementById("togglePaginationBtn");
+const filterSelect = document.getElementById("filterSelect");
+const fileCount = document.getElementById("fileCount");
+const fileModal = document.getElementById("fileModal");
+const closeModal = document.getElementById("closeModal");
+const modalPreview = document.getElementById("modalPreview");
+const modalTitle = document.getElementById("modalTitle");
+const modalDescription = document.getElementById("modalDescription");
+const modalTags = document.getElementById("modalTags");
+const modalCopyBtn = document.getElementById("modalCopyBtn");
+const modalDownloadBtn = document.getElementById("modalDownloadBtn");
+const modalAddedDate = document.getElementById("modalAddedDate");
+const modalEventDate = document.getElementById("modalEventDate");
+const confirmModal = document.getElementById('confirmModal');
+const confirmCheckbox = document.getElementById('confirmCheckbox');
+const confirmProceed = document.getElementById('confirmProceed');
+const confirmCancel = document.getElementById('confirmCancel');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebar = document.getElementById('sidebar');
+const mainContent = document.getElementById('mainContent');
+const addMainFolderBtn = document.getElementById('addMainFolderBtn');
+const foldersContainer = document.getElementById('foldersContainer');
+const profileBtn = document.getElementById('profileBtn');
+const profileDropdown = document.getElementById('profileDropdown');
+const profileLogout = document.getElementById('profileLogout');
+let currentDownloadLink = null;
+let currentModalFilename = null;
+
+
+// mappage des types de fichiers
+const fileTypeMap = {
+  images: ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'],
+  videos: ['.mp4', '.mov', '.avi', '.wmv', '.flv', '.mkv', '.webm'],
+  audio: ['.mp3', '.wav', '.aac', '.flac', '.ogg', '.m4a'],
+  documents: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.rtf', '.odt'],
+  presentations: ['.ppt', '.pptx', '.key', '.odp']
+};
+
+function getFileExtension(filename) {
+  return filename.slice(filename.lastIndexOf('.')).toLowerCase();
+}
+
+function formatDateForDisplay(dateString) {
+  if (!dateString) return "No date";
+  
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  try {
+    const [day, month, year] = dateString.split('-');
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    console.error("Error formatting date:", e);
+    return "Invalid date";
+  }
+}
+
+// DOSSIERS
+
+function loadFolders() {
+  fetch('/get_folders')
+    .then(response => response.json())
+    .then(data => {
+      renderFolderStructure(data.folders);
+    })
+    .catch(error => console.error('Error loading folders:', error));
+}
+
+function renderFolderStructure(folders) {
+  foldersContainer.innerHTML = '';
+  
+  const folderMap = {};
+  folders.forEach(folder => {
+    folderMap[folder.id] = {
+      ...folder,
+      element: null,
+      subfolders: []
+    };
+  });
+  
+  // hiérarchie pour doss
+  Object.values(folderMap).forEach(folder => {
+    if (folder.parent_id && folderMap[folder.parent_id]) {
+      folderMap[folder.parent_id].subfolders.push(folder);
+    }
+  });
+  
+  // dossiers racine
+  Object.values(folderMap).forEach(folder => {
+    if (!folder.parent_id) {
+      renderFolder(folder, foldersContainer);
+    }
+  });
+}
+
+function renderFolder(folder, parentElement) {
+  const folderElement = document.createElement('div');
+  folderElement.className = 'folder';
+  folderElement.dataset.folderId = folder.id;
+  
+  const folderName = document.createElement('div');
+  folderName.className = 'folder-name';
+  folderName.style.display = 'flex';
+  folderName.style.justifyContent = 'space-between';
+  folderName.style.alignItems = 'center';
+  const iconHtml = folder.subfolders && folder.subfolders.length > 0 
+    ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px; margin-right: 8px;"></i>' 
+    : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; margin-right: 8px; opacity: 0.7;"></i>';
+
+  const adminButtons = isAdmin ? `
+    <div style="display: flex; gap: 5px;">
+        <button class="add-folder-btn" title="Add subfolder" style="background: none; border: none; color: #16677c; cursor: pointer; padding: 2px 4px;">
+            <i class="fas fa-plus"></i>
+        </button>
+        <button class="delete-folder-btn" title="Delete folder" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 2px 4px;">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+  ` : ''; 
+
+  folderName.innerHTML = `
+    <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        <span class="folder-icon">${iconHtml}</span>
+        <span class="folder-title" style="font-weight: 500; color: #334155;">${folder.name}</span>
+    </div>
+    ${adminButtons}
+  `;
+  const subfolders = document.createElement('div');
+  subfolders.className = 'subfolders';
+  folderElement.appendChild(folderName);
+  folderElement.appendChild(subfolders);
+  
+  if (folder.subfolders) {
+      folder.subfolders.forEach(subfolder => {
+        renderFolder(subfolder, subfolders);
+      });
+  }
+  
+  folderName.addEventListener('click', function(e) {
+    if (e.target.closest('.add-folder-btn')) {
+      e.stopPropagation();
+      if (isAdmin) {
+        showFolderInput(subfolders, folder.id);
+      }
+      return;
+    }
+    
+    if (e.target.closest('.delete-folder-btn')) {
+      e.stopPropagation();
+      if (isAdmin) {
+        if (confirm('Delete this folder and all its contents?')) {
+          deleteFolder(folder.id);
+        }
+      }
+      return;
+    }
+    
+    folderElement.classList.toggle('active');
+    if (folderElement.classList.contains('active')) {
+      filterFilesByFolder(folder.id);
+    } else {
+      filterAndDisplay();
+    }
+  });
+  
+  parentElement.appendChild(folderElement);
+  folder.element = folderElement;
+}
+
+function showFolderInput(parentElement, parentId = null) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'folder-input';
+  input.placeholder = 'Enter folder name';
+  
+  input.addEventListener('keyup', function(e) {
+    if (e.key === 'Enter' && this.value.trim()) {
+      createFolder(this.value.trim(), parentId);
+      this.remove();
+    } else if (e.key === 'Escape') {
+      this.remove();
+    }
+  });
+  
+  input.addEventListener('blur', function() {
+    if (this.parentNode) {
+      this.remove();
+    }
+  });
+  
+  parentElement.appendChild(input);
+  input.focus();
+}
+
+function createFolder(name, parentId = null) {
+  const formData = new FormData();
+  formData.append('name', name);
+  if (parentId) formData.append('parent_id', parentId);
+  
+  fetch('/create_folder', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      loadFolders();
+    } else {
+      alert('Error creating folder: ' + data.message);
+    }
+  })
+  .catch(error => console.error('Error creating folder:', error));
+}
+
+function deleteFolder(folderId) {
+  const formData = new FormData();
+  formData.append('folder_id', folderId);
+  
+  fetch('/delete_folder', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      loadFolders();
+      filterAndDisplay();
+    } else {
+      alert('Error deleting folder: ' + data.message);
+    }
+  })
+  .catch(error => console.error('Error deleting folder:', error));
+}
+
+function createHeaderBubbles() {
+  const header = document.querySelector('header');
+  const bubblesContainer = document.createElement('div');
+  bubblesContainer.className = 'header-bubbles';
+  bubblesContainer.id = 'headerBubbles';
+  
+  header.appendChild(bubblesContainer);
+  
+  const bubbleCount = 15;
+  
+  for (let i = 0; i < bubbleCount; i++) {
+    createBubble(bubblesContainer);
+  }
+}
+
+function createBubble(container) {
+  const bubble = document.createElement('div');
+  bubble.classList.add('bubble');
+  const size = Math.random() * 40 + 20;
+  bubble.style.width = `${size}px`;
+  bubble.style.height = `${size}px`;
+  const posX = Math.random() * 100;
+  const posY = Math.random() * 100;
+  bubble.style.left = `${posX}%`;
+  bubble.style.top = `${posY}%`;
+  const delay = Math.random() * 5;
+  bubble.style.animationDelay = `${delay}s`;
+  const duration = 8 + Math.random() * 4;
+  bubble.style.animationDuration = `${duration}s`;
+  container.appendChild(bubble);
+  setTimeout(() => {
+    bubble.remove();
+    createBubble(container);
+  }, (duration + delay) * 1000);
+}
+
+function filterFilesByFolder(folderId) {
+  fetch(`/get_files_in_folder/${folderId}`)
+    .then(response => response.json())
+    .then(data => {
+      const filesInFolder = data.files.map(f => f.name.toLowerCase());
+      
+      // maintenant filtrer l'affichage
+      const items = gallery.querySelectorAll(".gallery-item");
+      items.forEach(item => {
+        const itemName = item.getAttribute("data-name").toLowerCase();
+        item.style.display = filesInFolder.includes(itemName) ? "block" : "none";
+      });
+      
+      fileCount.textContent = `Showing ${filesInFolder.length} files in folder`;
+    })
+    .catch(error => {
+      console.error('Error filtering files:', error);
+    });
+}
+
+function filterFilesByFolder(folderId) {
+  // récupérer tous les fichiers dans ce dossier et ses sous dossiers
+  fetch(`/get_files_in_folder/${folderId}`)
+    .then(response => response.json())
+    .then(data => {
+      const filesInFolder = data.files.map(f => f.name.toLowerCase());
+      
+      // maintenant filtrer l'affichage
+      const items = gallery.querySelectorAll(".gallery-item");
+      items.forEach(item => {
+        const itemName = item.getAttribute("data-name").toLowerCase();
+        item.style.display = filesInFolder.includes(itemName) ? "block" : "none";
+      });
+      
+      fileCount.textContent = `Showing ${filesInFolder.length} files in folder`;
+    })
+    .catch(error => {
+      console.error('Error filtering files:', error);
+    });
+}
+
+function updateFileFolder(filename, folderId) {
+  const formData = new FormData();
+  formData.append('filename', filename);
+  if (folderId) formData.append('folder_id', folderId);
+  
+  fetch('/update_file_folder', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      const item = document.querySelector(`.gallery-item[data-filename="${filename}"]`);
+      if (item) {
+        item.dataset.folderId = folderId || '';
+      }
+    } else {
+      alert('Error updating folder: ' + data.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+}
+
+// GESTION DES FICHIERS
+function filterAndDisplay() {
+  const currentFilter = document.querySelector('.filter-dropdown-content button[data-filter]')?.getAttribute('data-filter') || 'all';
+  filterAndDisplayWithFilter(currentFilter);
+}
+
+function sortGallery(asc = true) {
+  const items = Array.from(gallery.children).filter(item => item.classList.contains('gallery-item'));
+  items.sort((a, b) => {
+    const nameA = a.getAttribute("data-name");
+    const nameB = b.getAttribute("data-name");
+    return asc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+  });
+  
+  items.forEach(item => gallery.appendChild(item));
+  filterAndDisplay();
+}
+
+function groupFilesByDate() {
+  const gallery = document.getElementById("gallery");
+  const items = Array.from(gallery.querySelectorAll(".gallery-item"));
+  
+  const filesByDate = {};
+  
+  items.forEach(item => {
+    const date = item.getAttribute("data-date");
+    if (!date) return;
+    
+    if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
+      console.warn("Invalid date format:", date);
+      return;
+    }
+    
+    if (!filesByDate[date]) {
+      filesByDate[date] = [];
+    }
+    filesByDate[date].push(item);
+  });
+  
+  const sortedDates = Object.keys(filesByDate).sort((a, b) => {
+    const [dayA, monthA, yearA] = a.split('-').map(Number);
+    const [dayB, monthB, yearB] = b.split('-').map(Number);
+    const dateA = new Date(yearA, monthA - 1, dayA);
+    const dateB = new Date(yearB, monthB - 1, dayB);
+    return dateB - dateA;
+  });
+  
+  gallery.innerHTML = '';
+  
+  sortedDates.forEach(date => {
+    const dateHeader = document.createElement("div");
+    dateHeader.className = "date-group";
+    dateHeader.textContent = date;
+    gallery.appendChild(dateHeader);
+    
+    filesByDate[date].forEach(item => {
+      gallery.appendChild(item);
+    });
+  });
+}
+
+function lazyLoadImages() {
+  const lazyImages = document.querySelectorAll('img[loading="lazy"]');
+  
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        const placeholder = img.previousElementSibling;
+        
+        img.onload = function() {
+          img.setAttribute('data-loaded', 'true');
+          if (placeholder && placeholder.classList.contains('img-placeholder')) {
+            placeholder.style.display = 'none';
+          }
+        };
+        
+        if (!img.src || img.src !== img.dataset.src) {
+          img.src = img.dataset.src || img.getAttribute('src');
+        }
+        
+        observer.unobserve(img);
+      }
+    });
+  }, {
+    rootMargin: '50px 0px',
+    threshold: 0.01
+  });
+
+  lazyImages.forEach(img => {
+    if (!img.dataset.src) {
+      img.dataset.src = img.getAttribute('src');
+      img.removeAttribute('src');
+    }
+    observer.observe(img);
+  });
+}
+
+// GESTION DES MODALS
+function showFileModal(item) {
+  currentModalFilename = item.getAttribute('data-filename');
+  const filename = currentModalFilename;
+  const link = item.getAttribute('data-link');
+  const ext = getFileExtension(filename);
+  const currentFolderId = item.dataset.folderId || '';
+  
+  modalTitle.textContent = filename;
+  modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
+  
+  // détails du fichier
+  fetch(`/file_details?filename=${encodeURIComponent(filename)}`)
+    .then(response => response.json())
+    .then(data => {
+      const descriptionHTML = data.description 
+          ? `<p>${data.description}</p>`
+          : "<p>No description available</p>";
+
+      modalDescription.innerHTML = descriptionHTML;
+      modalAddedDate.textContent = data.date_ajout || "Unknown";
+      modalEventDate.textContent = data.date_event || "Not specified";
+
+      if (data.tags && data.tags.length > 0) {
+          modalTags.innerHTML = data.tags.map(tag => 
+              `<span class="modal-tag">${tag}</span>`
+          ).join('');
+      } else {
+          modalTags.innerHTML = "<span class='modal-tag'>No tags</span>";
+      }
+
+      if (data.is_exclusive) {
+          modalTags.innerHTML += `<span class="modal-tag" style="background-color:#d9534f;color:white;">★ Exclusive</span>`;
+      }
+      
+      // afficher le dossier actuel
+      document.getElementById('currentFolderName').textContent = data.folder_id 
+          ? `Loading...` 
+          : "None";
+      
+      updateFolderButtons(!!data.folder_id);
+      // charge la structure des dossiers
+      loadFoldersForModal(data.folder_id);
+
+      document.getElementById('currentPortalName').textContent = data.portal_id 
+          ? `Loading...` 
+          : "None";
+      
+      // Charger la structure des portails
+      loadPortalsForModal(data.portal_id);
+      
+    })
+    .catch(error => {
+      console.error('Error fetching file details:', error);
+      modalDescription.innerHTML = "<p>Error loading details</p>";
+      modalTags.innerHTML = "<span class='modal-tag'>Error</span>";
+      updateFolderButtons(false);
+    });
+
+    
+  
+  // afficher le preview
+  let previewContent = '';
+  
+  if (fileTypeMap.images.includes(ext)) {
+      previewContent = `<img src="${link}" alt="${filename}" />`;
+  } else if (fileTypeMap.videos.includes(ext)) {
+      previewContent = `<video controls autoplay style="width:100%; max-height:80vh;">
+                        <source src="${link}" type="video/${ext.slice(1)}">
+                        Your browser does not support the video.
+                      </video>`;
+  } else if (fileTypeMap.audio.includes(ext)) {
+      previewContent = `<audio controls autoplay style="width:100%;">
+                        <source src="${link}" type="audio/${ext.slice(1)}">
+                        Your browser does not support audio.
+                      </audio>`;
+  } else if (ext === '.pdf') {
+      previewContent = `<iframe src="${link}" width="100%" height="100%" style="border:none;"></iframe>`;
+  } else if (['.docx', '.pptx'].includes(ext)) {
+      previewContent = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(link)}" 
+                            width="100%" height="100%" style="border:none;"></iframe>`;
+  } else {
+      previewContent = `<div class="file-preview" style="width:100%; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                        <div style="font-size:24px; margin-bottom:10px;">${ext.toUpperCase()}</div>
+                        <div>Preview not available</div>
+                      </div>`;
+  }
+  
+  modalPreview.innerHTML = previewContent;
+  fileModal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function loadFoldersForModal(currentFolderId) {
+  fetch('/get_folders')
+    .then(response => response.json())
+    .then(data => {
+      const folderTree = document.getElementById('folderTree');
+      folderTree.innerHTML = '';
+      
+      // afficher le nom du dossier actuel
+      if (currentFolderId) {
+        const currentFolder = data.folders.find(f => f.id == currentFolderId);
+        document.getElementById('currentFolderName').textContent = currentFolder 
+            ? currentFolder.name 
+            : "Unknown";
+        updateFolderButtons(true);
+      } else {
+        document.getElementById('currentFolderName').textContent = "None";
+        updateFolderButtons(false);
+      }
+      
+      // créer un mappage des dossiers
+      const folderMap = {};
+      data.folders.forEach(folder => {
+        folderMap[folder.id] = {
+          ...folder,
+          element: null,
+          subfolders: []
+        };
+      });
+      
+      // hiérarchie
+      Object.values(folderMap).forEach(folder => {
+        if (folder.parent_id && folderMap[folder.parent_id]) {
+          folderMap[folder.parent_id].subfolders.push(folder);
+        }
+      });
+      
+      // dossiers racine
+      Object.values(folderMap).forEach(folder => {
+        if (!folder.parent_id) {
+          renderFolderNode(folder, folderTree, currentFolderId);
+        }
+      });
+      
+    });
+    
+}
+
+const btnAddPortal = document.getElementById('addToPortalBtn');
+if (btnAddPortal) {
+    btnAddPortal.addEventListener('click', function() {
+        if (isAdmin) {
+            const portalList = document.getElementById('portalList');
+            portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
+        } else {
+            alert("You don't have permission to perform this action. Only administrators can modify portals.");
+        }
+    });
+}
+
+const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
+if (btnRemoveFolder) {
+    btnRemoveFolder.addEventListener('click', function() {
+        if (isAdmin) {
+            removeFileFromFolder(currentModalFilename);
+        } else {
+            alert("You don't have permission to perform this action. Only administrators can modify folders.");
+        }
+    });
+}
+
+function renderFolderNode(folder, parentElement, currentFolderId) {
+  const folderElement = document.createElement('div');
+  folderElement.className = 'folder-node';
+  folderElement.dataset.folderId = folder.id;
+  
+  const folderHeader = document.createElement('div');
+  folderHeader.className = 'folder-header';
+  
+  // L'icône
+  const iconHtml = folder.subfolders && folder.subfolders.length > 0 
+    ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px;"></i>' 
+    : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; opacity: 0.7;"></i>';
+
+  folderHeader.innerHTML = `
+    <span class="folder-icon" style="margin-right: 10px;">${iconHtml}</span>
+    <span class="folder-title" style="font-weight: 500; color: #334155; flex-grow: 1;">${folder.name}</span>
+    <button class="select-folder-btn" title="Select this folder" style="background: none; border: none; color: #16a34a; cursor: pointer;">
+        <i class="fas fa-check"></i>
+    </button>
+  `;
+  
+  const subfoldersContainer = document.createElement('div');
+  subfoldersContainer.className = 'subfolders-container';
+  
+  folderElement.appendChild(folderHeader);
+  folderElement.appendChild(subfoldersContainer);
+  
+  if (folder.subfolders) {
+      folder.subfolders.forEach(subfolder => {
+        renderFolderNode(subfolder, subfoldersContainer, currentFolderId);
+      });
+  }
+  
+  folderHeader.addEventListener('click', function(e) {
+    if (e.target.closest('.select-folder-btn')) {
+      e.stopPropagation();
+      updateFileFolder(currentModalFilename, folder.id);
+      document.getElementById('currentFolderName').textContent = folder.name;
+      document.getElementById('folderTree').style.display = 'none';
+      return;
+    }
+    
+    // Toggle l'arborescence
+    folderElement.classList.toggle('active');
+  });
+  
+  parentElement.appendChild(folderElement);
+}
+
+function closeFileModal() {
+  fileModal.classList.remove('active');
+  document.body.style.overflow = '';
+  
+  const videos = modalPreview.querySelectorAll('video');
+  const audios = modalPreview.querySelectorAll('audio');
+  
+  videos.forEach(video => {
+    video.pause();
+    video.currentTime = 0;
+  });
+  
+  audios.forEach(audio => {
+    audio.pause();
+    audio.currentTime = 0;
+  });
+}
+
+
+function filterAndDisplayWithFilter(filterValue) {
+  const searchValue = searchInput.value.toLowerCase();
+  let visibleCount = 0;
+
+  const items = gallery.querySelectorAll(".gallery-item");
+  items.forEach(item => {
+    const name = item.getAttribute("data-name").toLowerCase();
+    const tags = item.getAttribute("data-tags")?.toLowerCase() || "";
+    const ext = getFileExtension(name);
+    const isExclusive = item.getAttribute("data-exclusive") === 'true';
+
+    let show = name.includes(searchValue) || tags.includes(searchValue);
+
+    if (show) {
+      if (filterValue === 'all') {
+        show = true;
+      } else if (filterValue === 'exclusive') {
+        show = isExclusive === true || isExclusive === 'true';
+      } else if (filterValue === 'others') {
+        const allExts = [].concat(...Object.values(fileTypeMap));
+        show = !allExts.includes(ext);
+      } else {
+        show = fileTypeMap[filterValue]?.includes(ext) || false;
+      }
+    }
+
+    item.style.display = show ? "block" : "none";
+    if (show) visibleCount++;
+  });
+
+  const realTotal = fileCount.getAttribute('data-total');
+  fileCount.textContent = `Showing ${visibleCount} of ${realTotal} files`;  lazyLoadImages();
+}
+
+function setupEventListeners() {
+  // barre de recherche et filtres
+  searchInput.addEventListener("input", filterAndDisplay);
+  //filterSelect.addEventListener("change", filterAndDisplay);
+  document.querySelectorAll('.filter-dropdown-content button').forEach(button => {
+  button.addEventListener('click', function() {
+    const filterValue = this.getAttribute('data-filter');
+    document.getElementById('filterDropdownBtn').textContent = this.textContent;
+    filterAndDisplayWithFilter(filterValue);
+  });
+});
+  
+  // boutons de tri
+  ascSortBtn.addEventListener("click", () => sortGallery(true));
+  descSortBtn.addEventListener("click", () => sortGallery(false));
+  sortByDateBtn.addEventListener("click", function() {
+    isSortedByDate = !isSortedByDate;
+    this.classList.toggle("active", isSortedByDate);
+    
+    if (isSortedByDate) {
+      groupFilesByDate();
+    } else {
+      filterAndDisplay();
+    }
+  });
+  
+  // boutons affichage
+  toggleViewBtn.addEventListener("click", () => {
+    isListView = !isListView;
+    document.body.classList.toggle("list-view", isListView);
+    toggleViewBtn.textContent = isListView ? "Gallery View" : "List View";
+    lazyLoadImages();
+  });
+  
+  togglePaginationBtn.addEventListener("click", () => {
+    const currentUrl = new URL(window.location.href);
+    const showAll = currentUrl.searchParams.get("show_all") === "true";
+    
+    if (showAll) {
+      currentUrl.searchParams.delete("show_all");
+      currentUrl.searchParams.delete("page");
+    } else {
+      currentUrl.searchParams.set("show_all", "true");
+    }
+    
+    window.location.href = currentUrl.toString();
+  });
+  
+  // boutons copie et téléchargement
+  setupCopyLinkButtons();
+  setupGalleryItemClicks();
+
+  document.addEventListener('click', async (e) => {
+    const button = e.target.closest('.exclusive-btn');
+    if (!button) return;
+    
+    e.stopPropagation();
+    
+    if (!isAdmin) {
+      alert("Only administrators can change exclusive status.");
+      return;
+    }
+
+    const isExclusive = button.getAttribute('data-exclusive') === 'true';
+    const filename = button.getAttribute('data-filename');
+    
+    try {
+      const response = await fetch(`/update_exclusive`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `filename=${encodeURIComponent(filename)}&is_exclusive=${!isExclusive}`
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        button.setAttribute('data-exclusive', data.is_exclusive.toString());
+        button.classList.toggle('exclusive', data.is_exclusive);
+        
+        const tooltip = button.querySelector('.tooltip');
+        if (tooltip) {
+          tooltip.textContent = data.is_exclusive ? 'Exclusive' : 'Not Exclusive';
+        }
+        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span>${data.is_exclusive ? '★' : '☆'}`;
+        
+        const galleryItem = button.closest('.gallery-item');
+        if (galleryItem) {
+          galleryItem.setAttribute('data-exclusive', data.is_exclusive.toString());
+        }
+      } else {
+        console.error('Failed to update exclusive status');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  });
+  
+  // modal de confirmation
+  confirmCheckbox.addEventListener('change', function() {
+    confirmProceed.disabled = !this.checked;
+  });
+  
+  confirmProceed.addEventListener('click', function() {
+    if (currentDownloadLink) {
+      const a = document.createElement('a');
+      a.href = currentDownloadLink;
+      a.download = currentDownloadLink.split('filename=')[1] || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      confirmModal.classList.remove('active');
+      confirmCheckbox.checked = false;
+      confirmProceed.disabled = true;
+      currentDownloadLink = null;
+    }
+  });
+  
+  confirmCancel.addEventListener('click', function() {
+    confirmModal.classList.remove('active');
+    confirmCheckbox.checked = false;
+    confirmProceed.disabled = true;
+    currentDownloadLink = null;
+  });
+  
+  confirmModal.addEventListener('click', function(e) {
+    if (e.target === confirmModal) {
+      confirmModal.classList.remove('active');
+      confirmCheckbox.checked = false;
+      confirmProceed.disabled = true;
+      currentDownloadLink = null;
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.download-btn') || e.target.closest('#modalDownloadBtn')) {
+      e.preventDefault();
+      
+      const downloadBtn = e.target.closest('.download-btn') || e.target.closest('#modalDownloadBtn');
+      const isExclusive = downloadBtn.closest('.gallery-item')?.getAttribute('data-exclusive') === 'true';
+      
+      if (isExclusive) {
+        currentDownloadLink = downloadBtn.href;
+        confirmModal.classList.add('active');
+      } else {
+        // download normal pour les fichiers non exclusifs
+        const a = document.createElement('a');
+        a.href = downloadBtn.href;
+        a.download = downloadBtn.download || 'download';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    }
+  });
+  
+  // Sidebar
+  sidebarToggle.addEventListener('click', function(e) {
+    e.stopPropagation();
+    sidebar.classList.toggle('active');
+    this.innerHTML = sidebar.classList.contains('active') ? '❮' : '❯';
+  });
+  
+  document.addEventListener('click', function(e) {
+    if (window.innerWidth < 992 && 
+    !sidebar.contains(e.target) && 
+    e.target !== sidebarToggle) {
+      sidebar.classList.remove('active');
+      sidebarToggle.innerHTML = '❯';
+    }
+  });
+  
+  // bouton ajout de dossier principal
+  addMainFolderBtn.addEventListener('click', function() {
+    if (isAdmin) {
+    showFolderInput(foldersContainer);
+    } else {
+      alert("You don't have permission to perform this action. Only administrators can modify folders.");
+    }
+  });
+  
+  // gestion du profil et logout
+  profileBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    profileDropdown.classList.toggle('active');
+  });
+  
+  profileLogout.addEventListener('click', function() {
+    window.location.href = '/logout';
+  });
+  
+  // fermer le dropdown quand on clique ailleurs
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.profile-container')) {
+      profileDropdown.classList.remove('active');
+    }
+  });
+  
+  closeModal.addEventListener('click', closeFileModal);
+  fileModal.addEventListener('click', function(e) {
+    if (e.target === fileModal) {
+      closeFileModal();
+    }
+  });
+  
+  // pour le bouton "Add to Folder"
+  document.getElementById('addToFolderBtn').addEventListener('click', function() {
+    if (isAdmin) {
+    const folderTree = document.getElementById('folderTree');
+    folderTree.style.display = folderTree.style.display === 'none' ? 'block' : 'none';
+  } else {
+    alert("You don't have permission to perform this action. Only administrators can modify folders.");
+  }
+  });
+}
+
+function setupCopyLinkButtons() {
+  const copyButtons = document.querySelectorAll('.copy-link-btn');
+  copyButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const link = button.getAttribute('data-link');
+      navigator.clipboard.writeText(link)
+        .then(() => {
+          const tooltip = button.querySelector('.tooltip');
+          if (tooltip) {
+            tooltip.textContent = 'Link copied!';
+            setTimeout(() => {
+              tooltip.textContent = 'Copy The Link';
+            }, 2000);
+          }
+        })
+        .catch(err => {
+          console.error('Erreur lors de la copie: ', err);
+        });
+    });
+  });
+}
+
+function setupExclusiveButtons() {
+  document.addEventListener('click', async (e) => {
+    const button = e.target.closest('.exclusive-btn');
+    if (!button) return;
+    
+    e.stopPropagation();
+    
+    if (!isAdmin) {
+      alert("Only administrators can change exclusive status.");
+      return;
+    }
+
+    const isExclusive = button.getAttribute('data-exclusive') === 'true';
+    const filename = button.getAttribute('data-filename');
+    
+    try {
+      const response = await fetch(`/update_exclusive`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `filename=${encodeURIComponent(filename)}&is_exclusive=${!isExclusive}`
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        button.setAttribute('data-exclusive', data.is_exclusive.toString());
+        button.classList.toggle('exclusive', data.is_exclusive);
+        
+        const tooltip = button.querySelector('.tooltip');
+        if (tooltip) {
+          tooltip.textContent = data.is_exclusive ? 'Exclusive' : 'Not Exclusive';
+        }
+        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span>${data.is_exclusive ? '★' : '☆'}`;
+        
+        const galleryItem = button.closest('.gallery-item');
+        if (galleryItem) {
+          galleryItem.setAttribute('data-exclusive', data.is_exclusive.toString());
+        }
+      } else {
+        console.error('Failed to update exclusive status');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  });
+}
+
+function setupGalleryItemClicks() {
+  const items = document.querySelectorAll('.gallery-item');
+  items.forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.copy-link-btn') || 
+          e.target.closest('.download-btn') || 
+          e.target.closest('.exclusive-btn')) {
+        return;
+      }
+      showFileModal(item);
+    });
+  });
+}
+
+function setupTooltips() {
+  document.addEventListener('mouseover', function(e) {
+    const tooltip = e.target.closest('.download-btn, .copy-link-btn, .exclusive-btn')?.querySelector('.tooltip');
+    if (tooltip) {
+      tooltip.style.left = '50%';
+      tooltip.style.transform = 'translateX(-50%)';
+    }
+  });
+}
+
+// ===========================================
+// AUTHENTIFICATION
+// ===========================================
+
+function promptForPassword(actionCallback) {
+  if (isAdmin) {
+    actionCallback();
+  } 
+  else {
+    alert("You don't have permission to perform this action. Only administrators can modify folders.");
+}
+  
+
+  const passwordModal = document.createElement('div');
+  passwordModal.style.position = 'fixed';
+  passwordModal.style.top = '0';
+  passwordModal.style.left = '0';
+  passwordModal.style.right = '0';
+  passwordModal.style.bottom = '0';
+  passwordModal.style.backgroundColor = 'rgba(0,0,0,0.7)';
+  passwordModal.style.display = 'flex';
+  passwordModal.style.justifyContent = 'center';
+  passwordModal.style.alignItems = 'center';
+  passwordModal.style.zIndex = '2001';
+  
+  const passwordContent = document.createElement('div');
+  passwordContent.style.backgroundColor = 'white';
+  passwordContent.style.padding = '20px';
+  passwordContent.style.borderRadius = '8px';
+  passwordContent.style.width = '300px';
+  
+  const passwordLabel = document.createElement('label');
+  passwordLabel.textContent = 'Admin Password:';
+  passwordLabel.style.display = 'block';
+  passwordLabel.style.marginBottom = '10px';
+  
+  const passwordInput = document.createElement('input');
+  passwordInput.type = 'password';
+  passwordInput.style.width = '100%';
+  passwordInput.style.padding = '8px';
+  passwordInput.style.marginBottom = '15px';
+  passwordInput.style.border = '1px solid #ccc';
+  passwordInput.style.borderRadius = '4px';
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.justifyContent = 'flex-end';
+  buttonContainer.style.gap = '10px';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.padding = '8px 16px';
+  cancelBtn.style.border = 'none';
+  cancelBtn.style.borderRadius = '4px';
+  cancelBtn.style.backgroundColor = '#f0f0f0';
+  cancelBtn.style.cursor = 'pointer';
+  
+  const submitBtn = document.createElement('button');
+  submitBtn.textContent = 'Submit';
+  submitBtn.style.padding = '8px 16px';
+  submitBtn.style.border = 'none';
+  submitBtn.style.borderRadius = '4px';
+  submitBtn.style.backgroundColor = '#16677c';
+  submitBtn.style.color = 'white';
+  submitBtn.style.cursor = 'pointer';
+  
+  cancelBtn.addEventListener('click', () => {
+    document.body.removeChild(passwordModal);
+  });
+  
+  /*
+  submitBtn.addEventListener('click', () => {
+    if (passwordInput.value === UPLOAD_SECRET) {
+      isAuthenticated = true;
+      document.body.removeChild(passwordModal);
+      actionCallback();
+    } else {
+      alert('Incorrect password. You don\'t have permission to perform this action.');
+      document.body.removeChild(passwordModal);
+    }
+  });
+  */
+  passwordInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      submitBtn.click();
+    }
+  });
+  
+  buttonContainer.appendChild(cancelBtn);
+  buttonContainer.appendChild(submitBtn);
+  
+  passwordContent.appendChild(passwordLabel);
+  passwordContent.appendChild(passwordInput);
+  passwordContent.appendChild(buttonContainer);
+  passwordModal.appendChild(passwordContent);
+  
+  document.body.appendChild(passwordModal);
+  passwordInput.focus();
+}
+
+// ===========================================
+// INITIALISATION
+// ===========================================
+
+function updateUploadButtonVisibility() {
+  const uploadBtn = document.querySelector('.upload-btn');
+  if (uploadBtn) {
+    uploadBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  enforceNonAdminLock();
+  setupEventListeners();
+  filterAndDisplay();
+  lazyLoadImages();
+  loadFolders();
+  setProfileButtonColor();
+  updateUploadButtonVisibility();
+  createHeaderBubbles();
+  setupTooltips();
+  
+ 
+  function handleSidebarOnResize() {
+    if (window.innerWidth >= 992) {
+      sidebar.classList.add('active');
+      sidebarToggle.innerHTML = '❮';
+    } else {
+      sidebar.classList.remove('active');
+      sidebarToggle.innerHTML = '❯';
+    }
+  }
+  
+  window.addEventListener('load', handleSidebarOnResize);
+  window.addEventListener('resize', handleSidebarOnResize);
+});
+
+function setProfileButtonColor() {
+  const profileBtn = document.getElementById('profileBtn');
+  if (profileBtn) {
+    if (isAdmin) {
+      profileBtn.style.backgroundColor = '#d9534f'; 
+      profileBtn.style.borderColor = '#d9534f';
+      profileBtn.title = "Administrator";
+      
+      profileBtn.addEventListener('mouseenter', () => {
+        profileBtn.style.backgroundColor = '#c9302c'; 
+      });
+      profileBtn.addEventListener('mouseleave', () => {
+        profileBtn.style.backgroundColor = '#d9534f';
+      });
+    } else {
+      const initials = profileBtn.textContent.trim();
+      let hash = 0;
+      for (let i = 0; i < initials.length; i++) {
+        hash = initials.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const color = `hsl(${hash % 360}, 30%, 60%)`;
+      profileBtn.style.backgroundColor = color;
+      profileBtn.style.borderColor = color;
+      
+      profileBtn.addEventListener('mouseenter', () => {
+        profileBtn.style.backgroundColor = `hsl(${hash % 360}, 30%, 50%)`;
+      });
+      profileBtn.addEventListener('mouseleave', () => {
+        profileBtn.style.backgroundColor = color;
+      });
+    }
+  }
+}
+
+/*function enforceNonAdminLock() {
+  const adminButtons = document.querySelectorAll('.add-folder-btn, .delete-folder-btn, .add-main-folder-btn');
+  
+  adminButtons.forEach(button => {
+    if (!isAdmin) {
+      button.classList.add('disabled');
+      button.setAttribute('disabled', '');
+      button.title = "Admins only";
+    } else {
+      button.classList.remove('disabled');
+      button.removeAttribute('disabled');
+      button.removeAttribute('title');
+    }
+  });
+}*/
+function enforceNonAdminLock() {
+  const adminButtons = document.querySelectorAll('.add-folder-btn, .delete-folder-btn, .add-main-folder-btn');
+  
+  adminButtons.forEach(button => {
+    if (!isAdmin) {
+      button.classList.add('disabled');
+      button.setAttribute('disabled', '');
+      button.title = "Admins only";
+    } else {
+      button.classList.remove('disabled');
+      button.removeAttribute('disabled');
+      button.removeAttribute('title');
+    }
+  });
+}
+
+function loadPortalsForModal(currentPortalId) {
+  fetch('/get_portals')
+    .then(response => response.json())
+    .then(data => {
+      const portalList = document.getElementById('portalList');
+      portalList.innerHTML = '';
+      
+      if (currentPortalId) {
+        const currentPortal = data.portals.find(p => p.id == currentPortalId);
+        document.getElementById('currentPortalName').textContent = currentPortal 
+            ? currentPortal.name 
+            : "Unknown";
+      } else {
+        document.getElementById('currentPortalName').textContent = "None";
+      }
+      
+      // liste des portails
+      data.portals.forEach(portal => {
+        checkFileInPortal(currentModalFilename, portal.id).then(isInPortal => {
+          const portalItem = document.createElement('div');
+          portalItem.className = 'portal-item';
+          
+          if (isInPortal) {
+            portalItem.innerHTML = `
+              <div class="portal-header" style="background-color: #e8f5e8;">
+                <span class="portal-icon">✓</span>
+                <span class="portal-title">${portal.name}</span>
+                <button class="select-portal-btn remove" data-portal-id="${portal.id}" title="Remove from portal">✕</button>
+              </div>
+            `;
+          } else {
+            portalItem.innerHTML = `
+              <div class="portal-header">
+                <span class="portal-icon">🌐</span>
+                <span class="portal-title">${portal.name}</span>
+                <button class="select-portal-btn add" data-portal-id="${portal.id}" title="Add to portal">✓</button>
+              </div>
+            `;
+          }
+          
+          portalList.appendChild(portalItem);
+          
+          const btn = portalItem.querySelector('.select-portal-btn');
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const portalId = this.getAttribute('data-portal-id');
+            const portalName = this.parentElement.querySelector('.portal-title').textContent;
+            
+            if (this.classList.contains('remove')) {
+              removeFileFromPortal(currentModalFilename, portalId, portalName);
+            } else {
+              addFileToPortal(currentModalFilename, portalId, portalName);
+            }
+          });
+        });
+      });
+    })
+    .catch(error => {
+      console.error('Error loading portals:', error);
+    });
+}
+
+function addFileToPortal(filename, portalId, portalName) {
+  const formData = new FormData();
+  formData.append('filename', filename);
+  formData.append('portal_id', portalId);
+  
+  fetch('/update_file_portal', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      document.getElementById('currentPortalName').textContent = portalName;
+      loadPortalsForModal(portalId);
+      updatePortalStats(portalId);
+    } else {
+      alert('Error adding to portal: ' + data.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+}
+
+function checkFileInPortal(filename, portalId) {
+  return fetch(`/get_portal_files/${portalId}`)
+    .then(response => response.json())
+    .then(data => {
+      return data.files.includes(filename);
+    })
+    .catch(error => {
+      console.error('Error checking file in portal:', error);
+      return false;
+    });
+}
+
+function removeFileFromPortal(filename, portalId, portalName) {
+  if (!confirm(`Are you sure you want to remove this file from ${portalName}?`)) {
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('filename', filename);
+  formData.append('portal_id', portalId);
+  
+  fetch('/remove_file_from_portal', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      document.getElementById('currentPortalName').textContent = "None";
+      loadPortalsForModal(null);
+      updatePortalStats(portalId);
+    } else {
+      alert('Error removing from portal: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error removing from portal: ' + error.message);
+  });
+}
+
+
+const formData = new FormData();
+  formData.append('filename', filename);
+  formData.append('portal_id', portalId);
+  
+  fetch('/update_file_portal', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      document.getElementById('currentPortalName').textContent = portalName;
+      loadPortalsForModal(portalId);
+      updatePortalStats(portalId);
+    } else {
+      alert('Error adding to portal: ' + data.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+
+  function updatePortalStats(portalId) {
+  fetch(`/portal/${portalId}/stats`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        console.log('Portal stats updated successfully');
+      }
+    })
+    .catch(error => console.error('Error updating portal stats:', error));
+}
+// maj le portail d'un fichier
+function updateFilePortal(filename, portalId) {
+  const formData = new FormData();
+  formData.append('filename', filename);
+  if (portalId) formData.append('portal_id', portalId);
+  
+  fetch('/update_file_portal', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      // maj interface utilisateur 
+      console.log('File portal updated successfully');
+    } else {
+      alert('Error updating portal: ' + data.message);
+    }
+  })
+  .catch(error => console.error('Error:', error));
+}
+
+function updateFolderButtons(hasFolder) {
+    const addBtn = document.getElementById('addToFolderBtn');
+    const removeBtn = document.getElementById('removeFromFolderBtn');
+    
+    if (hasFolder) {
+        addBtn.style.display = 'none';
+        removeBtn.style.display = 'block';
+    } else {
+        addBtn.style.display = 'block';
+        removeBtn.style.display = 'none';
+    }
+}
+
+// supprimer un fichier d'un dossier
+function removeFileFromFolder(filename) {
+    if (!confirm("Are you sure you want to remove this file from its current folder?")) {
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('filename', filename);
+    
+    fetch('/remove_file_from_folder', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            document.getElementById('currentFolderName').textContent = "None";
+            updateFolderButtons(false);
+            loadFoldersForModal(null);            
+            syncFolderState(filename);
+            
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            alert('Error removing from folder: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error removing from folder: ' + error.message);
+    });
+}
+
+function syncFolderState(filename) {
+    fetch('/sync_file_folder', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `filename=${encodeURIComponent(filename)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            console.log('Folder state synchronized successfully');
+        }
+    })
+    .catch(error => {
+        console.error('Error syncing folder state:', error);
+    });
+}
+
+document.getElementById('addToPortalBtn').addEventListener('click', function() {
+  if (isAdmin) {
+    const portalList = document.getElementById('portalList');
+    portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
+  } else {
+    alert("You don't have permission to perform this action. Only administrators can modify portals.");
+  }
+});
+
+document.getElementById('ascSortBtn').addEventListener('click', () => {
+    sortGallery(true);
+    document.getElementById('sortDropdownBtn').textContent = 'Sort: A-Z';
+  });
+  
+  document.getElementById('descSortBtn').addEventListener('click', () => {
+    sortGallery(false);
+    document.getElementById('sortDropdownBtn').textContent = 'Sort: Z-A';
+  });
+  
+  document.getElementById('sortByDateBtn').addEventListener('click', function() {
+    isSortedByDate = !isSortedByDate;
+    this.classList.toggle("active", isSortedByDate);
+    if (isSortedByDate) {
+      groupFilesByDate();
+      document.getElementById('sortDropdownBtn').textContent = 'Sort: By Date';
+    } else {
+      filterAndDisplay();
+      document.getElementById('sortDropdownBtn').textContent = 'Sort';
+    }
+  });
