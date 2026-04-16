@@ -28,7 +28,7 @@ body {
   max-width: 100vw;
 }
 
-/* ========== HEADER AMÉLIORÉ ========== */
+/* ========== HEADER  ========== */
 header {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   padding: 20px 30px;
@@ -466,28 +466,19 @@ header h1 {
 }
 
 .folder.active > .folder-name {
-    background-color: #f0f9ff; /* Fond bleu très subtil */
+    background-color: #f0f9ff; 
     border-radius: 8px;
-    
-    /* C'est ici que la magie du halo opère (une ombre diffuse sans décalage) */
     box-shadow: 0 0 0 4px rgba(22, 103, 124, 0.15); 
-    
-    /* On ajoute un peu d'espace intérieur pour que le halo respire */
     padding: 6px 10px;
-    
-    /* On compense le padding par une marge négative pour ne pas décaler le texte par rapport aux autres dossiers */
     margin: -6px -10px; 
-    
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* On met le texte du dossier sélectionné en gras et à la couleur de ton thème */
 .folder.active > .folder-name .folder-title {
     color: #16677c !important;
     font-weight: 700 !important;
 }
 
-/* On colore également l'icône du dossier sélectionné pour qu'elle ressorte */
 .folder.active > .folder-name .folder-icon i {
     color: #16677c !important;
     opacity: 1 !important;
@@ -995,6 +986,7 @@ body.list-view .item-footer {
   transition: var(--transition);
   backdrop-filter: blur(4px);
 }
+
 
 .close-btn:hover {
   background: rgba(255, 255, 255, 0.3);

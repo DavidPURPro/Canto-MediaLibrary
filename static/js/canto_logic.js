@@ -449,72 +449,65 @@ function lazyLoadImages() {
   });
 }
 
-// GESTION DES MODALS
+// modal
 function showFileModal(item) {
   currentModalFilename = item.getAttribute('data-filename');
   const filename = currentModalFilename;
   const link = item.getAttribute('data-link');
   const ext = getFileExtension(filename);
-  const currentFolderId = item.dataset.folderId || '';
-  
-  modalTitle.textContent = filename;
-  modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
-  
-  // détails du fichier
+  const folderNameFromCard = item.getAttribute('data-folder-name') || 'None';
+  const portalNameFromCard = item.getAttribute('data-portal-name') || 'None';
+  const folderNameSpan = document.getElementById('currentFolderName');
+  if (folderNameSpan) folderNameSpan.textContent = folderNameFromCard;
+  const portalNameSpan = document.getElementById('currentPortalName');
+  if (portalNameSpan) portalNameSpan.textContent = portalNameFromCard;
+  const modalTitle = document.getElementById('modalTitle');
+  const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+  const modalDescription = document.getElementById('modalDescription');
+  const modalAddedDate = document.getElementById('modalAddedDate');
+  const modalEventDate = document.getElementById('modalEventDate');
+  const modalTags = document.getElementById('modalTags');
+  const modalPreview = document.getElementById('modalPreview');
+  const fileModal = document.getElementById('fileModal');
+  if (modalTitle) modalTitle.textContent = filename;
+  if (modalDownloadBtn) modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
   fetch(`/file_details?filename=${encodeURIComponent(filename)}`)
     .then(response => response.json())
     .then(data => {
       const descriptionHTML = data.description 
           ? `<p>${data.description}</p>`
           : "<p>No description available</p>";
+      if (modalDescription) modalDescription.innerHTML = descriptionHTML;
+      if (modalAddedDate) modalAddedDate.textContent = data.date_ajout || "Unknown";
+      if (modalEventDate) modalEventDate.textContent = data.date_event || "Not specified";
 
-      modalDescription.innerHTML = descriptionHTML;
-      modalAddedDate.textContent = data.date_ajout || "Unknown";
-      modalEventDate.textContent = data.date_event || "Not specified";
+      if (modalTags) {
+          if (data.tags && data.tags.length > 0) {
+              modalTags.innerHTML = data.tags.map(tag => 
+                  `<span class="modal-tag">${tag}</span>`
+              ).join('');
+          } else {
+              modalTags.innerHTML = "<span class='modal-tag'>No tags</span>";
+          }
 
-      if (data.tags && data.tags.length > 0) {
-          modalTags.innerHTML = data.tags.map(tag => 
-              `<span class="modal-tag">${tag}</span>`
-          ).join('');
-      } else {
-          modalTags.innerHTML = "<span class='modal-tag'>No tags</span>";
-      }
-
-      if (data.is_exclusive) {
-          modalTags.innerHTML += `<span class="modal-tag" style="background-color:#d9534f;color:white;">★ Exclusive</span>`;
-      }
-      
-      // afficher le dossier actuel
-      document.getElementById('currentFolderName').textContent = data.folder_id 
-          ? `Loading...` 
-          : "None";
-      
-      updateFolderButtons(!!data.folder_id);
-      // charge la structure des dossiers
-      loadFoldersForModal(data.folder_id);
-
-      document.getElementById('currentPortalName').textContent = data.portal_id 
-          ? `Loading...` 
-          : "None";
-      
-      // Charger la structure des portails
-      loadPortalsForModal(data.portal_id);
-      
+          if (data.is_exclusive) {
+              modalTags.innerHTML += `<span class="modal-tag" style="background-color:#d9534f;color:white;">★ Exclusive</span>`;
+          }
+      }      
+      if (typeof updateFolderButtons === 'function') updateFolderButtons(!!data.folder_id);
+      if (typeof loadFoldersForModal === 'function') loadFoldersForModal(data.folder_id);
+      if (typeof loadPortalsForModal === 'function') loadPortalsForModal(data.portal_id);
     })
     .catch(error => {
       console.error('Error fetching file details:', error);
-      modalDescription.innerHTML = "<p>Error loading details</p>";
-      modalTags.innerHTML = "<span class='modal-tag'>Error</span>";
-      updateFolderButtons(false);
+      if (modalDescription) modalDescription.innerHTML = "<p>Error loading details</p>";
+      if (modalTags) modalTags.innerHTML = "<span class='modal-tag'>Error</span>";
+      if (typeof updateFolderButtons === 'function') updateFolderButtons(false);
     });
-
-    
-  
-  // afficher le preview
   let previewContent = '';
   
   if (fileTypeMap.images.includes(ext)) {
-      previewContent = `<img src="${link}" alt="${filename}" />`;
+      previewContent = `<img src="${link}" alt="${filename}" style="max-width:100%; max-height:80vh; object-fit:contain;" />`;
   } else if (fileTypeMap.videos.includes(ext)) {
       previewContent = `<video controls autoplay style="width:100%; max-height:80vh;">
                         <source src="${link}" type="video/${ext.slice(1)}">
@@ -536,13 +529,17 @@ function showFileModal(item) {
                         <div>Preview not available</div>
                       </div>`;
   }
-  
-  modalPreview.innerHTML = previewContent;
-  fileModal.classList.add('active');
-  document.body.style.overflow = 'hidden';
+  if (modalPreview) modalPreview.innerHTML = previewContent;  
+  if (fileModal) {
+      fileModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+  }
 }
 
 function loadFoldersForModal(currentFolderId) {
+  const folderTree = document.getElementById('folderTree');    
+  if (!folderTree) return;
+  folderTree.innerHTML = 'Loading...';
   fetch('/get_folders')
     .then(response => response.json())
     .then(data => {
@@ -588,18 +585,47 @@ function loadFoldersForModal(currentFolderId) {
     });
     
 }
+// assigner au portail
+    const btnAddPortal = document.getElementById('addToPortalBtn');
+    const portalList = document.getElementById('portalList');
+    if (btnAddPortal && portalList) {
+        const newBtnAddPortal = btnAddPortal.cloneNode(true);
+        btnAddPortal.parentNode.replaceChild(newBtnAddPortal, btnAddPortal);
 
-const btnAddPortal = document.getElementById('addToPortalBtn');
-if (btnAddPortal) {
-    btnAddPortal.addEventListener('click', function() {
-        if (isAdmin) {
-            const portalList = document.getElementById('portalList');
-            portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
-        } else {
-            alert("You don't have permission to perform this action. Only administrators can modify portals.");
-        }
-    });
-}
+        newBtnAddPortal.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (portalList.style.display === 'none' || portalList.style.display === '') {
+                portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Chargement des portails...</span>';
+                portalList.style.display = 'block';
+
+                fetch('/get_all_portals')
+                .then(response => response.json())
+                .then(data => {
+                    portalList.innerHTML = '';
+                    if(data.portals && data.portals.length > 0) {
+                        data.portals.forEach(portal => {
+                            const btn = document.createElement('button');
+                            btn.className = 'modern-btn secondary-btn';
+                            btn.style.width = '100%';
+                            btn.style.marginBottom = '6px';
+                            btn.style.textAlign = 'left';
+                            btn.innerHTML = `${portal.name}`;
+                            btn.onclick = () => window.addFileToPortal(portal.id, portal.name);
+                            portalList.appendChild(btn);
+                        });
+                    } else {
+                        portalList.innerHTML = '<span style="font-size:12px;">Aucun portail trouvé.</span>';
+                    }
+                })
+                .catch(err => {
+                    console.error("Erreur Fetch Portails :", err);
+                    portalList.innerHTML = '<span style="color:red; font-size:12px;">Erreur de chargement</span>';
+                });
+            } else {
+                portalList.style.display = 'none';
+            }
+        });
+    }
 
 const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
 if (btnRemoveFolder) {
@@ -888,13 +914,16 @@ function setupEventListeners() {
   });
   
   // bouton ajout de dossier principal
-  addMainFolderBtn.addEventListener('click', function() {
-    if (isAdmin) {
-    showFolderInput(foldersContainer);
-    } else {
-      alert("You don't have permission to perform this action. Only administrators can modify folders.");
-    }
-  });
+  const addMainFolderBtn = document.getElementById('addMainFolderBtn'); 
+if (addMainFolderBtn) {
+    addMainFolderBtn.addEventListener('click', function() {
+        if (isAdmin) {
+            showFolderInput(foldersContainer);
+        } else {
+            alert("You don't have permission to perform this action. Only administrators can modify folders.");
+        }
+    });
+}
   
   // gestion du profil et logout
   profileBtn.addEventListener('click', function(e) {
@@ -921,14 +950,17 @@ function setupEventListeners() {
   });
   
   // pour le bouton "Add to Folder"
-  document.getElementById('addToFolderBtn').addEventListener('click', function() {
-    if (isAdmin) {
-    const folderTree = document.getElementById('folderTree');
-    folderTree.style.display = folderTree.style.display === 'none' ? 'block' : 'none';
-  } else {
-    alert("You don't have permission to perform this action. Only administrators can modify folders.");
+  const btnAddFolder = document.getElementById('addToFolderBtn');
+  if (btnAddFolder) {
+      btnAddFolder.addEventListener('click', function() {
+          if (isAdmin) {
+              const folderTree = document.getElementById('folderTree');
+              folderTree.style.display = folderTree.style.display === 'none' ? 'block' : 'none';
+          } else {
+              alert("You don't have permission to perform this action. Only administrators can modify folders.");
+          }
+      });
   }
-  });
 }
 
 function setupCopyLinkButtons() {
@@ -1026,10 +1058,7 @@ function setupTooltips() {
   });
 }
 
-// ===========================================
 // AUTHENTIFICATION
-// ===========================================
-
 function promptForPassword(actionCallback) {
   if (isAdmin) {
     actionCallback();
@@ -1126,10 +1155,7 @@ function promptForPassword(actionCallback) {
   passwordInput.focus();
 }
 
-// ===========================================
 // INITIALISATION
-// ===========================================
-
 function updateUploadButtonVisibility() {
   const uploadBtn = document.querySelector('.upload-btn');
   if (uploadBtn) {
@@ -1166,9 +1192,11 @@ document.addEventListener('DOMContentLoaded', function() {
 function setProfileButtonColor() {
   const profileBtn = document.getElementById('profileBtn');
   if (profileBtn) {
+    const isAdmin = document.body.getAttribute('data-is-admin') === 'true' || typeof window.isAdmin !== 'undefined' && window.isAdmin;
+    profileBtn.style.border = '2px solid #ffffff';
+    profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)'; 
     if (isAdmin) {
       profileBtn.style.backgroundColor = '#d9534f'; 
-      profileBtn.style.borderColor = '#d9534f';
       profileBtn.title = "Administrator";
       
       profileBtn.addEventListener('mouseenter', () => {
@@ -1177,18 +1205,20 @@ function setProfileButtonColor() {
       profileBtn.addEventListener('mouseleave', () => {
         profileBtn.style.backgroundColor = '#d9534f';
       });
-    } else {
+    } 
+    else {
       const initials = profileBtn.textContent.trim();
       let hash = 0;
       for (let i = 0; i < initials.length; i++) {
         hash = initials.charCodeAt(i) + ((hash << 5) - hash);
       }
-      const color = `hsl(${hash % 360}, 30%, 60%)`;
+      const safeHue = (Math.abs(hash) % 290) + 30; 
+      const color = `hsl(${safeHue}, 85%, 55%)`;
+      const hoverColor = `hsl(${safeHue}, 85%, 45%)`; 
       profileBtn.style.backgroundColor = color;
-      profileBtn.style.borderColor = color;
       
       profileBtn.addEventListener('mouseenter', () => {
-        profileBtn.style.backgroundColor = `hsl(${hash % 360}, 30%, 50%)`;
+        profileBtn.style.backgroundColor = hoverColor;
       });
       profileBtn.addEventListener('mouseleave', () => {
         profileBtn.style.backgroundColor = color;
@@ -1197,21 +1227,6 @@ function setProfileButtonColor() {
   }
 }
 
-/*function enforceNonAdminLock() {
-  const adminButtons = document.querySelectorAll('.add-folder-btn, .delete-folder-btn, .add-main-folder-btn');
-  
-  adminButtons.forEach(button => {
-    if (!isAdmin) {
-      button.classList.add('disabled');
-      button.setAttribute('disabled', '');
-      button.title = "Admins only";
-    } else {
-      button.classList.remove('disabled');
-      button.removeAttribute('disabled');
-      button.removeAttribute('title');
-    }
-  });
-}*/
 function enforceNonAdminLock() {
   const adminButtons = document.querySelectorAll('.add-folder-btn, .delete-folder-btn, .add-main-folder-btn');
   
@@ -1229,6 +1244,8 @@ function enforceNonAdminLock() {
 }
 
 function loadPortalsForModal(currentPortalId) {
+  const portalList = document.getElementById('portalList');
+  if (!portalList) return;
   fetch('/get_portals')
     .then(response => response.json())
     .then(data => {
@@ -1290,9 +1307,11 @@ function loadPortalsForModal(currentPortalId) {
     });
 }
 
-function addFileToPortal(filename, portalId, portalName) {
+function addFileToPortal(portalId, portalName) {
+  if (!currentModalFilename) return;
+
   const formData = new FormData();
-  formData.append('filename', filename);
+  formData.append('filename', currentModalFilename);
   formData.append('portal_id', portalId);
   
   fetch('/update_file_portal', {
@@ -1303,8 +1322,8 @@ function addFileToPortal(filename, portalId, portalName) {
   .then(data => {
     if (data.status === 'success') {
       document.getElementById('currentPortalName').textContent = portalName;
-      loadPortalsForModal(portalId);
-      updatePortalStats(portalId);
+      if (typeof loadPortalsForModal === "function") loadPortalsForModal(portalId);
+      if (typeof updatePortalStats === "function") updatePortalStats(portalId);
     } else {
       alert('Error adding to portal: ' + data.message);
     }
@@ -1324,13 +1343,22 @@ function checkFileInPortal(filename, portalId) {
     });
 }
 
-function removeFileFromPortal(filename, portalId, portalName) {
+function removeFileFromPortal() {
+  if (!currentModalFilename) return;
+  const activeCard = document.querySelector(`.file-card[data-filename="${currentModalFilename}"]`);
+  if (!activeCard) return;
+  const portalId = activeCard.getAttribute('data-portal-id');
+  const portalName = document.getElementById('currentPortalName').textContent;
+  if (!portalId || portalId === 'None' || portalId === '') {
+      alert("Ce fichier n'est associé à aucun portail.");
+      return;
+  }
   if (!confirm(`Are you sure you want to remove this file from ${portalName}?`)) {
     return;
   }
   
   const formData = new FormData();
-  formData.append('filename', filename);
+  formData.append('filename', currentModalFilename);
   formData.append('portal_id', portalId);
   
   fetch('/remove_file_from_portal', {
@@ -1341,8 +1369,10 @@ function removeFileFromPortal(filename, portalId, portalName) {
   .then(data => {
     if (data.status === 'success') {
       document.getElementById('currentPortalName').textContent = "None";
-      loadPortalsForModal(null);
-      updatePortalStats(portalId);
+      if (typeof loadPortalsForModal === "function") loadPortalsForModal(null);
+      if (typeof updatePortalStats === "function") updatePortalStats(portalId);
+      
+      alert('Fichier retiré du portail avec succès !');
     } else {
       alert('Error removing from portal: ' + data.message);
     }
@@ -1352,27 +1382,6 @@ function removeFileFromPortal(filename, portalId, portalName) {
     alert('Error removing from portal: ' + error.message);
   });
 }
-
-
-const formData = new FormData();
-  formData.append('filename', filename);
-  formData.append('portal_id', portalId);
-  
-  fetch('/update_file_portal', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      document.getElementById('currentPortalName').textContent = portalName;
-      loadPortalsForModal(portalId);
-      updatePortalStats(portalId);
-    } else {
-      alert('Error adding to portal: ' + data.message);
-    }
-  })
-  .catch(error => console.error('Error:', error));
 
   function updatePortalStats(portalId) {
   fetch(`/portal/${portalId}/stats`)
@@ -1407,15 +1416,16 @@ function updateFilePortal(filename, portalId) {
 }
 
 function updateFolderButtons(hasFolder) {
-    const addBtn = document.getElementById('addToFolderBtn');
-    const removeBtn = document.getElementById('removeFromFolderBtn');
+    const btnAddFolder = document.getElementById('addToFolderBtn');
+    const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
     
     if (hasFolder) {
-        addBtn.style.display = 'none';
-        removeBtn.style.display = 'block';
-    } else {
-        addBtn.style.display = 'block';
-        removeBtn.style.display = 'none';
+        if (btnAddFolder) btnAddFolder.style.display = 'none';
+        if (btnRemoveFolder) btnRemoveFolder.style.display = 'block';
+    } 
+    else {
+        if (btnAddFolder) btnAddFolder.style.display = 'block';
+        if (btnRemoveFolder) btnRemoveFolder.style.display = 'none';
     }
 }
 
@@ -1472,14 +1482,17 @@ function syncFolderState(filename) {
     });
 }
 
-document.getElementById('addToPortalBtn').addEventListener('click', function() {
-  if (isAdmin) {
-    const portalList = document.getElementById('portalList');
-    portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
-  } else {
-    alert("You don't have permission to perform this action. Only administrators can modify portals.");
-  }
-});
+const btnAddPortalbtn = document.getElementById('addToPortalBtn');
+if (btnAddPortalbtn) {
+  btnAddPortal.addEventListener('click', function() {
+    if (isAdmin) {
+      const portalList = document.getElementById('portalList');
+      portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
+    } else {
+      alert("You don't have permission to perform this action. Only administrators can modify portals.");
+    }
+  });
+}
 
 document.getElementById('ascSortBtn').addEventListener('click', () => {
     sortGallery(true);
@@ -1502,3 +1515,69 @@ document.getElementById('ascSortBtn').addEventListener('click', () => {
       document.getElementById('sortDropdownBtn').textContent = 'Sort';
     }
   });
+
+  // === FONCTION POUR CHARGER LES PORTAILS DEPUIS LA BDD ===
+function loadPortalsForModal() {
+    const portalList = document.getElementById('portalList');
+    if (!portalList) return;
+    
+    portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Chargement...</span>';
+    
+    fetch('/get_all_portals')
+    .then(response => response.json())
+    .then(data => {
+        portalList.innerHTML = '';
+        if(data.portals && data.portals.length > 0) {
+            data.portals.forEach(portal => {
+                const btn = document.createElement('button');
+                // Style adapté pour la Media Library
+                btn.className = 'modern-btn secondary-btn';
+                btn.style.width = '100%';
+                btn.style.marginBottom = '6px';
+                btn.style.justifyContent = 'flex-start';
+                btn.innerHTML = `<i class="fas fa-globe"></i> ${portal.name}`;
+                
+                btn.onclick = () => addFileToPortal(portal.id, portal.name);
+                portalList.appendChild(btn);
+            });
+        } else {
+            portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Aucun portail trouvé.</span>';
+        }
+    })
+    .catch(err => {
+        console.error("Erreur chargement portails:", err);
+        portalList.innerHTML = '<span style="color:#ef4444; font-size:12px;">Erreur de chargement</span>';
+    });
+}
+
+function addFileToPortal(targetPortalId, portalName) {
+    if (!currentModalFilename) {
+        console.error("Aucun fichier sélectionné (currentModalFilename est null)");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('filename', currentModalFilename);
+    formData.append('portal_id', targetPortalId);
+    
+    fetch('/update_file_portal', { method: 'POST', body: formData })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const currentPortalSpan = document.getElementById('currentPortalName');
+            if (currentPortalSpan) currentPortalSpan.textContent = portalName;
+
+            const portalList = document.getElementById('portalList');
+            if (portalList) portalList.style.display = 'none';
+            alert('Fichier assigné au portail : ' + portalName);
+        } 
+        else {
+            alert('Erreur : ' + data.message);
+        }
+    })
+    .catch(err => {
+        console.error('Erreur API:', err);
+        alert("Erreur lors de l'ajout au portail.");
+    });
+}
+

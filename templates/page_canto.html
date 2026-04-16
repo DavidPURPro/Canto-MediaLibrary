@@ -25,7 +25,7 @@
   <header>
     <div class="header-bubbles" id="headerBubbles"></div>
     <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
-    <h1>Media Library</h1>
+    <h1 class="shimmer-title">Media Library</h1>
     
     <div class="controls">
       <a href="https://purprojet.sharepoint.com/sites/AdminToolKit/SitePages/PUR-Admin-ToolKit.aspx" class="modern-btn secondary-btn" target="_blank" rel="noopener noreferrer" title="Back to Admin Toolkit">
@@ -45,7 +45,6 @@
       <button id="togglePaginationBtn" class="modern-btn secondary-btn {% if not show_all %}active{% endif %}">
         <i class="fas fa-layer-group"></i> {% if show_all %}Pagination Mode{% else %}Show All Files{% endif %}
       </button>
-      
       
       <div class="filter-dropdown">
         <button class="modern-btn secondary-btn" id="filterDropdownBtn"><i class="fas fa-filter"></i> All Files</button>
@@ -95,7 +94,7 @@
       </button>
       {% endif %}
       <div class="folders-container" id="foldersContainer">
-          </div>
+      </div>
     </div>
 
     <div class="main-content" id="mainContent">
@@ -114,7 +113,8 @@
 
       <div class="gallery" id="gallery">
         {% for file in files %}
-        <div class="gallery-item" data-tags="{{ file.tags | join(', ') | lower }}" data-name="{{ file.nom|lower }}" data-link="{{ file.lien }}" data-filename="{{ file.nom }}" data-description="{{ file.description }}" data-tags="{{ file.tags|tojson }}" data-exclusive="{{ 'true' if file.is_exclusive is true else 'false' }}" {% if file.date_ajout %}data-date="{{ file.date_ajout.strftime('%d-%m-%Y') }}"{% endif %}>
+        <div class="gallery-item" data-tags="{{ file.tags | join(', ') | lower }}" data-name="{{ file.nom|lower }}" data-link="{{ file.lien }}" data-filename="{{ file.nom }}" data-description="{{ file.description }}" data-tags="{{ file.tags|tojson }}" data-exclusive="{{ 'true' if file.is_exclusive is true else 'false' }}" {% if file.date_ajout %}data-date="{{ file.date_ajout.strftime('%d-%m-%Y') }}" {% endif %} data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
+         data-portal-name="{{ file.portal_name if file.portal_name else 'None' }}" >
           {% set ext = file.nom.split('.')[-1]|lower %}
 
           {% if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp'] %}
@@ -216,7 +216,7 @@
       <button class="close-btn" id="closeModal"><i class="fas fa-times"></i></button>
       
       <div class="modal-preview" id="modalPreview">
-        </div>
+      </div>
       
       <div class="modal-info">
         <h2 class="modal-title" id="modalTitle"></h2>
@@ -224,39 +224,39 @@
         
         <div class="modal-tags" id="modalTags"></div>
         
-        <div style="margin-bottom: 20px; font-size: 13px; color: var(--gray-500);">
-          <div style="margin-bottom: 5px;"><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
+        <div class="modal-meta">
+          <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
           <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"></span></div>
         </div>
         
         <div class="folder-selector" id="folderSelector">
           <h4><i class="far fa-folder-open"></i> Folder Assignment</h4>
-          <div style="font-size: 14px; margin-bottom: 10px;"><strong>Current:</strong> <span id="currentFolderName" style="color: var(--primary); font-weight: 600;">None</span></div>
+          <div class="current-status"><strong>Current:</strong> <span id="currentFolderName">None</span></div>
           
           {% if is_admin %}
-          <div style="display: flex; gap: 10px;">
-            <button class="modern-btn secondary-btn" id="addToFolderBtn" style="font-size: 12px; padding: 6px 12px;">Change Folder</button>
-            <button class="modern-btn danger-btn" id="removeFromFolderBtn" style="display: none; font-size: 12px; padding: 6px 12px;">Remove</button>
+          <div class="action-group">
+            <button class="modern-btn secondary-btn" id="addToFolderBtn">Change Folder</button>
+            <button class="modern-btn danger-btn" id="removeFromFolderBtn" style="display: none;">Remove</button>
           </div>
-          <div class="folder-tree" id="folderTree" style="display: none; margin-top: 10px;"></div>
+          <div class="folder-tree" id="folderTree" style="display: none;"></div>
           {% endif %}
         </div>
 
         <div class="portal-selector" id="portalSelector">
           <h4><i class="fas fa-globe"></i> Portal Assignment</h4>
-          <div style="font-size: 14px; margin-bottom: 10px;"><strong>Current:</strong> <span id="currentPortalName" style="color: var(--primary); font-weight: 600;">None</span></div>
+          <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
           
           {% if is_admin %}
-          <button class="modern-btn secondary-btn" id="addToPortalBtn" style="font-size: 12px; padding: 6px 12px;">Assign to Portal</button>
-          <div class="portal-list" id="portalList" style="display: none; margin-top: 10px;"></div>
+          <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
+          <div class="portal-list" id="portalList" style="display: none;"></div>
           {% endif %}
         </div>
 
-        <div class="modal-actions" style="margin-top: 30px;">
-          <button class="modern-btn secondary-btn" id="modalCopyBtn" style="flex: 1; justify-content: center;">
+        <div class="modal-actions">
+          <button class="modern-btn secondary-btn" id="modalCopyBtn">
             <i class="fas fa-link"></i> Copy Link
           </button>
-          <a href="#" class="modern-btn primary-btn" id="modalDownloadBtn" download style="flex: 1; justify-content: center;">
+          <a href="#" class="modern-btn primary-btn" id="modalDownloadBtn" download>
             <i class="fas fa-download"></i> Download
           </a>
         </div>

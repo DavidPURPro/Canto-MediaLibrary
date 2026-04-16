@@ -7,34 +7,41 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initProfileAvatar() {
-    const avatarBtn = document.getElementById('profileBtn');
-    if (!avatarBtn) return;
-
-    const email = avatarBtn.getAttribute('data-user-email');
-    const isAdmin = avatarBtn.getAttribute('data-is-admin') === 'true';
-
-    let initials = "??";
-    if (email) {
-        const namePart = email.split('@')[0];
-        const parts = namePart.split('.');
-        if (parts.length >= 2) {
-            initials = parts[0][0].toUpperCase() + parts[parts.length - 1][0].toUpperCase();
-        } else {
-            initials = parts[0].substring(0, 2).toUpperCase();
-        }
-    }
-    avatarBtn.textContent = initials;
-
+  const profileBtn = document.getElementById('profileBtn');
+  if (profileBtn) {
+    const isAdmin = document.body.getAttribute('data-is-admin') === 'true' || typeof window.isAdmin !== 'undefined' && window.isAdmin;
+    profileBtn.style.border = '2px solid #ffffff';
+    profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)'; 
     if (isAdmin) {
-        avatarBtn.classList.add('is-admin');
-    } else {
-        let hash = 0;
-        for (let i = 0; i < email.length; i++) {
-            hash = email.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        const color = `hsl(${Math.abs(hash) % 360}, 45%, 50%)`;
-        avatarBtn.style.backgroundColor = color;
+      profileBtn.style.backgroundColor = '#d9534f'; 
+      profileBtn.title = "Administrator";
+      
+      profileBtn.addEventListener('mouseenter', () => {
+        profileBtn.style.backgroundColor = '#c9302c'; 
+      });
+      profileBtn.addEventListener('mouseleave', () => {
+        profileBtn.style.backgroundColor = '#d9534f';
+      });
+      
+    } 
+    else {
+      const initials = profileBtn.textContent.trim();
+      let hash = 0;
+      for (let i = 0; i < initials.length; i++) {
+        hash = initials.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const safeHue = (Math.abs(hash) % 290) + 30; 
+      const color = `hsl(${safeHue}, 85%, 55%)`;
+      const hoverColor = `hsl(${safeHue}, 85%, 45%)`; 
+      profileBtn.style.backgroundColor = color;
+      profileBtn.addEventListener('mouseenter', () => {
+        profileBtn.style.backgroundColor = hoverColor;
+      });
+      profileBtn.addEventListener('mouseleave', () => {
+        profileBtn.style.backgroundColor = color;
+      });
     }
+  }
 }
 
 function initStaggeredReveal() {
@@ -196,3 +203,4 @@ window.prepareDelete = (id, name) => {
 window.closeDeleteModal = () => {
     document.getElementById('deletePortalModal').classList.remove('active');
 };
+

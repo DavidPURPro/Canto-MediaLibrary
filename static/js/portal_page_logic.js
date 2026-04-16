@@ -1,7 +1,9 @@
 document.addEventListener('DOMContentLoaded', function() {
   const portalId = document.body.getAttribute('data-portal-id');
-  const portalEmail = document.body.getAttribute('data-portal-email');  
-  let currentModalFilename = null;
+  const portalEmail = document.body.getAttribute('data-portal-email');
+  
+  let currentModalFilename = null; 
+
   const profileBtn = document.getElementById('profileBtn');
   const profileDropdown = document.getElementById('profileDropdown');
   const portalLogout = document.getElementById('portalLogout');
@@ -13,30 +15,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const closeModal = document.getElementById('closeModal');
   const copyPortalLinkBtn = document.getElementById('copyPortalLinkBtn');
   const modalPreview = document.getElementById('modalPreview');
-  const modalTitle = document.getElementById('modalTitle');
-  const modalDescription = document.getElementById('modalDescription');
-  const modalTags = document.getElementById('modalTags');
-  const modalCopyBtn = document.getElementById('modalCopyBtn');
   const modalDownloadBtn = document.getElementById('modalDownloadBtn');
-  const modalAddedDate = document.getElementById('modalAddedDate');
-  const modalEventDate = document.getElementById('modalEventDate');
-  
+  const modalCopyBtn = document.getElementById('modalCopyBtn');
   const filesCount = document.getElementById('filesCount');
   const portalFilesCount = document.getElementById('portalFilesCount');
   const portalTotalSize = document.getElementById('portalTotalSize');
 
   setProfileButtonColor();
   setupEventListeners();
-  
-  if (portalEmail && !portalEmail.includes('@pur.co')) {
-    const btnAddFolder = document.getElementById('addToFolderBtn');
-    const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
-    const btnAddPortal = document.getElementById('addToPortalBtn');
-    
-    if(btnAddFolder) btnAddFolder.style.display = 'none';
-    if(btnRemoveFolder) btnRemoveFolder.style.display = 'none';
-    if(btnAddPortal) btnAddPortal.style.display = 'none';
-  }
 
   function setupEventListeners() {
     const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
@@ -48,7 +34,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // retirer du Portail
     const btnRemovePortal = document.getElementById('removeFromPortalBtn');
     if (btnRemovePortal) {
         btnRemovePortal.addEventListener('click', function() {
@@ -57,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
     if(profileBtn) {
       profileBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -155,14 +141,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function setProfileButtonColor() {
     if (portalEmail && profileBtn) {
+      profileBtn.style.border = '2px solid #ffffff';
+      profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)';
+      profileBtn.style.color = '#ffffff';
+
       const initials = profileBtn.textContent.trim();
       let hash = 0;
       for (let i = 0; i < initials.length; i++) {
         hash = initials.charCodeAt(i) + ((hash << 5) - hash);
       }
-      const color = `hsl(${hash % 360}, 70%, 40%)`;
+      
+      const safeHue = (Math.abs(hash) % 290) + 30; 
+      const color = `hsl(${safeHue}, 85%, 55%)`;
+      const hoverColor = `hsl(${safeHue}, 85%, 45%)`; 
+      
       profileBtn.style.backgroundColor = color;
-      profileBtn.style.color = 'white';
+      
+      profileBtn.addEventListener('mouseenter', () => {
+        profileBtn.style.backgroundColor = hoverColor;
+      });
+      profileBtn.addEventListener('mouseleave', () => {
+        profileBtn.style.backgroundColor = color;
+      });
     }
   }
 
@@ -230,7 +230,6 @@ document.addEventListener('DOMContentLoaded', function() {
     currentModalFilename = filename;
     document.getElementById('modalTitle').textContent = filename;
     document.getElementById('modalDescription').textContent = card.getAttribute('data-description') || 'No description available.';
-    
     document.getElementById('currentFolderName').textContent = folderName;
     
     const portalNameElem = document.querySelector('header h1');
@@ -241,7 +240,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const btnAddFolder = document.getElementById('addToFolderBtn');
     const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
-    
+    const btnAddPortal = document.getElementById('addToPortalBtn');
+    const btnRemovePortal = document.getElementById('removeFromPortalBtn');
+
     if (folderName !== 'None' && folderName !== '') {
         if (btnAddFolder) btnAddFolder.style.display = 'none';
         if (btnRemoveFolder) btnRemoveFolder.style.display = 'block';
@@ -249,9 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnAddFolder) btnAddFolder.style.display = 'block';
         if (btnRemoveFolder) btnRemoveFolder.style.display = 'none';
     }
-
-    const btnAddPortal = document.getElementById('addToPortalBtn');
-    const btnRemovePortal = document.getElementById('removeFromPortalBtn');
+    
     if (btnAddPortal) btnAddPortal.style.display = 'none';
     if (btnRemovePortal) btnRemovePortal.style.display = 'block';
 
@@ -274,11 +273,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalAddedDate').textContent = card.getAttribute('data-date-added') || 'Unknown';
     document.getElementById('modalEventDate').textContent = card.getAttribute('data-date-event') || 'Unknown';
     
-    const modalDownloadBtn = document.getElementById('modalDownloadBtn');
-    modalDownloadBtn.setAttribute('href', downloadUrl);
-    modalDownloadBtn.setAttribute('download', filename);
+    if(modalDownloadBtn) {
+        modalDownloadBtn.setAttribute('href', downloadUrl);
+        modalDownloadBtn.setAttribute('download', filename);
+    }
     
-    const modalPreview = document.getElementById('modalPreview');
     modalPreview.innerHTML = '';
     
     if (fileType === 'Image') {
@@ -302,8 +301,7 @@ document.addEventListener('DOMContentLoaded', function() {
         iframe.height = '100%';
         iframe.style.border = 'none';
         modalPreview.appendChild(iframe);
-    } 
-    else {
+    } else {
         const placeholder = document.createElement('div');
         placeholder.style.display = 'flex';
         placeholder.style.flexDirection = 'column';
@@ -315,8 +313,8 @@ document.addEventListener('DOMContentLoaded', function() {
         modalPreview.appendChild(placeholder);
     }
     
-    document.getElementById('fileModal').classList.add('active');
-}
+    fileModal.classList.add('active');
+  }
 
   function closeFileModal() {
     fileModal.classList.remove('active');
@@ -441,42 +439,42 @@ document.addEventListener('DOMContentLoaded', function() {
           alert("Erreur lors de l'ajout au dossier.");
       });
   }
-});
 
+  function removeFileFromFolder() {
+      if (!currentModalFilename) return;
+      const formData = new FormData();
+      formData.append('filename', currentModalFilename);
+      
+      fetch('/remove_file_folder', { method: 'POST', body: formData })
+      .then(response => response.json())
+      .then(data => {
+          if (data.status === 'success') {
+              alert('Fichier retiré du dossier.');
+              window.location.reload(); 
+          } else { alert('Erreur : ' + data.message); }
+      });
+  }
+
+  function removeFileFromPortal() {
+      if (!currentModalFilename) return;
+      const formData = new FormData();
+      formData.append('filename', currentModalFilename);
+      formData.append('portal_id', portalId); 
+      
+      fetch('/remove_file_portal', { method: 'POST', body: formData })
+      .then(response => response.json())
+      .then(data => {
+          if (data.status === 'success') {
+              alert('Fichier retiré du portail.');
+              window.location.reload(); 
+          } else { alert('Erreur : ' + data.message); }
+      });
+  }
+
+});
 
 window.addEventListener('pageshow', function(event) {
   if (event.persisted) {
     window.location.reload(); 
   }
 });
-
-function removeFileFromFolder() {
-        if (!currentModalFilename) return;
-        const formData = new FormData();
-        formData.append('filename', currentModalFilename);
-        
-        fetch('/remove_file_folder', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('Fichier retiré du dossier.');
-                window.location.reload(); // Recharge la page pour voir les changements
-            } else { alert('Erreur : ' + data.message); }
-        });
-    }
-
-    function removeFileFromPortal() {
-        if (!currentModalFilename) return;
-        const formData = new FormData();
-        formData.append('filename', currentModalFilename);
-        formData.append('portal_id', portalId); // On utilise l'ID du portail actuel
-        
-        fetch('/remove_file_portal', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('Fichier retiré du portail.');
-                window.location.reload(); // Le fichier va disparaître de l'écran !
-            } else { alert('Erreur : ' + data.message); }
-        });
-    }

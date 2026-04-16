@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portals Hub — Media Library</title>
-  
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/header.css') }}">
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,24 +20,26 @@
         
         <nav class="nav-controls">
             <a href="{{ url_for('index') }}" class="btn-nav-glass">← Gallery</a>
-            <button id="addPortalBtn" class="btn-add-portal {% if not is_admin %}hidden{% endif %}">
+            {% if is_admin %}
+            <button id="addPortalBtn" class="btn-add-portal">
                 <i class="fas fa-plus"></i> <span>New Portal</span>
             </button>
+            {% endif %}
             
-            <div class="profile-section">
-                <button class="profile-avatar {% if is_admin %}is-admin{% endif %}" 
-                        id="profileBtn" 
-                        data-user-email="{{ session.get('user_email', '') }}"
-                        data-is-admin="{{ 'true' if is_admin else 'false' }}">
-                </button>
-                <div class="profile-dropdown" id="profileDropdown">
-                    <p class="user-email-text">{{ session.get('user_email', '') }}</p>
-                    {% if is_admin %}
-                    <div class="admin-badge"><i class="fas fa-shield-alt"></i> Administrator</div>
-                    {% endif %}
-                    <div class="divider"></div>
-                    <a href="/logout" class="logout-link"><i class="fas fa-sign-out-alt"></i> Log Out</a>
+            <div class="profile-container">
+              <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn" data-is-admin="{{ 'true' if is_admin else 'false' }}">
+                {% set parts = session.get('user_email', '').split('@')[0].split('.') %}
+                {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+              </button>
+              <div class="profile-dropdown" id="profileDropdown">
+                <div class="profile-email" id="profileEmail">{{ session.get('user_email', '') }}</div>
+                {% if is_admin %}
+                <div class="profile-admin-badge"><i class="fas fa-shield-alt"></i> Admin</div>
+                {% endif %}
+                <div class="profile-logout" id="profileLogout" onclick="window.location.href='/logout'">
+                  <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
                 </div>
+              </div>
             </div>
         </nav>
     </div>

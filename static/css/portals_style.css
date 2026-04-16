@@ -32,6 +32,7 @@ header h1 {
 }
 @keyframes titleShimmer { to { background-position: 200% center; } }
 
+
 .nav-controls { display: flex; gap: 12px; align-items: center; }
 .btn-nav-glass { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.15); color: white; padding: 10px 22px; border-radius: 50px; text-decoration: none; font-weight: 600; font-size: 14px; transition: var(--transition); }
 .btn-nav-glass:hover { background: white; color: var(--p-teal); transform: translateY(-2px); }

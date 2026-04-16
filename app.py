@@ -328,6 +328,8 @@ def index():
             'date_ajout': doc[6],
             'date_event': doc[7].strftime("%d-%m-%Y") if doc[7] else None,
             'folder_id': doc[8],
+            'folder_name': doc[9] if doc[9] else 'None',
+            'portal_name': doc[10] if doc[10] else 'None'
         })
 
     total_pages = (total_files + per_page - 1) // per_page if per_page else 1
@@ -491,9 +493,8 @@ def update_file_folder():
         cur.close()
         conn.close()
 
-# -----------------------
+
 # Fichiers (infos et recherche)
-# -----------------------
 @app.route("/file_details")
 @login_required_json
 def get_file_details():
@@ -534,6 +535,7 @@ def get_file_details():
             "date_event": date_event.strftime("%d-%m-%Y") if date_event else "",
             "folder_id": folder_id,
             "portal_id": portal_id  
+            
         })
     return jsonify({"error": "File not found"}), 404
 
@@ -800,9 +802,7 @@ def update_exclusive():
         cur.close()
         conn.close()
 
-# -----------------------
-# Fonctions pour les requêtes
-# -----------------------
+# fonctions pour les requêtes
 def get_files_for_folder(folder_id=None, page=1, per_page=None):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -815,21 +815,31 @@ def get_files_for_folder(folder_id=None, page=1, per_page=None):
                 SELECT f.id FROM folders f
                 JOIN folder_tree ft ON f.parent_id = ft.id
             )
-            SELECT id, nom_fichier, lien_telechargement, description, tags,
-                   is_exclusive, date_ajout, date_event, folder_id
-            FROM documents
-            WHERE folder_id IN (SELECT id FROM folder_tree)
+            SELECT d.id, d.nom_fichier, d.lien_telechargement, d.description, d.tags,
+                   d.is_exclusive, d.date_ajout, d.date_event, d.folder_id,
+                   f.name AS folder_name,
+                   p.name AS portal_name
+            FROM documents d
+            LEFT JOIN folders f ON d.folder_id = f.id
+            LEFT JOIN portal_files pf ON d.nom_fichier = pf.filename
+            LEFT JOIN portals p ON pf.portal_id = p.id
+            WHERE d.folder_id IN (SELECT id FROM folder_tree)
         """
         params = [folder_id]
     else:
         query = """
-            SELECT id, nom_fichier, lien_telechargement, description, tags,
-                   is_exclusive, date_ajout, date_event, folder_id
-            FROM documents
+            SELECT d.id, d.nom_fichier, d.lien_telechargement, d.description, d.tags,
+                   d.is_exclusive, d.date_ajout, d.date_event, d.folder_id,
+                   f.name AS folder_name,
+                   p.name AS portal_name
+            FROM documents d
+            LEFT JOIN folders f ON d.folder_id = f.id
+            LEFT JOIN portal_files pf ON d.nom_fichier = pf.filename
+            LEFT JOIN portals p ON pf.portal_id = p.id
         """
         params = []
 
-    query += " ORDER BY nom_fichier"
+    query += " ORDER BY d.nom_fichier"
 
     if per_page:
         offset = (page - 1) * per_page
@@ -865,9 +875,7 @@ def count_files_for_folder(folder_id=None):
     conn.close()
     return count
 
-# -----------------------
 # Portals
-# -----------------------
 @app.route('/portals')
 @login_required_html
 def portals():
@@ -1088,9 +1096,10 @@ def portal_page(portal_id):
     cur.execute("""
         SELECT pf.id, pf.filename, pf.description, pf.size_bytes, pf.upload_date, 
                pf.file_url, pf.file_type, d.tags, d.is_exclusive, d.folder_id,
-               d.date_event
+               d.date_event, f.name AS folder_name
         FROM portal_files pf
         LEFT JOIN documents d ON pf.filename = d.nom_fichier
+        LEFT JOIN folders f ON d.folder_id = f.id
         WHERE pf.portal_id = %s 
         ORDER BY pf.filename;
     """, (portal_id,))
@@ -1146,7 +1155,8 @@ def portal_page(portal_id):
             "tags": parse_tags(file[7]),
             "is_exclusive": bool(file[8]) if file[8] is not None else False,
             "folder_id": file[9],
-            "event_date": file[10].strftime("%d-%m-%Y") if file[10] else None
+            "event_date": file[10].strftime("%d-%m-%Y") if file[10] else None,
+            "folder_name": file[11] if file[11] else "None"
         })
     
     cur.close()
@@ -1989,8 +1999,6 @@ def send_reset_email(user_email, reset_link):
         print(f"Erreur d'envoi d'email: {e}")
         return False
     
-from flask import jsonify
-
 @app.route('/get_all_portals', methods=['GET'])
 def api_get_all_portals():
     conn = get_db_connection()
@@ -2010,6 +2018,7 @@ def api_get_folders():
     cur.close()
     conn.close()
     return jsonify({"folders": folders})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
