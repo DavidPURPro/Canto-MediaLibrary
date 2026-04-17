@@ -546,25 +546,26 @@ def search_file():
     tags = request.args.getlist("tag")
     if not tags and 'tag' in request.args:
         tags = [request.args.get("tag")]
-    
     exclusive = request.args.get("exclusive") == "true"
     folder_id = request.args.get("folder_id")
-
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 100)) 
+    offset = (page - 1) * per_page
     query = """
-        SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event
+        SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event,
+               COUNT(*) OVER() as total_count
         FROM documents
     """
     conditions = []
     params = []
-
     if filename:
-        conditions.append("nom_fichier ILIKE %s")
-        params.append(f"%{filename}%")
+        conditions.append("(nom_fichier ILIKE %s OR description ILIKE %s OR tags::text ILIKE %s)")
+        search_term = f"%{filename}%"
+        params.extend([search_term, search_term, search_term])
 
     if tags:
         tag_conditions = []
         for tag in tags:
-            # RECHERCHE SPÉCIFIQUE POUR LE FORMAT ARRAY POSTGRESQL {tag1,tag2}
             tag_conditions.append("tags::text ILIKE %s")
             params.append(f'%{tag}%')
         conditions.append("(" + " OR ".join(tag_conditions) + ")")
@@ -574,11 +575,10 @@ def search_file():
     if folder_id:
         conditions.append("folder_id = %s")
         params.append(folder_id)
-
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-
-    query += " ORDER BY nom_fichier;"
+    query += " ORDER BY nom_fichier LIMIT %s OFFSET %s;"
+    params.extend([per_page, offset])
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -592,24 +592,30 @@ def search_file():
     finally:
         cur.close()
         conn.close()
-
     files = []
-    for nom, url, description, tags, is_exclusive, date_ajout, date_event in results:
+    total_count = 0
+    if results:
+        total_count = results[0][7] 
+    for row in results:
+        nom, url, description, tags_db, is_exclusive, date_ajout, date_event, _ = row
         files.append({
             "name": nom,
             "url": url,
             "description": description,
-            "tags": parse_tags(tags),
+            "tags": parse_tags(tags_db),
             "is_exclusive": bool(is_exclusive) if is_exclusive is not None else False,
             "date_ajout": date_ajout.strftime("%d-%m-%Y") if date_ajout else None,
             "date_event": date_event.strftime("%d-%m-%Y") if date_event else None,
         })
 
-    return jsonify(files)
+    return jsonify({
+        "files": files,
+        "total": total_count,
+        "page": page,
+        "total_pages": (total_count + per_page - 1) // per_page
+    })
 
-# -----------------------
 # ROUTES ADMIN UNIQUEMENT (UI/POST)
-# -----------------------
 @app.route("/upload")
 @login_required_html
 @admin_required
@@ -646,7 +652,6 @@ def upload_file():
     folder_ids = request.form.getlist("folder_ids")
     portal_ids = request.form.getlist("portal_ids") 
     forbidden_extensions = {".heic", ".thm"}
-
     uploaded_urls = []
     current_date = datetime.now().date()
 

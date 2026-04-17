@@ -42,9 +42,6 @@
       </div>
       
       <button id="toggleViewBtn" class="modern-btn secondary-btn"><i class="fas fa-list"></i> List View</button>
-      <button id="togglePaginationBtn" class="modern-btn secondary-btn {% if not show_all %}active{% endif %}">
-        <i class="fas fa-layer-group"></i> {% if show_all %}Pagination Mode{% else %}Show All Files{% endif %}
-      </button>
       
       <div class="filter-dropdown">
         <button class="modern-btn secondary-btn" id="filterDropdownBtn"><i class="fas fa-filter"></i> All Files</button>
@@ -99,11 +96,15 @@
 
     <div class="main-content" id="mainContent">
       
-      <div class="search-bar">
-        <i class="fas fa-search" style="position: absolute; margin-left: 15px; color: var(--gray-500);"></i>
-        <input type="text" id="searchInput" placeholder="Find a file by name, description, tags..." style="padding-left: 45px;"/>
-        <div id="fileCount" data-total="{{ total_files }}">Showing {{ images|length }} of {{ total_files }}</div>
-      </div>
+      <div class="search-container">
+  <div class="search-wrapper">
+    <i class="fas fa-search search-icon"></i>
+    <input type="text" id="searchInput" placeholder="Find a file by name, description, tags..." />
+    <div id="fileCount" class="search-badge" data-total="{{ total_files }}">
+      Showing {{ files|length }} of {{ total_files }}
+    </div>
+  </div>
+</div>
 
       {% if show_all %}
       <div class="warning-message">

@@ -94,44 +94,86 @@
             <div class="form-group tags-section">
               <label>Select Tags</label>
               <div class="tag-selects-grid">
-                <div class="select-wrapper">
-                  <span class="tag-category">Region</span>
-                  <select class="modern-select" id="regionTags" onchange="addTagFromSelect(this)">
-                    <option value="">Select...</option>
-                    <option value="France">France</option>
-                    <option value="Canada">Canada</option>
-                    <option value="Colombia">Colombia</option>
-                    <option value="Indonesia">Indonesia</option>
-                    </select>
-                </div>
-                
-                <div class="select-wrapper">
-                  <span class="tag-category">Project Type</span>
-                  <select class="modern-select" id="projectTypeTags" onchange="addTagFromSelect(this)">
-                    <option value="">Select...</option>
-                    <option value="Agroforestry project">Agroforestry project</option>
-                    <option value="Reforestation project">Reforestation project</option>
-                  </select>
-                </div>
 
                 <div class="select-wrapper">
-                  <span class="tag-category">Activity</span>
-                  <select class="modern-select" id="activityTags" onchange="addTagFromSelect(this)">
-                    <option value="">Select...</option>
-                    <option value="Tree Planting">Tree Planting</option>
-                    <option value="Harvesting">Harvesting</option>
-                  </select>
-                </div>
+      <span class="tag-category">Region</span>
+      <select class="modern-select" id="regionTags" onchange="addTagFromSelect(this)">
+        <option value="">Select...</option>
+        <optgroup label="Europe & North America">
+          <option value="France">France</option>
+          <option value="UK">UK</option>
+          <option value="Canada">Canada</option>
+          <option value="USA">USA</option>
+        </optgroup>
+        <optgroup label="Latin America">
+          <option value="Colombia">Colombia</option>
+          <option value="Peru">Peru</option>
+          <option value="Brazil">Brazil</option>
+          <option value="Honduras">Honduras</option>
+          <option value="Guatemala">Guatemala</option>
+        </optgroup>
+        <optgroup label="Africa">
+          <option value="Ivory Coast">Ivory Coast</option>
+          <option value="Ethiopia">Ethiopia</option>
+          <option value="Uganda">Uganda</option>
+          <option value="Rwanda">Rwanda</option>
+        </optgroup>
+        <optgroup label="Asia">
+          <option value="Indonesia">Indonesia</option>
+          <option value="Philippines">Philippines</option>
+          <option value="Thailand">Thailand</option>
+          <option value="Vietnam">Vietnam</option>
+          <option value="China">China</option>
+        </optgroup>
+      </select>
+    </div>
+    
+    <div class="select-wrapper">
+      <span class="tag-category">Project Type</span>
+      <select class="modern-select" id="projectTypeTags" onchange="addTagFromSelect(this)">
+        <option value="">Select...</option>
+        <option value="Agroforestry">Agroforestry</option>
+        <option value="Reforestation">Reforestation</option>
+        <option value="Forest Conservation">Forest Conservation</option>
+        <option value="Regenerative Agriculture">Regenerative Agriculture</option>
+        <option value="Coastal Restoration (Mangroves)">Coastal Restoration (Mangroves)</option>
+        <option value="Marine Ecosystems">Marine Ecosystems</option>
+        <option value="Carbon Insetting">Carbon Insetting</option>
+      </select>
+    </div>
 
-                <div class="select-wrapper">
-                  <span class="tag-category">Commodity</span>
-                  <select class="modern-select" id="commodityTags" onchange="addTagFromSelect(this)">
-                    <option value="">Select...</option>
-                    <option value="Coffee">Coffee</option>
-                    <option value="Cocoa">Cocoa</option>
-                  </select>
-                </div>
-              </div>
+    <div class="select-wrapper">
+      <span class="tag-category">Activity</span>
+      <select class="modern-select" id="activityTags" onchange="addTagFromSelect(this)">
+        <option value="">Select...</option>
+        <option value="Tree Planting">Tree Planting</option>
+        <option value="Nursery Management">Nursery Management</option>
+        <option value="Harvesting">Harvesting</option>
+        <option value="Pruning & Maintenance">Pruning & Maintenance</option>
+        <option value="Farmer Training">Farmer Training</option>
+        <option value="Community Workshop">Community Workshop</option>
+        <option value="Monitoring & Mapping">Monitoring & Mapping</option>
+        <option value="Soil Preparation">Soil Preparation</option>
+      </select>
+    </div>
+
+    <div class="select-wrapper">
+      <span class="tag-category">Commodity</span>
+      <select class="modern-select" id="commodityTags" onchange="addTagFromSelect(this)">
+        <option value="">Select...</option>
+        <option value="Coffee">Coffee</option>
+        <option value="Cocoa">Cocoa</option>
+        <option value="Vanilla">Vanilla</option>
+        <option value="Palm Oil">Palm Oil</option>
+        <option value="Rice">Rice</option>
+        <option value="Sugar Cane">Sugar Cane</option>
+        <option value="Rubber">Rubber</option>
+        <option value="Fruit Trees">Fruit Trees</option>
+        <option value="Cotton">Cotton</option>
+      </select>
+    </div>
+    
+  </div>
 
               <div class="custom-tag-section mt-3">
                 <div class="tag-input-container">

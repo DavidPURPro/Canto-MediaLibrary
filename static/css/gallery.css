@@ -8,6 +8,8 @@
   overflow-y: auto; 
   max-height: calc(100vh - 160px);
   box-sizing: border-box;
+  min-height: 60vh;
+  align-content: flex-start;
 }
 
 .gallery-item {
@@ -43,6 +45,7 @@
 .gallery-item video,
 .file-preview {
   width: 100%;
+  aspect-ratio: 4 / 3;
   height: 200px;
   object-fit: cover;
   display: block;
@@ -344,9 +347,7 @@ body.list-view .date-group {
 }
 
 
-/* ==========================================
-   MOBILE - GALERIE
-   ========================================== */
+/* MOBILE - GALERIE */
 @media (max-width: 768px) {
   .gallery { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); padding: 15px; gap: 15px;}
   

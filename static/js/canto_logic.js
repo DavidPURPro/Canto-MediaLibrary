@@ -1,22 +1,13 @@
-/*
-const ADMIN_EMAILS = JSON.parse('{{ admin_emails | safe }}');
-let currentUserEmail = "{{ session.get('user_email', '') }}"; // mail utilisateur actuel
-let isAdmin = ADMIN_EMAILS.includes(currentUserEmail.toLowerCase());
-*/
-//let isAdmin = JSON.parse('{{ is_admin|lower }}');
-//let isAdmin = JSON.parse('{{ is_admin | tojson }}');
 const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
 let isListView = false;
 let isSortedByDate = false;
 let isAuthenticated = false;
-
 const searchInput = document.getElementById("searchInput");
 const gallery = document.getElementById("gallery");
 const ascSortBtn = document.getElementById("ascSortBtn");
 const descSortBtn = document.getElementById("descSortBtn");
 const sortByDateBtn = document.getElementById("sortByDateBtn");
 const toggleViewBtn = document.getElementById("toggleViewBtn");
-const togglePaginationBtn = document.getElementById("togglePaginationBtn");
 const filterSelect = document.getElementById("filterSelect");
 const fileCount = document.getElementById("fileCount");
 const fileModal = document.getElementById("fileModal");
@@ -116,7 +107,6 @@ function renderFolder(folder, parentElement) {
   const folderElement = document.createElement('div');
   folderElement.className = 'folder';
   folderElement.dataset.folderId = folder.id;
-  
   const folderName = document.createElement('div');
   folderName.className = 'folder-name';
   folderName.style.display = 'flex';
@@ -125,7 +115,6 @@ function renderFolder(folder, parentElement) {
   const iconHtml = folder.subfolders && folder.subfolders.length > 0 
     ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px; margin-right: 8px;"></i>' 
     : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; margin-right: 8px; opacity: 0.7;"></i>';
-
   const adminButtons = isAdmin ? `
     <div style="display: flex; gap: 5px;">
         <button class="add-folder-btn" title="Add subfolder" style="background: none; border: none; color: #16677c; cursor: pointer; padding: 2px 4px;">
@@ -136,7 +125,6 @@ function renderFolder(folder, parentElement) {
         </button>
     </div>
   ` : ''; 
-
   folderName.innerHTML = `
     <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
         <span class="folder-icon">${iconHtml}</span>
@@ -144,6 +132,7 @@ function renderFolder(folder, parentElement) {
     </div>
     ${adminButtons}
   `;
+
   const subfolders = document.createElement('div');
   subfolders.className = 'subfolders';
   folderElement.appendChild(folderName);
@@ -154,32 +143,36 @@ function renderFolder(folder, parentElement) {
         renderFolder(subfolder, subfolders);
       });
   }
-  
+
   folderName.addEventListener('click', function(e) {
     if (e.target.closest('.add-folder-btn')) {
       e.stopPropagation();
-      if (isAdmin) {
-        showFolderInput(subfolders, folder.id);
-      }
+      if (isAdmin) showFolderInput(subfolders, folder.id);
       return;
     }
-    
     if (e.target.closest('.delete-folder-btn')) {
       e.stopPropagation();
-      if (isAdmin) {
-        if (confirm('Delete this folder and all its contents?')) {
-          deleteFolder(folder.id);
-        }
-      }
+      if (isAdmin && confirm('Delete this folder?')) deleteFolder(folder.id);
       return;
     }
-    
+    document.querySelectorAll('.folder-name').forEach(el => el.classList.remove('is-selected'));
     folderElement.classList.toggle('active');
     if (folderElement.classList.contains('active')) {
-      filterFilesByFolder(folder.id);
+        folderName.classList.add('is-selected');
+        currentFolderFilter = folder.id;
     } else {
-      filterAndDisplay();
+        currentFolderFilter = null;
     }
+    const siblings = folderElement.parentNode.querySelectorAll(':scope > .folder');
+    siblings.forEach(sibling => {
+        if (sibling !== folderElement) sibling.classList.remove('active');
+    });
+    gallery.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
+            <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
+            <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Filtrage...</p>
+        </div>`;
+    executeGlobalSearch(currentSearchQuery, 1);
   });
   
   parentElement.appendChild(folderElement);
@@ -191,22 +184,23 @@ function showFolderInput(parentElement, parentId = null) {
   input.type = 'text';
   input.className = 'folder-input';
   input.placeholder = 'Enter folder name';
-  
+  let isHandled = false; 
   input.addEventListener('keyup', function(e) {
-    if (e.key === 'Enter' && this.value.trim()) {
+    if (e.key === 'Enter' && this.value.trim() && !isHandled) {
+      isHandled = true; 
       createFolder(this.value.trim(), parentId);
-      this.remove();
-    } else if (e.key === 'Escape') {
-      this.remove();
+      if (this.parentNode) this.remove();
+    } else if (e.key === 'Escape' && !isHandled) {
+      isHandled = true; 
+      if (this.parentNode) this.remove();
     }
   });
-  
   input.addEventListener('blur', function() {
-    if (this.parentNode) {
-      this.remove();
+    if (!isHandled) {
+      isHandled = true; 
+      if (this.parentNode) this.remove();
     }
   });
-  
   parentElement.appendChild(input);
   input.focus();
 }
@@ -288,32 +282,11 @@ function createBubble(container) {
 }
 
 function filterFilesByFolder(folderId) {
-  fetch(`/get_files_in_folder/${folderId}`)
-    .then(response => response.json())
-    .then(data => {
-      const filesInFolder = data.files.map(f => f.name.toLowerCase());
-      
-      // maintenant filtrer l'affichage
-      const items = gallery.querySelectorAll(".gallery-item");
-      items.forEach(item => {
-        const itemName = item.getAttribute("data-name").toLowerCase();
-        item.style.display = filesInFolder.includes(itemName) ? "block" : "none";
-      });
-      
-      fileCount.textContent = `Showing ${filesInFolder.length} files in folder`;
-    })
-    .catch(error => {
-      console.error('Error filtering files:', error);
-    });
-}
-
-function filterFilesByFolder(folderId) {
   // récupérer tous les fichiers dans ce dossier et ses sous dossiers
   fetch(`/get_files_in_folder/${folderId}`)
     .then(response => response.json())
     .then(data => {
       const filesInFolder = data.files.map(f => f.name.toLowerCase());
-      
       // maintenant filtrer l'affichage
       const items = gallery.querySelectorAll(".gallery-item");
       items.forEach(item => {
@@ -642,11 +615,8 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
   const folderElement = document.createElement('div');
   folderElement.className = 'folder-node';
   folderElement.dataset.folderId = folder.id;
-  
   const folderHeader = document.createElement('div');
   folderHeader.className = 'folder-header';
-  
-  // L'icône
   const iconHtml = folder.subfolders && folder.subfolders.length > 0 
     ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px;"></i>' 
     : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; opacity: 0.7;"></i>';
@@ -661,10 +631,8 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
   
   const subfoldersContainer = document.createElement('div');
   subfoldersContainer.className = 'subfolders-container';
-  
   folderElement.appendChild(folderHeader);
   folderElement.appendChild(subfoldersContainer);
-  
   if (folder.subfolders) {
       folder.subfolders.forEach(subfolder => {
         renderFolderNode(subfolder, subfoldersContainer, currentFolderId);
@@ -679,8 +647,6 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
       document.getElementById('folderTree').style.display = 'none';
       return;
     }
-    
-    // Toggle l'arborescence
     folderElement.classList.toggle('active');
   });
   
@@ -690,59 +656,173 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
 function closeFileModal() {
   fileModal.classList.remove('active');
   document.body.style.overflow = '';
-  
   const videos = modalPreview.querySelectorAll('video');
   const audios = modalPreview.querySelectorAll('audio');
-  
   videos.forEach(video => {
     video.pause();
     video.currentTime = 0;
   });
-  
   audios.forEach(audio => {
     audio.pause();
     audio.currentTime = 0;
   });
 }
 
-
 function filterAndDisplayWithFilter(filterValue) {
-  const searchValue = searchInput.value.toLowerCase();
   let visibleCount = 0;
-
   const items = gallery.querySelectorAll(".gallery-item");
   items.forEach(item => {
     const name = item.getAttribute("data-name").toLowerCase();
-    const tags = item.getAttribute("data-tags")?.toLowerCase() || "";
     const ext = getFileExtension(name);
     const isExclusive = item.getAttribute("data-exclusive") === 'true';
-
-    let show = name.includes(searchValue) || tags.includes(searchValue);
-
-    if (show) {
-      if (filterValue === 'all') {
-        show = true;
-      } else if (filterValue === 'exclusive') {
-        show = isExclusive === true || isExclusive === 'true';
-      } else if (filterValue === 'others') {
-        const allExts = [].concat(...Object.values(fileTypeMap));
-        show = !allExts.includes(ext);
-      } else {
-        show = fileTypeMap[filterValue]?.includes(ext) || false;
-      }
+    let show = true; 
+    if (filterValue === 'all') {
+      show = true;
+    } else if (filterValue === 'exclusive') {
+      show = isExclusive === true || isExclusive === 'true';
+    } else if (filterValue === 'others') {
+      const allExts = [].concat(...Object.values(fileTypeMap));
+      show = !allExts.includes(ext);
+    } else {
+      show = fileTypeMap[filterValue]?.includes(ext) || false;
     }
-
     item.style.display = show ? "block" : "none";
     if (show) visibleCount++;
   });
-
   const realTotal = fileCount.getAttribute('data-total');
-  fileCount.textContent = `Showing ${visibleCount} of ${realTotal} files`;  lazyLoadImages();
+  if(fileCount) fileCount.textContent = `Showing ${visibleCount} of ${realTotal} files`;  
+  lazyLoadImages();
 }
+
+// RECHERCHE GLOBALE ASYNCHRONE
+const pagination = document.querySelector('.pagination');
+let typingTimer;                
+const doneTypingInterval = 400;  
+let currentSearchQuery = ""; 
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        clearTimeout(typingTimer);
+        const query = searchInput.value.trim();
+
+        if (query.length > 0) {
+            currentSearchQuery = query;
+            typingTimer = setTimeout(() => executeGlobalSearch(query, 1), doneTypingInterval);
+        } else {
+            window.location.href = window.location.pathname; 
+        }
+    });
+}
+
+
+let currentFolderFilter = null;
+function executeGlobalSearch(query, page = 1) {
+    gallery.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
+            <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
+            <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
+        </div>`;
+    
+    let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100`;
+    if (currentFolderFilter) {
+        url += `&folder_id=${currentFolderFilter}`;
+    }
+    fetch(url) 
+        .then(response => response.json())
+        .then(data => {
+            gallery.innerHTML = ''; 
+            const files = data.files;
+            const total = data.total;
+            const totalPages = data.total_pages;
+            if(fileCount) fileCount.innerHTML = `${total} results found`;
+            if (files.length === 0) {
+                gallery.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
+                        <i class="fas fa-search-minus fa-2x" style="margin-bottom: 15px; color: #cbd5e1;"></i>
+                        <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">This folder is empty.</p>
+                    </div>`;
+                if (pagination) pagination.style.display = 'none';
+                return;
+            }
+            files.forEach(file => {
+                const ext = file.name.split('.').pop().toLowerCase();
+                let mediaHtml = '';
+                if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+                    mediaHtml = `<div class="img-placeholder"></div><img src="${file.url}" alt="${file.name}" loading="lazy" />`;
+                } 
+                else if (['mp4', 'webm', 'mov'].includes(ext)) {
+                    mediaHtml = `<video controls width="100%" style="max-height: 200px; border-radius: 11px 11px 0 0; object-fit: cover;" preload="none"><source src="${file.url}" type="video/${ext}"></video>`;
+                } 
+                else if (['pdf', 'emf', 'docx', 'pptx'].includes(ext)) {
+                    mediaHtml = `<img src="/static/icons/${ext}.png" alt="${file.name}" style="max-height: 200px; object-fit: contain;" loading="lazy" />`;
+                } 
+                else {
+                    mediaHtml = `<div class="file-preview"><img src="/static/No_preview.png" style="max-width:80px;"/><div style="font-weight: 700; color: var(--gray-500);">${ext.toUpperCase()}</div></div>`;
+                }
+                const isExclusive = file.is_exclusive === true || file.is_exclusive === 'true';
+                const cardHtml = `
+                    <div class="gallery-item" 
+                         data-name="${file.name.toLowerCase()}" 
+                         data-link="${file.url}" 
+                         data-filename="${file.name}" 
+                         data-description="${file.description || ''}" 
+                         data-tags='${JSON.stringify(file.tags || [])}' 
+                         data-exclusive="${isExclusive ? 'true' : 'false'}" 
+                         data-date="${file.date_ajout || ''}">
+                        ${mediaHtml}
+                        <div class="image-title" title="${file.name}">${file.name}</div>
+                        <div class="item-footer">
+                            <button class="copy-link-btn" data-link="${file.url}"><span class="tooltip">Copy Link</span><i class="fas fa-link"></i></button>
+                            <a href="${file.url}" class="download-btn" download="${file.name}"><span class="tooltip">Download</span><i class="fas fa-download"></i></a>
+                            <button class="exclusive-btn ${isExclusive ? 'exclusive' : ''}" data-filename="${file.name}"><span class="tooltip">${isExclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${isExclusive ? 'fas fa-star' : 'far fa-star'}"></i></button>
+                        </div>
+                    </div>`;
+                gallery.insertAdjacentHTML('beforeend', cardHtml);
+            });
+            renderSearchPagination(query, page, totalPages);
+            if (typeof lazyLoadImages === 'function') lazyLoadImages();
+            if (typeof setupGalleryItemClicks === 'function') setupGalleryItemClicks();
+            if (typeof setupCopyLinkButtons === 'function') setupCopyLinkButtons();
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            gallery.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: red;">Error processing search.</div>`;
+        });
+}
+
+// recréer les boutons de pagination
+function renderSearchPagination(query, currentPage, totalPages) {
+    if (!pagination) return;
+    if (totalPages <= 1) {
+        pagination.style.display = 'none';
+        return;
+    }
+    pagination.style.display = 'flex';
+    pagination.innerHTML = '';
+    const prevBtn = document.createElement('button');
+    prevBtn.className = `page-btn ${currentPage === 1 ? 'disabled' : ''}`;
+    prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Prev';
+    if (currentPage > 1) {
+        prevBtn.onclick = () => executeGlobalSearch(query, currentPage - 1);
+    }
+    pagination.appendChild(prevBtn);
+    const indicator = document.createElement('span');
+    indicator.className = 'page-btn active';
+    indicator.style.cursor = 'default';
+    indicator.textContent = `Page ${currentPage} of ${totalPages}`;
+    pagination.appendChild(indicator);
+    const nextBtn = document.createElement('button');
+    nextBtn.className = `page-btn ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextBtn.innerHTML = 'Next <i class="fas fa-chevron-right"></i>';
+    if (currentPage < totalPages) {
+        nextBtn.onclick = () => executeGlobalSearch(query, currentPage + 1);
+    }
+    pagination.appendChild(nextBtn);
+}
+
 
 function setupEventListeners() {
   // barre de recherche et filtres
-  searchInput.addEventListener("input", filterAndDisplay);
+  //searchInput.addEventListener("input", filterAndDisplay);
   //filterSelect.addEventListener("change", filterAndDisplay);
   document.querySelectorAll('.filter-dropdown-content button').forEach(button => {
   button.addEventListener('click', function() {
@@ -772,20 +852,6 @@ function setupEventListeners() {
     document.body.classList.toggle("list-view", isListView);
     toggleViewBtn.textContent = isListView ? "Gallery View" : "List View";
     lazyLoadImages();
-  });
-  
-  togglePaginationBtn.addEventListener("click", () => {
-    const currentUrl = new URL(window.location.href);
-    const showAll = currentUrl.searchParams.get("show_all") === "true";
-    
-    if (showAll) {
-      currentUrl.searchParams.delete("show_all");
-      currentUrl.searchParams.delete("page");
-    } else {
-      currentUrl.searchParams.set("show_all", "true");
-    }
-    
-    window.location.href = currentUrl.toString();
   });
   
   // boutons copie et téléchargement
