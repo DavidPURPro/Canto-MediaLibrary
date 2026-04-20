@@ -66,7 +66,6 @@ function formatDateForDisplay(dateString) {
 }
 
 // DOSSIERS
-
 function loadFolders() {
   fetch('/get_folders')
     .then(response => response.json())
