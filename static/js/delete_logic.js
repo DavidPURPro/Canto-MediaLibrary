@@ -31,26 +31,27 @@ function searchFiles() {
         ? `/search_file?tag=${encodeURIComponent(searchQuery)}` 
         : `/search_file?filename=${encodeURIComponent(searchQuery)}`;
     
-    fetch(endpoint)
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => {
-                    throw new Error(err.error || 'Network response was not ok');
-                });
-            }
-            return response.json();
-        })
-        .then(files => {
-            if (files.error) {
-                showError(files.error);
-            } else {
-                displayResults(files);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showError(error.message || "An error occurred while searching.");
-        });
+fetch(endpoint)
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || 'Network response was not ok');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            showError(data.error);
+        } 
+        else {
+            displayResults(data.files || []); 
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError(error.message || "An error occurred while searching.");
+    });
 }
 
 function displayResults(files) {

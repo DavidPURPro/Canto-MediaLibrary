@@ -16,23 +16,21 @@
         <div class="portal-name">{{ portal_name }}</div>
         <h2>Login</h2>
         
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="{{ 'success-message' if category == 'success' else 'error-message' }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        
+        {% set messages = get_flashed_messages(true) %}
+        {% if messages and messages.length > 0 %}
+            {% for msg in messages %}
+                <div class="{{ 'success-message' if msg[0] == 'success' else 'error-message' }}">
+                    {{ msg[1] }}
+                </div>
+            {% endfor %}
+        {% endif %}
         {% if error %}
         <div class="error-message">
             {{ error }}
         </div>
         {% endif %}
         
-        <form method="POST" action="{{ url_for('portal_login', portal_id=portal_id) }}">
+        <form method="POST" action="/portal/{{ portal_id }}/login">
             <div class="input-group">
                 <i class="fas fa-envelope"></i>
                 <input type="email" name="email" placeholder="Email" required>
@@ -47,11 +45,11 @@
         </form>
         
         <div class="forgot-password">
-            <a href="{{ url_for('portal_request_reset', portal_id=portal_id) }}">Forgot your password?</a>
+            <a href="/portal/{{ portal_id }}/request_reset">Forgot your password?</a>
         </div>
 
         <div class="back-to-portals">
-            <a href="{{ url_for('portals') }}">
+            <a href="/portals">
                 <i class="fas fa-arrow-left"></i> Back to Portals
             </a>
         </div>

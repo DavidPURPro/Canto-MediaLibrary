@@ -26,19 +26,15 @@
                 <h4 class="login-title">PUR Projet Media Library</h4>
             </div>
             <div class="card-body">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+                {% set messages = get_flashed_messages(true) %}
+                {% if messages and messages.length > 0 %}
+                    {% for msg in messages %}
+                        <div class="alert alert-{{ msg[0] }}">{{ msg[1] }}</div>
+                    {% endfor %}
+                {% endif %}
                 
-                <a href="{{ url_for('start_auth') }}" class="btn btn-primary w-100 login-btn" id="loginButton">
-                    Log in <i class="fas fa-arrow-right"></i>
+                <a href="/start_auth" class="btn btn-primary w-100 login-btn" id="loginButton">
+                Log in <i class="fas fa-arrow-right"></i>
                 </a>
             </div>
         </div>

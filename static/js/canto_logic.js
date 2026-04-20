@@ -1238,6 +1238,7 @@ document.addEventListener('DOMContentLoaded', function() {
   updateUploadButtonVisibility();
   createHeaderBubbles();
   setupTooltips();
+  executeGlobalSearch('', 1);
   
  
   function handleSidebarOnResize() {
