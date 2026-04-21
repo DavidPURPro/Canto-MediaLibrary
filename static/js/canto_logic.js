@@ -4,9 +4,6 @@ let isSortedByDate = false;
 let isAuthenticated = false;
 const searchInput = document.getElementById("searchInput");
 const gallery = document.getElementById("gallery");
-const ascSortBtn = document.getElementById("ascSortBtn");
-const descSortBtn = document.getElementById("descSortBtn");
-const sortByDateBtn = document.getElementById("sortByDateBtn");
 const toggleViewBtn = document.getElementById("toggleViewBtn");
 const filterSelect = document.getElementById("filterSelect");
 const fileCount = document.getElementById("fileCount");
@@ -34,6 +31,8 @@ const profileDropdown = document.getElementById('profileDropdown');
 const profileLogout = document.getElementById('profileLogout');
 let currentDownloadLink = null;
 let currentModalFilename = null;
+let currentGlobalSort = 'name_asc';
+let currentGlobalFilter = 'all';
 
 
 // mappage des types de fichiers
@@ -48,6 +47,24 @@ const fileTypeMap = {
 function getFileExtension(filename) {
   return filename.slice(filename.lastIndexOf('.')).toLowerCase();
 }
+
+document.querySelectorAll('.sort-dropdown-content button[data-sort]').forEach(button => {
+    button.addEventListener('click', (e) => {
+        currentGlobalSort = e.currentTarget.getAttribute('data-sort');
+        const textCloned = e.currentTarget.textContent.trim();
+        document.getElementById('sortDropdownBtn').innerHTML = `<i class="fas fa-sort"></i> Sort: ${textCloned}`;
+        executeGlobalSearch(currentSearchQuery, 1);
+    });
+});
+
+document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEach(button => {
+    button.addEventListener('click', (e) => {
+        currentGlobalFilter = e.currentTarget.getAttribute('data-filter');
+        const textCloned = e.currentTarget.textContent.trim();
+        document.getElementById('filterDropdownBtn').innerHTML = `<i class="fas fa-filter"></i> ${textCloned}`;
+        executeGlobalSearch(currentSearchQuery, 1);
+    });
+});
 
 function formatDateForDisplay(dateString) {
   if (!dateString) return "No date";
@@ -65,7 +82,7 @@ function formatDateForDisplay(dateString) {
   }
 }
 
-// DOSSIERS
+// dossiers
 function loadFolders() {
   fetch('/get_folders')
     .then(response => response.json())
@@ -323,7 +340,7 @@ function updateFileFolder(filename, folderId) {
   .catch(error => console.error('Error:', error));
 }
 
-// GESTION DES FICHIERS
+// gestion files
 function filterAndDisplay() {
   const currentFilter = document.querySelector('.filter-dropdown-content button[data-filter]')?.getAttribute('data-filter') || 'all';
   filterAndDisplayWithFilter(currentFilter);
@@ -509,52 +526,38 @@ function showFileModal(item) {
 }
 
 function loadFoldersForModal(currentFolderId) {
-  const folderTree = document.getElementById('folderTree');    
-  if (!folderTree) return;
-  folderTree.innerHTML = 'Loading...';
   fetch('/get_folders')
     .then(response => response.json())
     .then(data => {
-      const folderTree = document.getElementById('folderTree');
-      folderTree.innerHTML = '';
-      
-      // afficher le nom du dossier actuel
       if (currentFolderId) {
         const currentFolder = data.folders.find(f => f.id == currentFolderId);
         document.getElementById('currentFolderName').textContent = currentFolder 
             ? currentFolder.name 
             : "Unknown";
-        updateFolderButtons(true);
-      } else {
+      } 
+      else {
         document.getElementById('currentFolderName').textContent = "None";
-        updateFolderButtons(false);
       }
-      
-      // créer un mappage des dossiers
+      if (typeof updateFolderButtons === 'function') updateFolderButtons(!!currentFolderId);
+      const folderTree = document.getElementById('folderTree');
+      if (!folderTree) return; 
+      folderTree.innerHTML = '';
       const folderMap = {};
       data.folders.forEach(folder => {
-        folderMap[folder.id] = {
-          ...folder,
-          element: null,
-          subfolders: []
-        };
+        folderMap[folder.id] = { ...folder, element: null, subfolders: [] };
       });
-      
-      // hiérarchie
       Object.values(folderMap).forEach(folder => {
         if (folder.parent_id && folderMap[folder.parent_id]) {
           folderMap[folder.parent_id].subfolders.push(folder);
         }
       });
-      
-      // dossiers racine
       Object.values(folderMap).forEach(folder => {
         if (!folder.parent_id) {
           renderFolderNode(folder, folderTree, currentFolderId);
         }
       });
-      
-    });
+    })
+    .catch(error => console.error('Error loading folders:', error));
     
 }
 // assigner au portail
@@ -693,7 +696,7 @@ function filterAndDisplayWithFilter(filterValue) {
   lazyLoadImages();
 }
 
-// RECHERCHE GLOBALE ASYNCHRONE
+// recherche global
 const pagination = document.querySelector('.pagination');
 let typingTimer;                
 const doneTypingInterval = 400;  
@@ -721,8 +724,7 @@ function executeGlobalSearch(query, page = 1) {
             <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
         </div>`;
     
-    let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100`;
-    if (currentFolderFilter) {
+    let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}`;     if (currentFolderFilter) {
         url += `&folder_id=${currentFolderFilter}`;
     }
     fetch(url) 
@@ -820,30 +822,23 @@ function renderSearchPagination(query, currentPage, totalPages) {
 
 
 function setupEventListeners() {
-  // barre de recherche et filtres
-  //searchInput.addEventListener("input", filterAndDisplay);
-  //filterSelect.addEventListener("change", filterAndDisplay);
-  document.querySelectorAll('.filter-dropdown-content button').forEach(button => {
-  button.addEventListener('click', function() {
-    const filterValue = this.getAttribute('data-filter');
-    document.getElementById('filterDropdownBtn').textContent = this.textContent;
-    filterAndDisplayWithFilter(filterValue);
-  });
+document.querySelectorAll('.sort-dropdown-content button[data-sort]').forEach(button => {
+    button.addEventListener('click', (e) => {
+        currentGlobalSort = e.currentTarget.getAttribute('data-sort');
+        const textCloned = e.currentTarget.textContent.trim();
+        document.getElementById('sortDropdownBtn').innerHTML = `<i class="fas fa-sort"></i> Sort: ${textCloned}`;
+        executeGlobalSearch(currentSearchQuery, 1);
+    });
 });
-  
-  // boutons de tri
-  ascSortBtn.addEventListener("click", () => sortGallery(true));
-  descSortBtn.addEventListener("click", () => sortGallery(false));
-  sortByDateBtn.addEventListener("click", function() {
-    isSortedByDate = !isSortedByDate;
-    this.classList.toggle("active", isSortedByDate);
-    
-    if (isSortedByDate) {
-      groupFilesByDate();
-    } else {
-      filterAndDisplay();
-    }
-  });
+
+document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEach(button => {
+    button.addEventListener('click', (e) => {
+        currentGlobalFilter = e.currentTarget.getAttribute('data-filter');
+        const textCloned = e.currentTarget.textContent.trim();
+        document.getElementById('filterDropdownBtn').innerHTML = `<i class="fas fa-filter"></i> ${textCloned}`;
+        executeGlobalSearch(currentSearchQuery, 1);
+    });
+});
   
   // boutons affichage
   toggleViewBtn.addEventListener("click", () => {
@@ -1123,7 +1118,7 @@ function setupTooltips() {
   });
 }
 
-// AUTHENTIFICATION
+// authentification
 function promptForPassword(actionCallback) {
   if (isAdmin) {
     actionCallback();
@@ -1132,7 +1127,6 @@ function promptForPassword(actionCallback) {
     alert("You don't have permission to perform this action. Only administrators can modify folders.");
 }
   
-
   const passwordModal = document.createElement('div');
   passwordModal.style.position = 'fixed';
   passwordModal.style.top = '0';
@@ -1190,18 +1184,6 @@ function promptForPassword(actionCallback) {
     document.body.removeChild(passwordModal);
   });
   
-  /*
-  submitBtn.addEventListener('click', () => {
-    if (passwordInput.value === UPLOAD_SECRET) {
-      isAuthenticated = true;
-      document.body.removeChild(passwordModal);
-      actionCallback();
-    } else {
-      alert('Incorrect password. You don\'t have permission to perform this action.');
-      document.body.removeChild(passwordModal);
-    }
-  });
-  */
   passwordInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
       submitBtn.click();
@@ -1220,7 +1202,7 @@ function promptForPassword(actionCallback) {
   passwordInput.focus();
 }
 
-// INITIALISATION
+// init
 function updateUploadButtonVisibility() {
   const uploadBtn = document.querySelector('.upload-btn');
   if (uploadBtn) {
@@ -1301,7 +1283,8 @@ function enforceNonAdminLock() {
       button.classList.add('disabled');
       button.setAttribute('disabled', '');
       button.title = "Admins only";
-    } else {
+    } 
+    else {
       button.classList.remove('disabled');
       button.removeAttribute('disabled');
       button.removeAttribute('title');
@@ -1310,14 +1293,10 @@ function enforceNonAdminLock() {
 }
 
 function loadPortalsForModal(currentPortalId) {
-  const portalList = document.getElementById('portalList');
-  if (!portalList) return;
-  fetch('/get_portals')
+  fetch('/get_all_portals')
     .then(response => response.json())
     .then(data => {
-      const portalList = document.getElementById('portalList');
-      portalList.innerHTML = '';
-      
+      // 1. Mettre à jour le nom du portail (VISIBLE POUR TOUT LE MONDE)
       if (currentPortalId) {
         const currentPortal = data.portals.find(p => p.id == currentPortalId);
         document.getElementById('currentPortalName').textContent = currentPortal 
@@ -1326,51 +1305,32 @@ function loadPortalsForModal(currentPortalId) {
       } else {
         document.getElementById('currentPortalName').textContent = "None";
       }
-      
-      // liste des portails
-      data.portals.forEach(portal => {
-        checkFileInPortal(currentModalFilename, portal.id).then(isInPortal => {
-          const portalItem = document.createElement('div');
-          portalItem.className = 'portal-item';
-          
-          if (isInPortal) {
-            portalItem.innerHTML = `
-              <div class="portal-header" style="background-color: #e8f5e8;">
-                <span class="portal-icon">✓</span>
-                <span class="portal-title">${portal.name}</span>
-                <button class="select-portal-btn remove" data-portal-id="${portal.id}" title="Remove from portal">✕</button>
-              </div>
-            `;
-          } else {
-            portalItem.innerHTML = `
-              <div class="portal-header">
-                <span class="portal-icon">🌐</span>
-                <span class="portal-title">${portal.name}</span>
-                <button class="select-portal-btn add" data-portal-id="${portal.id}" title="Add to portal">✓</button>
-              </div>
-            `;
-          }
-          
-          portalList.appendChild(portalItem);
-          
-          const btn = portalItem.querySelector('.select-portal-btn');
-          btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const portalId = this.getAttribute('data-portal-id');
-            const portalName = this.parentElement.querySelector('.portal-title').textContent;
-            
-            if (this.classList.contains('remove')) {
-              removeFileFromPortal(currentModalFilename, portalId, portalName);
-            } else {
-              addFileToPortal(currentModalFilename, portalId, portalName);
-            }
+
+      // 2. Créer la liste des boutons (UNIQUEMENT POUR LES ADMINS)
+      const portalList = document.getElementById('portalList');
+      if (!portalList) return; // Si non-admin, on s'arrête ici !
+
+      portalList.innerHTML = '';
+      if(data.portals && data.portals.length > 0) {
+          data.portals.forEach(portal => {
+              const btn = document.createElement('button');
+              btn.className = 'modern-btn secondary-btn';
+              btn.style.width = '100%';
+              btn.style.marginBottom = '6px';
+              btn.style.justifyContent = 'flex-start';
+              btn.innerHTML = `<i class="fas fa-globe"></i> ${portal.name}`;
+              
+              btn.onclick = () => addFileToPortal(portal.id, portal.name);
+              portalList.appendChild(btn);
           });
-        });
-      });
+      } else {
+          portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Aucun portail trouvé.</span>';
+      }
     })
-    .catch(error => {
-      console.error('Error loading portals:', error);
+    .catch(err => {
+        console.error("Erreur chargement portails:", err);
     });
+
 }
 
 function addFileToPortal(portalId, portalName) {
@@ -1500,7 +1460,6 @@ function removeFileFromFolder(filename) {
     if (!confirm("Are you sure you want to remove this file from its current folder?")) {
         return;
     }
-    
     const formData = new FormData();
     formData.append('filename', filename);
     
@@ -1558,62 +1517,6 @@ if (btnAddPortalbtn) {
       alert("You don't have permission to perform this action. Only administrators can modify portals.");
     }
   });
-}
-
-document.getElementById('ascSortBtn').addEventListener('click', () => {
-    sortGallery(true);
-    document.getElementById('sortDropdownBtn').textContent = 'Sort: A-Z';
-  });
-  
-  document.getElementById('descSortBtn').addEventListener('click', () => {
-    sortGallery(false);
-    document.getElementById('sortDropdownBtn').textContent = 'Sort: Z-A';
-  });
-  
-  document.getElementById('sortByDateBtn').addEventListener('click', function() {
-    isSortedByDate = !isSortedByDate;
-    this.classList.toggle("active", isSortedByDate);
-    if (isSortedByDate) {
-      groupFilesByDate();
-      document.getElementById('sortDropdownBtn').textContent = 'Sort: By Date';
-    } else {
-      filterAndDisplay();
-      document.getElementById('sortDropdownBtn').textContent = 'Sort';
-    }
-  });
-
-  // === FONCTION POUR CHARGER LES PORTAILS DEPUIS LA BDD ===
-function loadPortalsForModal() {
-    const portalList = document.getElementById('portalList');
-    if (!portalList) return;
-    
-    portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Chargement...</span>';
-    
-    fetch('/get_all_portals')
-    .then(response => response.json())
-    .then(data => {
-        portalList.innerHTML = '';
-        if(data.portals && data.portals.length > 0) {
-            data.portals.forEach(portal => {
-                const btn = document.createElement('button');
-                // Style adapté pour la Media Library
-                btn.className = 'modern-btn secondary-btn';
-                btn.style.width = '100%';
-                btn.style.marginBottom = '6px';
-                btn.style.justifyContent = 'flex-start';
-                btn.innerHTML = `<i class="fas fa-globe"></i> ${portal.name}`;
-                
-                btn.onclick = () => addFileToPortal(portal.id, portal.name);
-                portalList.appendChild(btn);
-            });
-        } else {
-            portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Aucun portail trouvé.</span>';
-        }
-    })
-    .catch(err => {
-        console.error("Erreur chargement portails:", err);
-        portalList.innerHTML = '<span style="color:#ef4444; font-size:12px;">Erreur de chargement</span>';
-    });
 }
 
 function addFileToPortal(targetPortalId, portalName) {

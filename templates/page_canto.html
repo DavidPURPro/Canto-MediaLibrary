@@ -32,35 +32,41 @@
           <i class="fas fa-toolbox"></i> Admin Toolkit
       </a>
       
-      <div class="sort-dropdown">
-        <button class="modern-btn secondary-btn" id="sortDropdownBtn"><i class="fas fa-sort"></i> Sort</button>
-        <div class="sort-dropdown-content">
-          <button id="ascSortBtn"><i class="fas fa-sort-alpha-down"></i> A-Z</button>
-          <button id="descSortBtn"><i class="fas fa-sort-alpha-up"></i> Z-A</button>
-          <button id="sortByDateBtn"><i class="fas fa-calendar-alt"></i> By Date</button>
-        </div>
-      </div>
-      
-      <button id="toggleViewBtn" class="modern-btn secondary-btn"><i class="fas fa-list"></i> List View</button>
-      
-      <div class="filter-dropdown">
-        <button class="modern-btn secondary-btn" id="filterDropdownBtn"><i class="fas fa-filter"></i> All Files</button>
-        <div class="filter-dropdown-content">
-          <button data-filter="all"><i class="fas fa-th-large"></i> All Files</button>
-          <button data-filter="images"><i class="fas fa-image"></i> Images</button>
-          <button data-filter="videos"><i class="fas fa-video"></i> Videos</button>
-          <button data-filter="audio"><i class="fas fa-music"></i> Audios</button>
-          <button data-filter="documents"><i class="fas fa-file-alt"></i> Documents</button>
-          <button data-filter="presentations"><i class="fas fa-file-powerpoint"></i> Presentations</button>
-          <button data-filter="exclusive"><i class="fas fa-star"></i> Exclusive Files</button>
-          <button data-filter="others"><i class="fas fa-file"></i> Others</button>
-        </div>
-      </div>
-      <a href="{{ url_for('portals') }}" class="modern-btn secondary-btn"><i class="fas fa-globe"></i> Portals</a>
+      <div class="controls-container"> 
+  <div class="sort-dropdown">
+    <button class="modern-btn secondary-btn" id="sortDropdownBtn">
+      <i class="fas fa-sort"></i> Sort: A-Z
+    </button>
+    <div class="sort-dropdown-content">
+      <button data-sort="name_asc"><i class="fas fa-sort-alpha-down"></i> A-Z</button>
+      <button data-sort="name_desc"><i class="fas fa-sort-alpha-up"></i> Z-A</button>
+      <button data-sort="date_desc"><i class="fas fa-calendar-alt"></i> By Date</button>
+    </div>
+  </div>
+
+  <button id="toggleViewBtn" class="modern-btn secondary-btn"><i class="fas fa-list"></i> List View</button>
+
+  <div class="filter-dropdown">
+    <button class="modern-btn secondary-btn" id="filterDropdownBtn">
+      <i class="fas fa-filter"></i> All Files
+    </button>
+    <div class="filter-dropdown-content">
+      <button data-filter="all"><i class="fas fa-th-large"></i> All Files</button>
+      <button data-filter="images"><i class="fas fa-image"></i> Images</button>
+      <button data-filter="videos"><i class="fas fa-video"></i> Videos</button>
+      <button data-filter="audio"><i class="fas fa-music"></i> Audios</button>
+      <button data-filter="documents"><i class="fas fa-file-alt"></i> Documents</button>
+      <button data-filter="presentations"><i class="fas fa-file-powerpoint"></i> Presentations</button>
+      <button data-filter="exclusive"><i class="fas fa-star"></i> Exclusive Files</button>
+      <button data-filter="others"><i class="fas fa-file"></i> Others</button>
+    </div>
+  </div>
+</div>
+      <a href="/portals" class="modern-btn secondary-btn"><i class="fas fa-globe"></i> Portals</a>
       
       {% if is_admin %}
-      <a href="{{ url_for('upload_page') }}" class="modern-btn primary-btn" title="Upload files"><i class="fas fa-cloud-upload-alt"></i> Upload</a>
-      <a href="{{ url_for('delete_page') }}" class="modern-btn danger-btn" title="Delete files"><i class="fas fa-trash-alt"></i> Delete</a>
+      <a href="/upload" class="modern-btn primary-btn" title="Upload files"><i class="fas fa-cloud-upload-alt"></i> Upload</a>
+      <a href="/delete_files" class="modern-btn danger-btn" title="Delete files"><i class="fas fa-trash-alt"></i> Delete</a>
       {% endif %}
     </div>
     
@@ -173,41 +179,56 @@
         {% endfor %}
       </div>
 
-      {% if not show_all %}
       <div class="pagination">
-        {% if current_page > 1 %}
-          <a href="{{ url_for('index', page=current_page-1) }}" class="page-btn"><i class="fas fa-chevron-left"></i> Prev</a>
-        {% else %}
-          <span class="page-btn disabled"><i class="fas fa-chevron-left"></i> Prev</span>
-        {% endif %}
+  {# Calcul des limites de la fenêtre d'affichage #}
+  {% set startPage = current_page - 2 %}
+  {% if startPage < 1 %}{% set startPage = 1 %}{% endif %}
 
-        {% if current_page > 3 %}
-          <a href="{{ url_for('index', page=1) }}" class="page-btn">1</a>
-          {% if current_page > 4 %}
-            <span class="page-dots">...</span>
-          {% endif %}
-        {% endif %}
+  {% set endPage = current_page + 2 %}
+  {% if endPage > total_pages %}{% set endPage = total_pages %}{% endif %}
 
-        {% for page_num in range([1, current_page-2]|max, [current_page+3, total_pages+1]|min) %}
-          <a href="{{ url_for('index', page=page_num) }}" class="page-btn {% if page_num == current_page %}active{% endif %}">
-            {{ page_num }}
-          </a>
-        {% endfor %}
+  {# Bouton Précédent #}
+  {% if current_page > 1 %}
+    <a href="/?page={{ current_page - 1 }}&sort={{ currentSort }}&filter={{ currentFilter }}" class="page-btn">
+      <i class="fas fa-chevron-left"></i> Prev
+    </a>
+  {% else %}
+    <span class="page-btn disabled"><i class="fas fa-chevron-left"></i> Prev</span>
+  {% endif %}
 
-        {% if current_page < total_pages - 2 %}
-          {% if current_page < total_pages - 3 %}
-            <span class="page-dots">...</span>
-          {% endif %}
-          <a href="{{ url_for('index', page=total_pages) }}" class="page-btn">{{ total_pages }}</a>
-        {% endif %}
+  {# Première page + Points de suspension au début #}
+  {% if startPage > 1 %}
+    <a href="/?page=1&sort={{ currentSort }}&filter={{ currentFilter }}" class="page-btn">1</a>
+    {% if startPage > 2 %}
+      <span class="page-dots">...</span>
+    {% endif %}
+  {% endif %}
 
-        {% if current_page < total_pages %}
-          <a href="{{ url_for('index', page=current_page+1) }}" class="page-btn">Next <i class="fas fa-chevron-right"></i></a>
-        {% else %}
-          <span class="page-btn disabled">Next <i class="fas fa-chevron-right"></i></span>
-        {% endif %}
-      </div>
-      {% endif %}
+  {# Boucle des pages centrales #}
+  {% for page_num in range(startPage, endPage + 1) %}
+    <a href="/?page={{ page_num }}&sort={{ currentSort }}&filter={{ currentFilter }}" 
+       class="page-btn {% if page_num == current_page %}active{% endif %}">
+      {{ page_num }}
+    </a>
+  {% endfor %}
+
+  {# Points de suspension à la fin + Dernière page #}
+  {% if endPage < total_pages %}
+    {% if endPage < total_pages - 1 %}
+      <span class="page-dots">...</span>
+    {% endif %}
+    <a href="/?page={{ total_pages }}&sort={{ currentSort }}&filter={{ currentFilter }}" class="page-btn">{{ total_pages }}</a>
+  {% endif %}
+
+  {# Bouton Suivant #}
+  {% if current_page < total_pages %}
+    <a href="/?page={{ current_page + 1 }}&sort={{ currentSort }}&filter={{ currentFilter }}" class="page-btn">
+      Next <i class="fas fa-chevron-right"></i>
+    </a>
+  {% else %}
+    <span class="page-btn disabled">Next <i class="fas fa-chevron-right"></i></span>
+  {% endif %}
+</div>
       
     </div>
   </div>

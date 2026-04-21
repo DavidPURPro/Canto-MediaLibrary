@@ -445,7 +445,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const formData = new FormData();
       formData.append('filename', currentModalFilename);
       
-      fetch('/remove_file_folder', { method: 'POST', body: formData })
+      fetch('/r_file_folder', { method: 'POST', body: formData })
       .then(response => response.json())
       .then(data => {
           if (data.status === 'success') {

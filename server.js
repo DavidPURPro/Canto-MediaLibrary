@@ -160,6 +160,66 @@ app.get('/', loginRequiredHtml, (req, res) => {
     res.redirect('/index');
 });
 
+app.get('/', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const sort = req.query.sort || 'date_desc';
+    const filter = req.query.filter || 'all';
+    const limit = 12;
+    const offset = (page - 1) * limit;
+    const ext = {
+        images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
+        videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
+        audio: ["'%.mp3'", "'%.wav'", "'%.aac'", "'%.flac'", "'%.ogg'", "'%.m4a'"],
+        documents: ["'%.pdf'", "'%.doc'", "'%.docx'", "'%.xls'", "'%.xlsx'", "'%.txt'", "'%.rtf'", "'%.odt'"],
+        presentations: ["'%.ppt'", "'%.pptx'", "'%.key'", "'%.odp'"]
+    };
+    const allKnownExts = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
+
+    try {
+        let baseQuery = `FROM documents d LEFT JOIN folders f ON d.folder_id = f.id WHERE 1=1`;
+        let queryParams = [];
+
+        if (filter === 'exclusive') {
+            baseQuery += ` AND d.is_exclusive = true`;
+        } else if (filter === 'images') {
+            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.images.join(',')}])`;
+        } else if (filter === 'videos') {
+            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.videos.join(',')}])`;
+        } else if (filter === 'audio') {
+            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.audio.join(',')}])`;
+        } else if (filter === 'documents') {
+            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.documents.join(',')}])`;
+        } else if (filter === 'presentations') {
+            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.presentations.join(',')}])`;
+        } else if (filter === 'others') {
+            baseQuery += ` AND LOWER(d.nom_fichier) NOT LIKE ANY(ARRAY[${allKnownExts.join(',')}])`;
+        }
+
+        let orderBy = 'ORDER BY d.date_ajout DESC';
+        if (sort === 'name_asc') orderBy = 'ORDER BY LOWER(d.nom_fichier) ASC';
+        if (sort === 'name_desc') orderBy = 'ORDER BY LOWER(d.nom_fichier) DESC';
+        if (sort === 'date_asc') orderBy = 'ORDER BY d.date_ajout ASC';
+
+        const countRes = await pool.query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
+        const totalFiles = parseInt(countRes.rows[0].count);
+        const totalPages = Math.ceil(totalFiles / limit) || 1;
+        const dataQuery = `SELECT d.*, f.name as folder_name ${baseQuery} ${orderBy} LIMIT ${limit} OFFSET ${offset}`;
+        const result = await pool.query(dataQuery, queryParams);
+
+        res.render('index.html', {
+            documents: result.rows,
+            current_page: page,
+            total_pages: totalPages,
+            currentSort: sort,
+            currentFilter: filter,
+            is_admin: req.session.is_admin
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Erreur SQL lors du filtrage");
+    }
+});
+
 app.get('/index', loginRequiredHtml, (req, res) => {
     res.render('page_canto.html', {
         username: req.session.username,
@@ -344,23 +404,40 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         const filename = req.query.filename;
         let tags = req.query.tag;
         if (tags && !Array.isArray(tags)) tags = [tags]; 
-        const exclusive = req.query.exclusive === "true";
         const folder_id = req.query.folder_id;
         const page = parseInt(req.query.page || 1, 10);
         const per_page = parseInt(req.query.per_page || 100, 10);
         const offset = (page - 1) * per_page;
+        
+        // Nouveaux paramètres Frontend
+        const sort = req.query.sort || 'name_asc';
+        const filter = req.query.filter || 'all';
+
+        // Mappage des extensions
+        const ext = {
+            images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
+            videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
+            audio: ["'%.mp3'", "'%.wav'", "'%.aac'", "'%.flac'", "'%.ogg'", "'%.m4a'"],
+            documents: ["'%.pdf'", "'%.doc'", "'%.docx'", "'%.xls'", "'%.xlsx'", "'%.txt'", "'%.rtf'", "'%.odt'"],
+            presentations: ["'%.ppt'", "'%.pptx'", "'%.key'", "'%.odp'"]
+        };
+        const allKnownExts = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
+
+        // Requête de base avec WHERE 1=1 pour faciliter la concaténation
         let query = `
-            SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event,
+            SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event, folder_id,
                    COUNT(*) OVER() as total_count
             FROM documents
+            WHERE 1=1
         `;
-        const conditions = [];
         const params = [];
+
+        // --- FILTRES DE RECHERCHE TEXTUELLE ET TAGS ---
         if (filename) {
             const searchTerm = `%${filename}%`;
             params.push(searchTerm, searchTerm, searchTerm);
             const pLen = params.length;
-            conditions.push(`(nom_fichier ILIKE $${pLen - 2} OR description ILIKE $${pLen - 1} OR tags::text ILIKE $${pLen})`);
+            query += ` AND (nom_fichier ILIKE $${pLen - 2} OR description ILIKE $${pLen - 1} OR tags::text ILIKE $${pLen})`;
         }
 
         if (tags && tags.length > 0) {
@@ -369,26 +446,50 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
                 params.push(`%${tag}%`);
                 tagConditions.push(`tags::text ILIKE $${params.length}`);
             }
-            conditions.push("(" + tagConditions.join(" OR ") + ")");
+            query += ` AND (${tagConditions.join(" OR ")})`;
         }
 
-        if (exclusive) {
-            conditions.push("is_exclusive = TRUE");
-        }
         if (folder_id) {
             params.push(folder_id);
-            conditions.push(`folder_id = $${params.length}`);
+            query += ` AND folder_id = $${params.length}`;
         }
-        if (conditions.length > 0) {
-            query += " WHERE " + conditions.join(" AND ");
+
+        // --- GESTION DU FILTRE PAR CATÉGORIE ---
+        if (filter === 'exclusive') {
+            query += ` AND is_exclusive = TRUE`;
+        } else if (filter === 'images') {
+            query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.images.join(',')}])`;
+        } else if (filter === 'videos') {
+            query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.videos.join(',')}])`;
+        } else if (filter === 'audio') {
+            query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.audio.join(',')}])`;
+        } else if (filter === 'documents') {
+            query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.documents.join(',')}])`;
+        } else if (filter === 'presentations') {
+            query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.presentations.join(',')}])`;
+        } else if (filter === 'others') {
+            query += ` AND LOWER(nom_fichier) NOT LIKE ANY(ARRAY[${allKnownExts.join(',')}])`;
         }
+
+        // --- GESTION DU TRI ---
+        let orderBy = 'ORDER BY LOWER(nom_fichier) ASC'; // Par défaut
+        if (sort === 'name_desc') orderBy = 'ORDER BY LOWER(nom_fichier) DESC';
+        if (sort === 'date_desc') orderBy = 'ORDER BY date_ajout DESC';
+        
+        query += ` ${orderBy}`;
+
+        // --- PAGINATION ---
         params.push(per_page, offset);
-        query += ` ORDER BY nom_fichier LIMIT $${params.length - 1} OFFSET $${params.length};`;
+        query += ` LIMIT $${params.length - 1} OFFSET $${params.length};`;
+
+        // Execution SQL
         const result = await pool.query(query, params);
+        
         let total_count = 0;
         if (result.rows.length > 0) {
             total_count = parseInt(result.rows[0].total_count, 10);
         }
+
         const formatDate = (dateObj) => {
             if (!dateObj) return null;
             const d = new Date(dateObj);
@@ -412,7 +513,8 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
                 tags: parsedTags,
                 is_exclusive: Boolean(row.is_exclusive),
                 date_ajout: formatDate(row.date_ajout),
-                date_event: formatDate(row.date_event)
+                date_event: formatDate(row.date_event),
+                folder_id: row.folder_id
             };
         });
 
@@ -422,6 +524,7 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
             page: page,
             total_pages: Math.ceil(total_count / per_page)
         });
+
     } catch (error) {
         console.error("Erreur search_file:", error.message);
         res.json({ files: [], total: 0, page: 1, total_pages: 0 });
@@ -814,7 +917,8 @@ app.post('/assign_file_folder', upload.none(), async (req, res) => {
         const result = await pool.query(query, [folder_id, filename]);
 
         if (result.rowCount > 0) {
-            res.json({ status: "success", message: "Fichier réassigné avec succès" });
+            res.json({ status: "success", message: "Fichier réassigné avec succès",
+    folder_id: folder_id});
         } 
         else {
             res.status(404).json({ status: "error", message: "Fichier non trouvé" });
@@ -966,7 +1070,7 @@ app.get('/portals', loginRequiredHtml, async (req, res) => {
             });
         }
 
-        res.render('portals.html', { portals: portals_list, is_admin: true });
+    res.render('portals.html', { portals: portals_list, is_admin: req.session.is_admin });
     } catch (error) {
         console.error("Erreur /portals:", error);
         res.status(500).send("Erreur serveur");
@@ -1043,7 +1147,7 @@ app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
             last_sync: portalRow.last_sync ? new Date(portalRow.last_sync).toLocaleDateString('fr-FR').replace(/\//g, '-') : ""
         };
 
-        res.render('portal_page.html', { portal: portal_data, files: files_data, is_admin: true });
+        res.render('portal_page.html', { portal: portal_data, files: files_data, is_admin: req.session.is_admin });
     } catch (error) {
         console.error("Erreur /portal/:id :", error);
         res.status(500).send("Erreur serveur");
