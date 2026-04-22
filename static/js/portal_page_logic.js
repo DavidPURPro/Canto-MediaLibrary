@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const profileBtn = document.getElementById('profileBtn');
   const profileDropdown = document.getElementById('profileDropdown');
-  const portalLogout = document.getElementById('portalLogout');
+  const profileLogout = document.getElementById('profileLogout');
   const portalOnlyLogout = document.getElementById('portalOnlyLogout');
   const searchInput = document.getElementById('searchInput');
   const searchButton = document.getElementById('searchButton');
@@ -56,8 +56,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
-    if (portalLogout) {
-      portalLogout.addEventListener('click', logoutFromPortal);
+    if (profileLogout) {
+      profileLogout.addEventListener('click', logoutFromPortal);
     }
     if (portalOnlyLogout) {
       portalOnlyLogout.addEventListener('click', function() {
@@ -166,7 +166,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function logoutFromPortal() {
+  function logoutFromPortal(e) {
+    if (e) e.preventDefault(); 
     if (confirm('Are you sure you want to log out of this portal?')) {
       fetch(`/portal/${portalId}/logout`, {
         method: 'POST',
@@ -175,7 +176,11 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .then(response => response.json())
       .then(data => {
-        window.location.href = `/portal/${portalId}/login`;
+        if (data.redirect_url) {
+          window.location.href = data.redirect_url;
+        } else {
+          window.location.href = `/portal/${portalId}/login`;
+        }
       })
       .catch(error => {
         console.error('Logout error:', error);

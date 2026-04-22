@@ -14,43 +14,53 @@
 <body data-portal-id="{{ portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
 
   <header>
-    <div class="header-left">
-      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
+  <div class="header-left">
+    <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
+  </div>
+  
+  <div class="header-center">
+    <h1>{{ portal.name }}</h1>
+  </div>
+  
+  <div class="header-right">
+    <div class="controls">
+      <a href="/portals" class="back-btn">← Portals</a>
+      
+      {% if user_email and 'pur.co' in user_email %}
+      <a href="/" class="back-btn"> Library</a>
+      {% endif %}
+      
+      <button class="back-btn" id="copyPortalLinkBtn" title="Copy portal link"> Copy Link</button>
     </div>
-    
-    <div class="header-center">
-      <h1>{{ portal.name }}</h1>
-    </div>
-    
-    <div class="header-right">
-      <div class="controls">
-        <a href="{{ url_for('portals') }}" class="back-btn">← Portals</a>
-        <a href="{{ url_for('index') }}" class="back-btn"> Library</a>
-        <button class="back-btn" id="copyPortalLinkBtn" title="Copy portal link"> Copy Link</button>
-      </div>
+      
+    <div class="profile-container">
+      <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
+        {% if user_email %}
+          {% set parts = user_email.split('@')[0].split('.') %}
+          {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+        {% else %}
+          ?
+        {% endif %}
+      </button>
+      <div class="profile-dropdown" id="profileDropdown">
+        <div class="profile-email" id="profileEmail">{{ user_email or 'Not logged in' }}</div>
         
-      <div class="profile-container">
-        <button class="profile-btn" id="profileBtn">
-          {% set portal_email = session.get('portal_user_email', '') %}
-          {% if portal_email %}
-            {% set parts = portal_email.split('@')[0].split('.') %}
-            {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
-          {% else %}
-            ?
-          {% endif %}
-        </button>
-        <div class="profile-dropdown" id="profileDropdown">
-          <div class="profile-email" id="profileEmail">{{ session.get('portal_user_email', 'Not logged in') }}</div>
-          
-          {% if session.get('portal_only') %}
-            <div class="profile-logout" id="portalOnlyLogout"><span>Log Out (Portal Only)</span></div>
-          {% else %}
-            <div class="profile-logout" id="portalLogout"><span>Portal Log Out</span></div>
-          {% endif %}
-        </div>
+        {% if is_admin %}
+          <div class="profile-admin-badge" style="padding: 10px; border-bottom: 1px solid var(--gray-200); color: #d9534f; font-weight: bold; font-size: 13px;">
+            <i class="fas fa-shield-alt"></i> Admin
+          </div>
+        {% endif %}
+        
+        {# Le bouton Logout ne s'affiche que si ce n'est PAS une session globale PUR.co #}
+        {% if not is_global_auth %}
+          <div class="profile-logout" id="profileLogout" style="cursor: pointer;">
+            <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
+          </div>
+        {% endif %}
       </div>
     </div>
-  </header>
+  </div>
+</header>
 
   <div class="portal-container">
     

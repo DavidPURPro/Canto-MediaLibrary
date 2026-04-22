@@ -744,21 +744,43 @@ function executeGlobalSearch(query, page = 1) {
                 if (pagination) pagination.style.display = 'none';
                 return;
             }
+            let currentDateGroup = null; 
+
             files.forEach(file => {
                 const ext = file.name.split('.').pop().toLowerCase();
                 let mediaHtml = '';
+                
                 if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
                     mediaHtml = `<div class="img-placeholder"></div><img src="${file.url}" alt="${file.name}" loading="lazy" />`;
                 } 
                 else if (['mp4', 'webm', 'mov'].includes(ext)) {
                     mediaHtml = `<video controls width="100%" style="max-height: 200px; border-radius: 11px 11px 0 0; object-fit: cover;" preload="none"><source src="${file.url}" type="video/${ext}"></video>`;
                 } 
-                else if (['pdf', 'emf', 'docx', 'pptx'].includes(ext)) {
+                else if (ext === 'pdf') {
+                    mediaHtml = `<iframe src="${file.url}" width="100%" height="200px" style="border: 1px solid #e2e8f0; border-radius: 11px 11px 0 0;" loading="lazy" preload="none"></iframe>`;
+                }
+                else if (['docx', 'pptx'].includes(ext)) {
+                    mediaHtml = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(file.url)}" width="100%" height="200px" style="border: none;" loading="lazy" preload="none"></iframe>`;
+                }
+                else if (['emf', 'heic', 'thm', 'psd'].includes(ext)) {
                     mediaHtml = `<img src="/static/icons/${ext}.png" alt="${file.name}" style="max-height: 200px; object-fit: contain;" loading="lazy" />`;
                 } 
                 else {
                     mediaHtml = `<div class="file-preview"><img src="/static/No_preview.png" style="max-width:80px;"/><div style="font-weight: 700; color: var(--gray-500);">${ext.toUpperCase()}</div></div>`;
                 }
+
+                if (currentGlobalSort === 'date_desc') {
+                    const fileDate = file.date_ajout || 'Anciens fichiers (Sans date)';
+                    if (fileDate !== currentDateGroup) {
+                        currentDateGroup = fileDate;
+                        const dateHeaderHtml = `
+                            <div class="date-group-header" style="grid-column: 1 / -1; font-size: 22px; font-weight: 800; color: #16677c; margin-top: 30px; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; width: 100%;">
+                                ${fileDate}
+                            </div>`;
+                        gallery.insertAdjacentHTML('beforeend', dateHeaderHtml);
+                    }
+                }
+
                 const isExclusive = file.is_exclusive === true || file.is_exclusive === 'true';
                 const cardHtml = `
                     <div class="gallery-item" 
@@ -830,6 +852,8 @@ document.querySelectorAll('.sort-dropdown-content button[data-sort]').forEach(bu
         executeGlobalSearch(currentSearchQuery, 1);
     });
 });
+
+// slug
 
 document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEach(button => {
     button.addEventListener('click', (e) => {
@@ -935,6 +959,39 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     }
   });
 
+  if (profileBtn) {
+    profileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (profileDropdown) profileDropdown.classList.toggle('active');
+    });
+}
+
+// gestion logout 
+  if (profileLogout) {
+    profileLogout.addEventListener('click', function(e) {
+      e.preventDefault(); 
+      const pathParts = window.location.pathname.split('/');
+      if (pathParts[1] === 'portal' && pathParts[2]) {
+        const portalId = pathParts[2];
+        
+        fetch(`/portal/${portalId}/logout`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            }
+        })
+        .catch(err => console.error("Erreur de déconnexion:", err));
+      } 
+      else {
+        window.location.href = '/logout';
+      }
+    });
+  }
+
   document.addEventListener('click', function(e) {
     if (e.target.closest('.download-btn') || e.target.closest('#modalDownloadBtn')) {
       e.preventDefault();
@@ -991,10 +1048,6 @@ if (addMainFolderBtn) {
     profileDropdown.classList.toggle('active');
   });
   
-  profileLogout.addEventListener('click', function() {
-    window.location.href = '/logout';
-  });
-  
   // fermer le dropdown quand on clique ailleurs
   document.addEventListener('click', function(e) {
     if (!e.target.closest('.profile-container')) {
@@ -1022,6 +1075,7 @@ if (addMainFolderBtn) {
       });
   }
 }
+
 
 function setupCopyLinkButtons() {
   const copyButtons = document.querySelectorAll('.copy-link-btn');

@@ -207,7 +207,7 @@ app.get('/', async (req, res) => {
         const result = await pool.query(dataQuery, queryParams);
 
         res.render('index.html', {
-            documents: result.rows,
+            files: result.rows,
             current_page: page,
             total_pages: totalPages,
             currentSort: sort,
@@ -237,19 +237,29 @@ async function isUserAdmin(accessToken) {
         const response = await client.api(`/me/memberOf?$filter=id eq '${adminGroupId}'`).get();
         return response.value && response.value.length > 0;
     } catch (e) {
-        console.error("Erreur Graph API (Admin Check):", e.message);
+        if (e.message && e.message.includes("Insufficient privileges"))
         return false;
+      console.error("Erreur Graph API (Admin Check):", e.message);
+      return false;
     }
 }
 
 function loginRequiredHtml(req, res, next) {
     if (req.path.startsWith('/portal/')) {
-        const portal_id = req.params.portal_id;
+      // employé de pur connecté au site principal ?
+        const isInternalUser = req.session.user_email && req.session.user_email.endsWith('@pur.comm'); 
+        // si oui on laisse passer       
+        if (isInternalUser) {
+            return next();
+        }
+        // sinon session pour portail
         if (!req.session.portal_user_email) {
-            return res.redirect(portal_id ? `/portal/${portal_id}/login` : '/portals');
+            const urlParts = req.path.split('/');
+            const extractedPortalId = urlParts[2]; 
+            return res.redirect(extractedPortalId && extractedPortalId !== 'login' ? `/portal/${extractedPortalId}/login` : '/login');
         }
         return next();
-    }
+    }    
     if (!req.session.user_email) {
         req.session.nextUrl = req.originalUrl;
         return res.redirect('/login');
@@ -311,7 +321,7 @@ app.get('/getAToken', async (req, res) => {
 
         const response = await pca.acquireTokenByCode(tokenRequest);
         const email = (response.account.username || response.account.name || "").toLowerCase();
-        const allowedDomain = (process.env.ALLOWED_DOMAIN || "pur.co").toLowerCase();
+        const allowedDomain = (process.env.ALLOWED_DOMAIN || "pur.com").toLowerCase();
 
         if (!email.endsWith(`@${allowedDomain}`)) {
             req.session.destroy();
@@ -323,7 +333,6 @@ app.get('/getAToken', async (req, res) => {
         req.session.user_email = email;
         req.session.username = email.split('@')[0];
         req.session.is_admin = isAdmin;
-
         const nextUrl = req.session.nextUrl || '/';
         delete req.session.nextUrl;
         
@@ -408,12 +417,8 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         const page = parseInt(req.query.page || 1, 10);
         const per_page = parseInt(req.query.per_page || 100, 10);
         const offset = (page - 1) * per_page;
-        
-        // Nouveaux paramètres Frontend
         const sort = req.query.sort || 'name_asc';
         const filter = req.query.filter || 'all';
-
-        // Mappage des extensions
         const ext = {
             images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
             videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
@@ -422,8 +427,6 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
             presentations: ["'%.ppt'", "'%.pptx'", "'%.key'", "'%.odp'"]
         };
         const allKnownExts = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
-
-        // Requête de base avec WHERE 1=1 pour faciliter la concaténation
         let query = `
             SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event, folder_id,
                    COUNT(*) OVER() as total_count
@@ -431,8 +434,6 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
             WHERE 1=1
         `;
         const params = [];
-
-        // --- FILTRES DE RECHERCHE TEXTUELLE ET TAGS ---
         if (filename) {
             const searchTerm = `%${filename}%`;
             params.push(searchTerm, searchTerm, searchTerm);
@@ -454,7 +455,7 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
             query += ` AND folder_id = $${params.length}`;
         }
 
-        // --- GESTION DU FILTRE PAR CATÉGORIE ---
+        // filtre par caté 
         if (filter === 'exclusive') {
             query += ` AND is_exclusive = TRUE`;
         } else if (filter === 'images') {
@@ -471,18 +472,17 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
             query += ` AND LOWER(nom_fichier) NOT LIKE ANY(ARRAY[${allKnownExts.join(',')}])`;
         }
 
-        // --- GESTION DU TRI ---
-        let orderBy = 'ORDER BY LOWER(nom_fichier) ASC'; // Par défaut
+        // trie
+        let orderBy = 'ORDER BY LOWER(nom_fichier) ASC'; 
         if (sort === 'name_desc') orderBy = 'ORDER BY LOWER(nom_fichier) DESC';
-        if (sort === 'date_desc') orderBy = 'ORDER BY date_ajout DESC';
+        if (sort === 'date_desc') orderBy = 'ORDER BY date_ajout DESC NULLS LAST';
         
         query += ` ${orderBy}`;
 
-        // --- PAGINATION ---
+        // pagination
         params.push(per_page, offset);
         query += ` LIMIT $${params.length - 1} OFFSET $${params.length};`;
 
-        // Execution SQL
         const result = await pool.query(query, params);
         
         let total_count = 0;
@@ -531,7 +531,6 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
     }
 });
 
-// routes UPLOAD (Page HTML et API Post)
 function buildFolderHierarchy(folders) {
     const folderMap = new Map();
     folders.forEach(f => folderMap.set(f.id, { ...f, subfolders: [] }));
@@ -539,7 +538,8 @@ function buildFolderHierarchy(folders) {
     folders.forEach(f => {
         if (f.parent_id && folderMap.has(f.parent_id)) {
             folderMap.get(f.parent_id).subfolders.push(folderMap.get(f.id));
-        } else {
+        } 
+        else {
             rootFolders.push(folderMap.get(f.id));
         }
     });
@@ -1147,7 +1147,13 @@ app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
             last_sync: portalRow.last_sync ? new Date(portalRow.last_sync).toLocaleDateString('fr-FR').replace(/\//g, '-') : ""
         };
 
-        res.render('portal_page.html', { portal: portal_data, files: files_data, is_admin: req.session.is_admin });
+        res.render('portal_page.html', { portal: portal_data, 
+          files: files_data, 
+          is_admin: req.session.is_admin,
+          user_email: req.session.user_email || req.session.portal_user_email,
+          username: req.session.username || (req.session.portal_user_email ? req.session.portal_user_email.split('@')[0] : ''),
+          is_global_auth: !!req.session.user_email
+        });
     } catch (error) {
         console.error("Erreur /portal/:id :", error);
         res.status(500).send("Erreur serveur");
@@ -1359,13 +1365,14 @@ app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
 // login au portail
 app.get('/portal/:portal_id/login', async (req, res) => {
     const portal_id = req.params.portal_id;
+    if (req.session.user_email && req.session.user_email.endsWith('@pur.com')) {
+        return res.redirect(`/portal/${portal_id}`);
+    }
     if (req.session?.portal_access == portal_id && req.session?.portal_user_email && !req.query.force) {
         return res.redirect(`/portal/${portal_id}`);
     }
-
     const result = await pool.query("SELECT name FROM portals WHERE id = $1;", [portal_id]);
     if (result.rows.length === 0) return res.status(404).send("Portal not found");
-
     res.render('portal_login.html', { portal_id, portal_name: result.rows[0].name, error: null });
 });
 
@@ -1507,25 +1514,31 @@ app.post('/portal/:portal_id/request_reset', upload.none(), async (req, res) => 
 // logout
 app.get('/logout_portal', (req, res) => {
     const pId = req.session.portal_access;
+    if (req.session.user_email && req.session.user_email.endsWith('@pur.com')) {
+        return res.redirect('/portals');
+    }
     req.session.destroy();
     res.redirect(pId ? `/portal/${pId}/login` : '/');
 });
 
 app.post('/portal/:portal_id/logout', (req, res) => {
-    const { portal_id } = req.params;
-
-    if (req.session.portal_only) {
-        req.session.destroy((err) => {
-            if (err) return res.status(500).json({ status: "error" });
-            res.json({ status: "success", redirect_url: "/portals" });
-        });
-    } 
-    else {
+    const portal_id = req.params.portal_id;
+    if (req.session.user_email) {
         delete req.session.portal_user_id;
         delete req.session.portal_user_email;
         delete req.session.portal_access;
-        res.json({ status: "success", redirect_url: `/portal/${portal_id}/login` });
+        req.session.save(() => {
+            res.json({ status: "success", redirect_url: "/portals" });
+        });
+        return;
     }
+    req.session.destroy((err) => {
+        if (err) {
+            console.error("Erreur destruction session:", err);
+            return res.status(500).json({ status: "error" });
+        }
+        res.json({ status: "success", redirect_url: `/portal/${portal_id}/login` });
+    });
 });
 
 app.get("/get_portal_slug/:portal_id", async (req, res) => {
@@ -1537,6 +1550,26 @@ app.get("/get_portal_slug/:portal_id", async (req, res) => {
         res.status(404).json({ status: "error", message: "Slug not found" });
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+app.get('/get_portal_url/:portal_id', loginRequiredJson, async (req, res) => {
+    try {
+        const portal_id = req.params.portal_id;
+        if (!portal_id) {
+            return res.status(400).json({ status: "error", message: "ID manquant" });
+        }
+        const host = req.get('host');
+        const protocol = req.protocol;
+        const portal_url = `${protocol}://${host}/portal/${portal_id}/login`;
+        return res.json({ 
+            status: "success", 
+            url: portal_url 
+        });
+
+    } catch (error) {
+        console.error("Erreur get_portal_url:", error);
+        res.status(500).json({ status: "error", message: "Erreur serveur" });
     }
 });
 
