@@ -972,7 +972,8 @@ app.get('/get_document_info/:id', async (req, res) => {
         
         if (result.rows.length > 0) {
             res.json(result.rows[0]);
-        } else {
+        } 
+        else {
             res.status(404).json({ error: "Document non trouvé" });
         }
     } catch (error) {
@@ -982,12 +983,12 @@ app.get('/get_document_info/:id', async (req, res) => {
 
 // routes suppr et maj fichiers
 // afficher la page
-app.get('/delete', loginRequiredHtml, (req, res) => {
+app.get('/delete_files', loginRequiredHtml, (req, res) => {
     res.render('delete.html');
 });
 
 // suppr définitivement un fichier (Azure + bdd)
-app.post('/delete_file', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/delete_files', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         const confirmation = req.body.confirmation === "on";
@@ -1012,7 +1013,7 @@ app.post('/delete_file', loginRequiredJson, upload.none(), async (req, res) => {
         res.json({ status: "success", message: `Fichier ${filename} supprimé` });
 
     } catch (error) {
-        console.error("Erreur delete_file:", error);
+        console.error("Erreur delete_files:", error);
         res.status(500).json({ status: "error", message: error.message });
     }
 });
