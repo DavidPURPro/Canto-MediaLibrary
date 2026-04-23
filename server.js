@@ -983,12 +983,12 @@ app.get('/get_document_info/:id', async (req, res) => {
 
 // routes suppr et maj fichiers
 // afficher la page
-app.get('/delete_files', loginRequiredHtml, (req, res) => {
+app.get('/delete', loginRequiredHtml, (req, res) => {
     res.render('delete.html');
 });
 
 // suppr définitivement un fichier (Azure + bdd)
-app.post('/delete_files', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/delete', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         const confirmation = req.body.confirmation === "on";
@@ -1209,7 +1209,7 @@ app.post('/update_portal/:portal_id', loginRequiredJson, upload.none(), async (r
     }
 });
 
-// Supprimer un portail
+// suppr un portail
 app.post('/delete_portal/:portal_id', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const pId = req.params.portal_id;
