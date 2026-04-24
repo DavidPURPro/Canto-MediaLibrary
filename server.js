@@ -1092,20 +1092,30 @@ app.get('/get_all_portals', loginRequiredJson, async (req, res) => {
     }
 });
 
+async function getPortalInfo(identifier) {
+    // chercher via l'ID classique ou le slug ("puratos-30")
+    const res = await pool.query("SELECT id, name, slug FROM portals WHERE id::text = $1 OR slug = $1 LIMIT 1;", [identifier]);
+    return res.rows.length > 0 ? res.rows[0] : null;
+}
+
 // page d'un portail spécifique
 app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
-  const portal_id = req.params.portal_id;
-  const isAdmin = req.session.user_email && req.session.user_email.endsWith('@pur.co');
-    if (!isAdmin) {
-        if (!req.session.portal_user_email || req.session.portal_access != portal_id) {
-            return res.redirect(`/portal/${portal_id}/login`);
-        }
-    }
+    const identifier = req.params.portal_id; 
     try {
-        const portalRes = await pool.query("SELECT id, name, url, access, creation_date, last_sync FROM portals WHERE id = $1;", [portal_id]);
+        const portalRes = await pool.query("SELECT id, name, url, access, creation_date, last_sync, slug FROM portals WHERE id::text = $1 OR slug = $1;", [identifier]);
         if (portalRes.rows.length === 0) return res.redirect('/portals');
-        
         const portalRow = portalRes.rows[0];
+        const real_portal_id = portalRow.id; 
+        const slug = portalRow.slug || real_portal_id; 
+        if (identifier == real_portal_id.toString() && portalRow.slug) {
+            return res.redirect(`/portal/${portalRow.slug}`);
+        }
+        const isAdmin = req.session.user_email && req.session.user_email.endsWith('@pur.co');
+        if (!isAdmin) {
+            if (!req.session.portal_user_email || req.session.portal_access != real_portal_id) {
+                return res.redirect(`/portal/${slug}/login`); 
+            }
+        }
 
         const filesRes = await pool.query(`
             SELECT pf.id, pf.filename, pf.description, pf.size_bytes, pf.upload_date, 
@@ -1116,7 +1126,7 @@ app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
             LEFT JOIN folders f ON d.folder_id = f.id
             WHERE pf.portal_id = $1 
             ORDER BY pf.filename;
-        `, [portal_id]);
+        `, [real_portal_id]);
 
         let total_bytes = 0;
         const files_data = filesRes.rows.map(file => {
@@ -1371,45 +1381,62 @@ app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
 
 // login au portail
 app.get('/portal/:portal_id/login', async (req, res) => {
-    const portal_id = req.params.portal_id;
-    if (req.session.user_email && req.session.user_email.endsWith('@pur.com')) {
-        return res.redirect(`/portal/${portal_id}`);
+    try {
+        const identifier = req.params.portal_id;
+        const portal = await getPortalInfo(identifier);
+        if (!portal) return res.status(404).send("Portal not found");
+        const real_portal_id = portal.id;
+        const slug = portal.slug || real_portal_id;
+
+        if (req.session.user_email && req.session.user_email.endsWith('@pur.co')) {
+            return res.redirect(`/portal/${slug}`);
+        }
+        if (req.session?.portal_access == real_portal_id && req.session?.portal_user_email && !req.query.force) {
+            return res.redirect(`/portal/${slug}`);
+        }
+        res.render('portal_login.html', { portal_id: slug, portal_name: portal.name, error: null });
+    } catch (error) {
+        console.error("Erreur GET login:", error);
+        res.status(500).send("Erreur serveur lors de l'affichage de la connexion");
     }
-    if (req.session?.portal_access == portal_id && req.session?.portal_user_email && !req.query.force) {
-        return res.redirect(`/portal/${portal_id}`);
-    }
-    const result = await pool.query("SELECT name FROM portals WHERE id = $1;", [portal_id]);
-    if (result.rows.length === 0) return res.status(404).send("Portal not found");
-    res.render('portal_login.html', { portal_id, portal_name: result.rows[0].name, error: null });
 });
 
 app.post('/portal/:portal_id/login', upload.none(), async (req, res) => {
-    const portal_id = req.params.portal_id;
-    const { email, password, reset_request, reset_email } = req.body;
-    if (reset_request !== undefined) {
-        const userRes = await pool.query("SELECT id FROM portal_users WHERE email = LOWER($1) AND portal_id = $2;", [reset_email, portal_id]);
-        if (userRes.rows.length > 0) {
-            const token = crypto.randomBytes(32).toString('hex');
-            const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-
-            await pool.query("UPDATE portal_users SET reset_token = $1, reset_token_expiry = $2 WHERE email = $3 AND portal_id = $4;",
-                [token, expiry, reset_email, portal_id]);
-            const resetUrl = `${req.protocol}://${req.get('host')}/portal/${portal_id}/reset_password/${token}`;
-            await sendEmail(reset_email, "Resetting your password", `Click here: ${resetUrl}`);
-            return res.render('portal_login.html', { portal_id, portal_name: "Portal", error: "Reset email sent!" });
+    try {
+        const identifier = req.params.portal_id;
+        const portal = await getPortalInfo(identifier);
+        if (!portal) return res.status(404).send("Portal not found");
+        const real_portal_id = portal.id;
+        const slug = portal.slug || real_portal_id;
+        const { email, password, reset_request, reset_email } = req.body;
+        if (reset_request !== undefined) {
+            const userRes = await pool.query("SELECT id FROM portal_users WHERE email = LOWER($1) AND portal_id = $2;", [reset_email, real_portal_id]);
+            if (userRes.rows.length > 0) {
+                const token = require('crypto').randomBytes(32).toString('hex');
+                const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+                await pool.query("UPDATE portal_users SET reset_token = $1, reset_token_expiry = $2 WHERE email = $3 AND portal_id = $4;",
+                    [token, expiry, reset_email, real_portal_id]);
+                const resetUrl = `${req.protocol}://${req.get('host')}/portal/${slug}/reset_password/${token}`;
+                await sendEmail(reset_email, "Resetting your password", `Click here: ${resetUrl}`);
+                return res.render('portal_login.html', { portal_id: slug, portal_name: portal.name, error: "Reset email sent!" });
+            }
         }
-    }
-    const authorized = await checkPortalAccess(email, portal_id, password);
-    if (authorized) {
-        const user = await pool.query("SELECT id FROM portal_users WHERE email = $1 AND portal_id = $2;", [email, portal_id]);
-        req.session.portal_user_id = user.rows[0].id;
-        req.session.portal_user_email = email;
-        req.session.portal_access = portal_id;
-
-        await pool.query("UPDATE portal_users SET last_login = NOW() WHERE id = $1;", [user.rows[0].id]);
-        res.redirect(`/portal/${portal_id}`);
-    } else {
-        res.render('portal_login.html', { portal_id, portal_name: "Portal", error: "Incorrect email or password" });
+        
+        const authorized = await checkPortalAccess(email, real_portal_id, password);
+        if (authorized) {
+            const user = await pool.query("SELECT id FROM portal_users WHERE email = $1 AND portal_id = $2;", [email, real_portal_id]);
+            req.session.portal_user_id = user.rows[0].id;
+            req.session.portal_user_email = email;
+            req.session.portal_access = real_portal_id; 
+            await pool.query("UPDATE portal_users SET last_login = NOW() WHERE id = $1;", [user.rows[0].id]);
+            res.redirect(`/portal/${slug}`);
+        } 
+        else {
+            res.render('portal_login.html', { portal_id: slug, portal_name: portal.name, error: "Incorrect email or password" });
+        }
+    } catch (error) {
+        console.error("Erreur POST login:", error);
+        res.render('portal_login.html', { portal_id: req.params.portal_id, portal_name: "Portal", error: "Une erreur interne est survenue. Veuillez réessayer." });
     }
 });
 
@@ -1563,17 +1590,16 @@ app.get("/get_portal_slug/:portal_id", async (req, res) => {
 app.get('/get_portal_url/:portal_id', loginRequiredJson, async (req, res) => {
     try {
         const portal_id = req.params.portal_id;
-        if (!portal_id) {
-            return res.status(400).json({ status: "error", message: "ID manquant" });
-        }
+        if (!portal_id) return res.status(400).json({ status: "error", message: "ID manquant" });
+        const result = await pool.query("SELECT slug FROM portals WHERE id = $1;", [portal_id]);
+        const slug = (result.rows.length > 0 && result.rows[0].slug) ? result.rows[0].slug : portal_id;
         const host = req.get('host');
         const protocol = req.protocol;
-        const portal_url = `${protocol}://${host}/portal/${portal_id}/login`;
+        const portal_url = `${protocol}://${host}/portal/${slug}/login`;
         return res.json({ 
             status: "success", 
             url: portal_url 
         });
-
     } catch (error) {
         console.error("Erreur get_portal_url:", error);
         res.status(500).json({ status: "error", message: "Erreur serveur" });
