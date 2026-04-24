@@ -1094,7 +1094,13 @@ app.get('/get_all_portals', loginRequiredJson, async (req, res) => {
 
 // page d'un portail spécifique
 app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
-    const portal_id = req.params.portal_id;
+  const portal_id = req.params.portal_id;
+  const isAdmin = req.session.user_email && req.session.user_email.endsWith('@pur.co');
+    if (!isAdmin) {
+        if (!req.session.portal_user_email || req.session.portal_access != portal_id) {
+            return res.redirect(`/portal/${portal_id}/login`);
+        }
+    }
     try {
         const portalRes = await pool.query("SELECT id, name, url, access, creation_date, last_sync FROM portals WHERE id = $1;", [portal_id]);
         if (portalRes.rows.length === 0) return res.redirect('/portals');
