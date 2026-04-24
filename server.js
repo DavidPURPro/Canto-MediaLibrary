@@ -1099,20 +1099,30 @@ async function getPortalInfo(identifier) {
 }
 
 // page d'un portail spécifique
-app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
+app.get('/portal/:portal_id', async (req, res) => {
     const identifier = req.params.portal_id; 
     try {
         const portalRes = await pool.query("SELECT id, name, url, access, creation_date, last_sync, slug FROM portals WHERE id::text = $1 OR slug = $1;", [identifier]);
         if (portalRes.rows.length === 0) return res.redirect('/portals');
+        
         const portalRow = portalRes.rows[0];
         const real_portal_id = portalRow.id; 
         const slug = portalRow.slug || real_portal_id; 
+        
         if (identifier == real_portal_id.toString() && portalRow.slug) {
             return res.redirect(`/portal/${portalRow.slug}`);
         }
-        const isAdmin = req.session.user_email && req.session.user_email.endsWith('@pur.co');
-        if (!isAdmin) {
-            if (!req.session.portal_user_email || req.session.portal_access != real_portal_id) {
+        const isAdmin = req.session.is_admin === true; 
+        const isGlobalAuth = !!req.session.user_email; 
+        const isPortalUser = !!req.session.portal_user_email;
+        const isAuthorizedPortalUser = isPortalUser && (req.session.portal_access == real_portal_id); 
+
+        if (isPortalUser && !isAuthorizedPortalUser && !isGlobalAuth) {
+            return res.redirect(`/portal/${slug}/login`);
+        }
+
+        if (portalRow.access === 'Private') {
+            if (!isAdmin && !isAuthorizedPortalUser) {
                 return res.redirect(`/portal/${slug}/login`); 
             }
         }
@@ -1164,12 +1174,13 @@ app.get('/portal/:portal_id', loginRequiredHtml, async (req, res) => {
             last_sync: portalRow.last_sync ? new Date(portalRow.last_sync).toLocaleDateString('fr-FR').replace(/\//g, '-') : ""
         };
 
-        res.render('portal_page.html', { portal: portal_data, 
+        res.render('portal_page.html', { 
+          portal: portal_data, 
           files: files_data, 
-          is_admin: req.session.is_admin,
-          user_email: req.session.user_email || req.session.portal_user_email,
-          username: req.session.username || (req.session.portal_user_email ? req.session.portal_user_email.split('@')[0] : ''),
-          is_global_auth: !!req.session.user_email
+          is_admin: isAdmin,
+          user_email: req.session.user_email || (isAuthorizedPortalUser ? req.session.portal_user_email : null),
+          username: req.session.username || (isAuthorizedPortalUser ? req.session.portal_user_email.split('@')[0] : null),
+          is_global_auth: isGlobalAuth
         });
     } catch (error) {
         console.error("Erreur /portal/:id :", error);

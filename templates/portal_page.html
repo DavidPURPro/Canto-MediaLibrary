@@ -21,7 +21,12 @@
   </div>
   
   <div class="header-center">
-    <h1>{{ portal.name }}</h1>
+    <h1>
+      {{ portal.name }}
+      {% if portal.access == 'Private' %}
+        <span class="badge-confidential">STRICTLY CONFIDENTIAL</span>
+      {% endif %}
+    </h1>
   </div>
   
   <div class="header-right">
@@ -32,7 +37,9 @@
       <a href="/" class="back-btn"> Library</a>
       {% endif %}
       
+      {% if portal.access == 'Public' or is_admin %}
       <button class="back-btn" id="copyPortalLinkBtn" title="Copy portal link"> Copy Link</button>
+      {% endif %}
     </div>
       
     <div class="profile-container">
@@ -53,7 +60,6 @@
           </div>
         {% endif %}
         
-        {# Le bouton Logout ne s'affiche que si ce n'est PAS une session globale PUR.co #}
         {% if not is_global_auth %}
           <div class="profile-logout" id="profileLogout" style="cursor: pointer;">
             <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
@@ -110,18 +116,20 @@
         
         <div class="files-grid" id="filesGrid">
           {% for file in files %}
-<div class="file-card" 
-     data-filename="{{ file.filename }}" 
-     data-description="{{ file.description }}" 
-     data-tags="{{ file.tags|join(',') if file.tags else '' }}" 
-     data-filetype="{{ file.file_type }}" 
-     data-date-added="{{ file.upload_date }}" 
-     data-date-event="{{ file.event_date }}" 
-     data-exclusive="{{ 'true' if file.is_exclusive else 'false' }}" 
-     data-size-bytes="{{ file.size_bytes }}"
-     data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
-     data-folder-id="{{ file.folder_id if file.folder_id else '' }}">
-                 <div class="file-preview">
+          <div class="file-card" 
+              data-filename="{{ file.filename }}" 
+              data-description="{{ file.description }}" 
+              data-tags="{{ file.tags|join(',') if file.tags else '' }}" 
+              data-filetype="{{ file.file_type }}" 
+              data-date-added="{{ file.upload_date }}" 
+              data-date-event="{{ file.event_date }}" 
+              data-exclusive="{{ 'true' if file.is_exclusive else 'false' }}" 
+              data-size-bytes="{{ file.size_bytes }}"
+              data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
+              data-folder-id="{{ file.folder_id if file.folder_id else '' }}"
+              data-file-url="{{ file.file_url }}">
+            
+            <div class="file-preview">
               {% if file.file_type == 'Image' %}
                 <img src="{{ file.file_url }}" alt="{{ file.filename }}" loading="lazy">
               {% elif file.file_type == 'Video' %}
@@ -158,7 +166,11 @@
             </div>
 
             <div class="file-actions">
-              <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
+              {% if portal.access == 'Public' or is_admin %}
+                <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
+              {% else %}
+                <span class="view-only-tag"> View Only</span>
+              {% endif %}
             </div>
           </div>
           {% else %}
@@ -202,12 +214,32 @@
           <div class="portal-list" id="portalList" style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
         </div>
 
-        <button class="modal-action-btn" id="modalCopyBtn">Copy Link</button>
-        <a href="#" class="modal-action-btn" id="modalDownloadBtn" download>Download File</a>
+        {% if portal.access == 'Public' or is_admin %}
+          <button class="modal-action-btn" id="modalCopyBtn">Copy Link</button>
+          <a href="#" class="modal-action-btn" id="modalDownloadBtn" download>Download File</a>
+        {% endif %}
       </div>
     </div>
   </div>
 
   <script src="{{ url_for('static', filename='js/portal_page_logic.js') }}"></script>
+
+  {% if portal.access == 'Private' and not is_admin %}
+  <script>
+      document.addEventListener('contextmenu', function(e) {
+          if (['IMG', 'VIDEO', 'IFRAME'].includes(e.target.tagName) || e.target.closest('#modalPreview')) {
+              e.preventDefault();
+              alert("This portal is private. Downloading and copying are disabled.");
+              return false;
+          }
+      });
+      document.addEventListener('keydown', function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+              e.preventDefault();
+              alert(" Page saving is disabled on this portal.");
+          }
+      });
+  </script>
+  {% endif %}
 </body>
 </html>

@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function showFileModal(card) {
     const filename = card.getAttribute('data-filename');
     const fileType = card.getAttribute('data-filetype');
-    const downloadUrl = card.querySelector('.download-btn').getAttribute('href');
+    const downloadUrl = card.getAttribute('data-file-url');
     const folderName = card.getAttribute('data-folder-name') || 'None';
     
     currentModalFilename = filename;
@@ -240,9 +240,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const portalNameElem = document.querySelector('header h1');
     const currentPortalSpan = document.getElementById('currentPortalName');
     if (portalNameElem && currentPortalSpan) {
-        currentPortalSpan.textContent = portalNameElem.textContent;
+        currentPortalSpan.textContent = portalNameElem.childNodes[0].textContent.trim();
     }
-
     const btnAddFolder = document.getElementById('addToFolderBtn');
     const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
     const btnAddPortal = document.getElementById('addToPortalBtn');
@@ -251,11 +250,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (folderName !== 'None' && folderName !== '') {
         if (btnAddFolder) btnAddFolder.style.display = 'none';
         if (btnRemoveFolder) btnRemoveFolder.style.display = 'block';
-    } else {
+    } 
+    
+    else {
         if (btnAddFolder) btnAddFolder.style.display = 'block';
         if (btnRemoveFolder) btnRemoveFolder.style.display = 'none';
     }
-    
     if (btnAddPortal) btnAddPortal.style.display = 'none';
     if (btnRemovePortal) btnRemovePortal.style.display = 'block';
 
@@ -271,14 +271,14 @@ document.addEventListener('DOMContentLoaded', function() {
             tagElement.textContent = tag.trim();
             modalTags.appendChild(tagElement);
         });
-    } else {
+    } 
+    else {
         modalTags.innerHTML = '<span>No tags</span>';
     }
     
     document.getElementById('modalAddedDate').textContent = card.getAttribute('data-date-added') || 'Unknown';
     document.getElementById('modalEventDate').textContent = card.getAttribute('data-date-event') || 'Unknown';
-    
-    if(modalDownloadBtn) {
+    if(typeof modalDownloadBtn !== 'undefined' && modalDownloadBtn) {
         modalDownloadBtn.setAttribute('href', downloadUrl);
         modalDownloadBtn.setAttribute('download', filename);
     }
@@ -290,7 +290,8 @@ document.addEventListener('DOMContentLoaded', function() {
         img.src = downloadUrl;
         img.alt = filename;
         modalPreview.appendChild(img);
-    } else if (fileType === 'Video') {
+    } 
+    else if (fileType === 'Video') {
         const video = document.createElement('video');
         video.controls = true;
         video.style.width = "100%";
@@ -299,14 +300,17 @@ document.addEventListener('DOMContentLoaded', function() {
         source.type = 'video/mp4';
         video.appendChild(source);
         modalPreview.appendChild(video);
-    } else if (fileType === 'PDF') {
+    } 
+    
+    else if (fileType === 'PDF') {
         const iframe = document.createElement('iframe');
         iframe.src = downloadUrl;
         iframe.width = '100%';
         iframe.height = '100%';
         iframe.style.border = 'none';
         modalPreview.appendChild(iframe);
-    } else {
+    } 
+    else {
         const placeholder = document.createElement('div');
         placeholder.style.display = 'flex';
         placeholder.style.flexDirection = 'column';
@@ -319,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     fileModal.classList.add('active');
-  }
+}
 
   function closeFileModal() {
     fileModal.classList.remove('active');
