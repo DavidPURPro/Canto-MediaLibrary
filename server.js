@@ -15,7 +15,9 @@ const pool = new Pool({
     database: process.env.POSTGRES_DB,
     password: process.env.POSTGRES_PASSWORD,
     port: process.env.POSTGRES_PORT || 5432,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    max: 30, 
+    idleTimeoutMillis: 30000, 
 });
 const multer = require('multer');
 const { BlobServiceClient } = require('@azure/storage-blob');
@@ -1093,7 +1095,7 @@ app.get('/get_all_portals', loginRequiredJson, async (req, res) => {
 });
 
 async function getPortalInfo(identifier) {
-    // chercher via l'ID classique ou le slug ("puratos-30")
+    // chercher avec id classique ou le slug ("puratos-30")
     const res = await pool.query("SELECT id, name, slug FROM portals WHERE id::text = $1 OR slug = $1 LIMIT 1;", [identifier]);
     return res.rows.length > 0 ? res.rows[0] : null;
 }

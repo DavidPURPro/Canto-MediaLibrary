@@ -1,0 +1,38 @@
+config:
+  target: "https://pur-flaskapi-b8bwd4eahpeue8d6.westeurope-01.azurewebsites.net"
+  phases:
+    - duration: 60
+      arrivalRate: 2
+      rampTo: 10
+      name: "Pic B2B Réaliste (Jusqu'à 10 utilisateurs/sec)"
+
+scenarios:
+  - name: "Navigation Admin Intensive"
+    weight: 1
+    flow:
+      # 1. Chargement de la liste de tous les portails
+      - get:
+          url: "/portals"
+          headers:
+            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
+      - think: 2
+      
+      # 2. Chargement des fichiers d'un portail
+      - get:
+          url: "/portal/test-26"
+          headers:
+            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
+      - think: 2
+      
+      # 3. La fameuse Recherche !
+      - get:
+          url: "/search_file?filename=logo&page=1&per_page=100"
+          headers:
+            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
+      - think: 1
+      
+      # 4. Requête API supplémentaire
+      - get:
+          url: "/get_folders"
+          headers:
+            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
