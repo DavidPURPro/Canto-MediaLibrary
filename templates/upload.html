@@ -89,6 +89,12 @@
                 <label for="filePortal">Add to Portal</label>
                 <select id="filePortal" class="modern-input">
                   <option value="none">(No portal)</option>
+                  
+                  <!-- Ajoute cette boucle pour lire les données du serveur -->
+                  {% for portal in portals %}
+                    <option value="{{ portal.id }}">{{ portal.name }}</option>
+                  {% endfor %}
+                  
                 </select>
               </div>
             </div>

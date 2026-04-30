@@ -6,6 +6,7 @@ const nunjucks = require('nunjucks');
 const path = require('path');
 const { Pool } = require('pg');
 const flash = require('connect-flash');
+const { BlobServiceClient } = require('@azure/storage-blob');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,12 +21,61 @@ const pool = new Pool({
     idleTimeoutMillis: 30000, 
 });
 const multer = require('multer');
-const { BlobServiceClient } = require('@azure/storage-blob');
 const sanitize = require('sanitize-filename');
-const upload = multer({ storage: multer.memoryStorage() });
 const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
 const containerClient = blobServiceClient.getContainerClient(process.env.AZURE_STORAGE_CONTAINER);
 
+const AZURE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER;
+
+const AzureStreamStorage = {
+    _handleFile: async function (req, file, cb) {
+        try {
+            const correctName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+            const filename = sanitize(correctName).replace(/\s+/g, '_');
+            const checkExist = await pool.query("SELECT id FROM documents WHERE nom_fichier = $1 LIMIT 1;", [filename]);
+            
+            if (checkExist.rows.length > 0) {
+                return cb(new Error(`FileExists_Error:${filename}`));
+            }
+
+            const blockBlobClient = containerClient.getBlockBlobClient(filename);
+            const bufferSize = 4 * 1024 * 1024; 
+            const maxBuffers = 20;
+
+            await blockBlobClient.uploadStream(file.stream, bufferSize, maxBuffers, {
+                blobHTTPHeaders: { blobContentType: file.mimetype }
+            });
+            
+            const properties = await blockBlobClient.getProperties();
+
+            cb(null, {
+                originalname: correctName, 
+                filename: filename,
+                url: blockBlobClient.url,
+                size: properties.contentLength
+            });
+        } catch (error) {
+            console.error("Erreur de Stream Azure :", error);
+            cb(error);
+        }
+    },
+    _removeFile: function (req, file, cb) { cb(null); }
+};
+
+// eviter certains extension
+const fileFilter = (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const forbidden_extensions = [".heic", ".thm"];
+    
+    if (forbidden_extensions.includes(ext)) {
+        return cb(new Error(`Extension '${ext}' non autorisée`));
+    }
+    cb(null, true);
+};
+
+const uploadStream = multer({ storage: AzureStreamStorage, fileFilter: fileFilter });
+const upload = multer();
 
 const bcrypt = require('bcryptjs');
 const msal = require('@azure/msal-node');
@@ -249,7 +299,7 @@ async function isUserAdmin(accessToken) {
 function loginRequiredHtml(req, res, next) {
     if (req.path.startsWith('/portal/')) {
       // employé de pur connecté au site principal ?
-        const isInternalUser = req.session.user_email && req.session.user_email.endsWith('@pur.comm'); 
+        const isInternalUser = req.session.user_email && req.session.user_email.endsWith('@pur.co'); 
         // si oui on laisse passer       
         if (isInternalUser) {
             return next();
@@ -274,12 +324,12 @@ function loginRequiredJson(req, res, next) {
     next();
 }
 
-function adminRequired(req, res, next) {
+/*function adminRequired(req, res, next) {
     if (!req.session || !req.session.is_admin) {
         return res.status(403).send("Accès Administrateur Requis");
     }
     next();
-}
+}*/
 
 
 // routes authentification msal entra id 
@@ -323,7 +373,7 @@ app.get('/getAToken', async (req, res) => {
 
         const response = await pca.acquireTokenByCode(tokenRequest);
         const email = (response.account.username || response.account.name || "").toLowerCase();
-        const allowedDomain = (process.env.ALLOWED_DOMAIN || "pur.com").toLowerCase();
+        const allowedDomain = (process.env.ALLOWED_DOMAIN || "pur.co").toLowerCase();
 
         if (!email.endsWith(`@${allowedDomain}`)) {
             req.session.destroy();
@@ -552,14 +602,18 @@ app.get('/upload', loginRequiredHtml, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
         const folders = buildFolderHierarchy(result.rows);
-        res.render('upload.html', { folders: folders });
+        const portalsRes = await pool.query("SELECT id, name FROM portals ORDER BY name ASC;");
+        res.render('upload.html', { 
+            folders: folders, 
+            portals: portalsRes.rows 
+        });
     } catch (error) {
         console.error("Erreur chargement page upload:", error);
         res.status(500).send("Erreur serveur");
     }
 });
 
-app.post('/upload', loginRequiredJson, upload.array("files"), async (req, res) => {
+/*app.post('/upload', loginRequiredJson, upload.array("files"), async (req, res) => {
     try {
         const files = req.files || [];
         const descriptions = [].concat(req.body.descriptions || []);
@@ -633,6 +687,97 @@ app.post('/upload', loginRequiredJson, upload.array("files"), async (req, res) =
     } catch (error) {
         console.error("Erreur lors de l'upload:", error);
         res.status(500).json({ status: "error", message: "Erreur lors de l'upload" });
+    }
+});
+*/
+
+app.post('/upload', loginRequiredJson, (req, res, next) => {
+    uploadStream.array("files")(req, res, function (err) {
+        if (err) {
+            if (err.message.startsWith('Extension_Error')) {
+                const ext = err.message.split(':')[1];
+                return res.status(400).json({ status: "error", message: `Extension '${ext}' non autorisée` });
+            }
+            if (err.message.startsWith('FileExists_Error')) {
+                const fname = err.message.split(':')[1];
+                return res.status(400).json({ 
+                    status: "error", 
+                    message: `Le fichier '${fname}' existe déjà dans la base. Veuillez le renommer avant de l'uploader.` 
+                });
+            }
+            return res.status(500).json({ status: "error", message: "Erreur lors du transfert des fichiers." });
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const files = req.files || [];
+        const descriptions = [].concat(req.body.descriptions || []);
+        const tags_list = [].concat(req.body.tags || []);
+        const date_events = [].concat(req.body.date_events || []);
+        const folder_ids = [].concat(req.body.folder_ids || []);
+        const portal_ids = [].concat(req.body.portal_ids || []);
+        
+        const uploaded_urls = [];
+        const currentDate = new Date().toISOString().split('T')[0]; 
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const filename = file.filename;
+            const blob_url = file.url;
+            const size_bytes = file.size;
+            const originalName = file.originalname;
+            
+            const ext = require('path').extname(originalName).toLowerCase();
+            const description = descriptions[i] || "";
+            
+            let tags = [];
+            try { tags = JSON.parse(tags_list[i] || "[]"); } catch (e) { }
+            
+            const folder_id = folder_ids[i] || null;
+            const portal_id = (portal_ids[i] && portal_ids[i] !== "none") ? portal_ids[i] : null;
+            let date_event = null;
+            
+            if (date_events[i]) {
+                const parts = date_events[i].split('-');
+                if (parts.length === 3) date_event = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+
+            // enregistre dans la table globale (documents)
+            await pool.query(`
+                INSERT INTO documents (
+                    nom_fichier, lien_telechargement, description, tags, 
+                    date_ajout, date_event, folder_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
+            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id]);
+
+            // si associé à un portail, enregistre dans portal_files
+            if (portal_id) {
+                let file_type = "Other";
+                if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) file_type = "Image";
+                else if (['.mp4', '.mov', '.avi', '.wmv'].includes(ext)) file_type = "Video";
+                else if (['.pdf'].includes(ext)) file_type = "PDF";
+                else if (['.doc', '.docx'].includes(ext)) file_type = "Document";
+                else if (['.xls', '.xlsx'].includes(ext)) file_type = "Spreadsheet";
+                let size_display;
+                if (size_bytes >= 1024 ** 3) size_display = (size_bytes / (1024 ** 3)).toFixed(2) + "GB";
+                else if (size_bytes >= 1024 ** 2) size_display = (size_bytes / (1024 ** 2)).toFixed(2) + "MB";
+                else if (size_bytes >= 1024) size_display = (size_bytes / 1024).toFixed(2) + "KB";
+                else size_display = size_bytes + "Bytes";
+                await pool.query(`
+                    INSERT INTO portal_files (portal_id, filename, description, file_url, file_type, upload_date, size_bytes, size)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+                `, [portal_id, filename, description || "No description", blob_url, file_type, currentDate, size_bytes, size_display]);
+            }
+
+            uploaded_urls.push(blob_url);
+        }
+
+        res.json({ status: "success", urls: uploaded_urls });
+
+    } catch (error) {
+        console.error("Erreur lors de l'enregistrement en BDD:", error);
+        res.status(500).json({ status: "error", message: "Erreur lors de l'enregistrement en BDD." });
     }
 });
 
@@ -994,15 +1139,13 @@ app.post('/delete', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         const confirmation = req.body.confirmation === "on";
-
         if (!confirmation) {
             return res.status(400).json({ status: "error", message: "Confirmation requise" });
         }
-
         if (!filename) {
             return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
         }
-
+        // suppr dans azure
         const blockBlobClient = containerClient.getBlockBlobClient(filename);
         try {
             await blockBlobClient.deleteIfExists(); 
@@ -1010,9 +1153,23 @@ app.post('/delete', loginRequiredJson, upload.none(), async (req, res) => {
             console.error("Erreur Azure:", azureError);
             return res.status(500).json({ status: "error", message: `Azure error: ${azureError.message}` });
         }
+
+        // identifier portail qui contient le fichier avant de le suppr de la bdd
+        const portalsResult = await pool.query("SELECT portal_id FROM portal_files WHERE filename = $1;", [filename]);
+        const affectedPortals = portalsResult.rows.map(row => row.portal_id);
+
+        if (affectedPortals.length > 0) {
+            await pool.query("DELETE FROM portal_files WHERE filename = $1;", [filename]);
+        }
+
+        // suppr du site principal
         await pool.query("DELETE FROM documents WHERE nom_fichier = $1;", [filename]);
 
-        res.json({ status: "success", message: `Fichier ${filename} supprimé` });
+        for (let portal_id of affectedPortals) {
+            await updatePortalStats(portal_id);
+        }
+
+        res.json({ status: "success", message: `Fichier ${filename} supprimé avec succès` });
 
     } catch (error) {
         console.error("Erreur delete_files:", error);
@@ -1561,7 +1718,7 @@ app.post('/portal/:portal_id/request_reset', upload.none(), async (req, res) => 
 // logout
 app.get('/logout_portal', (req, res) => {
     const pId = req.session.portal_access;
-    if (req.session.user_email && req.session.user_email.endsWith('@pur.com')) {
+    if (req.session.user_email && req.session.user_email.endsWith('@pur.co')) {
         return res.redirect('/portals');
     }
     req.session.destroy();

@@ -95,14 +95,14 @@ function displayResults(files) {
                     ${getFilePreview(file)}
                 </div>
                 
-                <form id="delete-form-${file.name.replace(/[^a-z0-9]/gi, '_')}" onsubmit="deleteFile(event, '${file.name}')" class="mt-3 border-top pt-3">
+                <form id="delete-form-${file.name.replace(/[^a-z0-9]/gi, '_')}" onsubmit="deleteFile(event)" class="mt-3 border-top pt-3">
                     <div class="confirmation-check form-check">
                         <input class="form-check-input" type="checkbox" id="confirm-${file.name.replace(/[^a-z0-9]/gi, '_')}" name="confirmation" required>
                         <label class="form-check-label" for="confirm-${file.name.replace(/[^a-z0-9]/gi, '_')}">
                             I confirm that I want to permanently delete this file
                         </label>
                     </div>
-                    <input type="hidden" name="filename" value="${file.name}">
+                    <input type="hidden" name="filename" value="${file.name.replace(/"/g, '&quot;')}">
                     <button type="submit" class="delete-btn mt-2">
                         <i class="fas fa-trash me-2"></i>Delete
                     </button>
@@ -151,17 +151,17 @@ function isPDF(filename) {
     return filename.toLowerCase().endsWith('.pdf');
 }
 
-window.deleteFile = function(event, filename) {
+window.deleteFile = function(event) {
     event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    const filename = formData.get('filename');
     
     if (!confirm(`Are you sure you want to permanently delete "${filename}"? This action cannot be undone.`)) {
         return;
     }
     
-    const form = event.target;
-    const formData = new FormData(form);
-    
-    fetch('/delete_file', {
+    fetch('/delete', {
         method: 'POST',
         body: formData
     })
@@ -174,7 +174,8 @@ window.deleteFile = function(event, filename) {
         if (data.status === 'success') {
             messageDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
             form.remove();
-        } else {
+        } 
+        else {
             messageDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
         }
     })
