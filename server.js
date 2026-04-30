@@ -7,8 +7,38 @@ const path = require('path');
 const { Pool } = require('pg');
 const flash = require('connect-flash');
 const { BlobServiceClient } = require('@azure/storage-blob');
+const appInsights = require('applicationinsights');
+let insightsClient;
+if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
+    appInsights.setup()
+        .setAutoDependencyCorrelation(true)
+        .setAutoCollectRequests(true)
+        .setAutoCollectPerformance(true, true)
+        .setAutoCollectExceptions(true)
+        .setAutoCollectDependencies(true)
+        .setAutoCollectConsole(true)
+        .setUseDiskRetryCaching(true)
+        .start();
+    insightsClient = appInsights.defaultClient;
+    console.log("Application Insights : ACTIVÉ (Mode Cloud)");
+} 
+else {
+    insightsClient = {
+        trackEvent: (data) => console.log(`[Local Analytics] Événement simulé : ${data.name}`)
+    };
+    console.log("Application Insights : DÉSACTIVÉ (Mode Local - Événements simulés dans la console)");
+}
 
 const app = express();
+const morgan = require('morgan');
+
+if (process.env.NODE_ENV === 'production') {
+    app.use(morgan('combined')); 
+} 
+else {
+    app.use(morgan('dev')); 
+}
+
 const PORT = process.env.PORT || 3000;
 const pool = new Pool({
     user: process.env.POSTGRES_USER,
@@ -24,10 +54,6 @@ const multer = require('multer');
 const sanitize = require('sanitize-filename');
 const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
 const containerClient = blobServiceClient.getContainerClient(process.env.AZURE_STORAGE_CONTAINER);
-
-const AZURE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER;
-
 const AzureStreamStorage = {
     _handleFile: async function (req, file, cb) {
         try {
@@ -101,6 +127,8 @@ const env = nunjucks.configure('templates', {
 
 const session = require('express-session');
 
+const rateLimit = require('express-rate-limit');
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -111,6 +139,28 @@ app.use(session({
     name: 'portal_session',
     cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 30 * 60 * 1000 }
 }));
+
+// bouclier anti-brute force pour les connexions
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 5, 
+    message: "Too many login attempts. Please wait 15 minutes before trying again.",
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res, next, options) => {
+        if (req.path.includes('/login')) {
+            const portal_id = req.params.portal_id;
+            if (portal_id) {
+                return res.status(options.statusCode).render('portal_login.html', { 
+                    portal_id: portal_id, 
+                    portal_name: "Portal", 
+                    error: options.message 
+                });
+            }
+        }
+        res.status(options.statusCode).send(options.message);
+    }
+});
 
 app.use(flash());
 
@@ -397,10 +447,14 @@ app.get('/getAToken', async (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-    const portal_only = req.session.portal_only;
-    const portal_user_email = req.session.portal_user_email;
-    const portal_access = req.session.portal_access;
+    const userEmailToLog = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
     req.session.destroy((err) => {
+        insightsClient.trackEvent({
+            name: "logout",
+            properties: {
+                utilisateur: userEmailToLog 
+            }
+        });
         const postLogoutUri = `${req.protocol}://${req.get('host')}/login`;
         const aadLogout = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri=${postLogoutUri}`;
         res.redirect(aadLogout);
@@ -772,7 +826,13 @@ app.post('/upload', loginRequiredJson, (req, res, next) => {
 
             uploaded_urls.push(blob_url);
         }
-
+        insightsClient.trackEvent({
+            name: "Fichier_upload",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success", urls: uploaded_urls });
 
     } catch (error) {
@@ -873,6 +933,13 @@ app.post('/delete_folder', loginRequiredJson, upload.none(), async (req, res) =>
         }
 
         await pool.query("DELETE FROM folders WHERE id = $1;", [folder_id]);
+        insightsClient.trackEvent({
+            name: "Folder_Supprime",
+            properties: {
+                dossier_id: folder_id,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success" });
     } catch (error) {
         console.error("Erreur delete_folder:", error);
@@ -897,6 +964,13 @@ app.post('/update_file_folder', loginRequiredJson, upload.none(), async (req, re
             "UPDATE documents SET folder_id = $1 WHERE nom_fichier = $2;",
             [folder_id, filename]
         );
+        insightsClient.trackEvent({
+            name: "update_file_folder",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success" });
     } catch (error) {
         console.error("Erreur update_file_folder:", error);
@@ -922,14 +996,28 @@ app.post('/remove_file_portal', loginRequiredJson, upload.none(), async (req, re
         
         if (remainingFiles > 0) {
             await updatePortalStats(portal_id);
-        } else {
+        } 
+        else {
             await pool.query(`
                 UPDATE portals 
                 SET files = 0, size = '0Bytes', last_sync = CURRENT_DATE 
                 WHERE id = $1;
             `, [portal_id]);
         }
-        
+        insightsClient.trackEvent({
+            name: "remove_file_from_folder",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
+        insightsClient.trackEvent({
+            name: "remove_file_portal",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success" });
     } catch (error) {
         console.error("Erreur remove_file_from_portal:", error);
@@ -992,7 +1080,13 @@ app.post('/remove_file_from_folder', loginRequiredJson, upload.none(), async (re
             "UPDATE documents SET folder_id = NULL WHERE nom_fichier = $1;",
             [filename]
         );
-        
+        insightsClient.trackEvent({
+            name: "remove_file_from_folder",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success" });
     } catch (error) {
         console.error("Erreur remove_file_from_folder:", error);
@@ -1064,6 +1158,13 @@ app.post('/assign_file_folder', upload.none(), async (req, res) => {
         const result = await pool.query(query, [folder_id, filename]);
 
         if (result.rowCount > 0) {
+            insightsClient.trackEvent({
+            name: "fichier_reassigner_avec_succes",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
             res.json({ status: "success", message: "Fichier réassigné avec succès",
     folder_id: folder_id});
         } 
@@ -1092,7 +1193,13 @@ app.post('/assign_file_portal', upload.none(), async (req, res) => {
             "INSERT INTO document_portals (document_id, portal_id) VALUES ($1, $2)",
             [documentId, portal_id]
         );
-
+        insightsClient.trackEvent({
+            name: "assign_file_portal",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success", message: "Portail mis à jour" });
     } catch (error) {
         console.error(error);
@@ -1168,7 +1275,13 @@ app.post('/delete', loginRequiredJson, upload.none(), async (req, res) => {
         for (let portal_id of affectedPortals) {
             await updatePortalStats(portal_id);
         }
-
+        insightsClient.trackEvent({
+            name: "Fichier_Supprime",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success", message: `Fichier ${filename} supprimé avec succès` });
 
     } catch (error) {
@@ -1368,7 +1481,13 @@ app.post('/add_portal', loginRequiredJson, async (req, res) => {
         const fullUrl = `${protocol}://${host}/portal/${slug}`;
 
         await pool.query("UPDATE portals SET slug = $1, url = $2 WHERE id = $3;", [slug, fullUrl, portal_id]);
-
+        insightsClient.trackEvent({
+            name: "portal added",
+            properties: {
+                portal_id: name,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success", message: "Portal created successfully", portal_id });
     } catch (error) {
         console.error("Erreur add_portal:", error);
@@ -1403,6 +1522,13 @@ app.post('/delete_portal/:portal_id', loginRequiredJson, upload.none(), async (r
         const delRes = await pool.query("DELETE FROM portals WHERE id = $1 RETURNING name;", [pId]);
         
         if (delRes.rows.length > 0) {
+            insightsClient.trackEvent({
+            name: "portal deleted",
+            properties: {
+                portail_nom: pId,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
             res.json({ status: "success", message: `Portal '${delRes.rows[0].name}' deleted successfully` });
         } else {
             res.status(404).json({ status: "error", message: "Portal not found" });
@@ -1502,7 +1628,13 @@ app.post('/remove_file_from_portal', loginRequiredJson, upload.none(), async (re
 
         await pool.query("DELETE FROM portal_files WHERE filename = $1 AND portal_id = $2;", [filename, portal_id]);
         await updatePortalStats(portal_id);
-        
+        insightsClient.trackEvent({
+            name: "Fichier_Supprime_from_portal",
+            properties: {
+                fichier: filename,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success" });
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
@@ -1571,7 +1703,7 @@ app.get('/portal/:portal_id/login', async (req, res) => {
     }
 });
 
-app.post('/portal/:portal_id/login', upload.none(), async (req, res) => {
+app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, res) => {
     try {
         const identifier = req.params.portal_id;
         const portal = await getPortalInfo(identifier);
@@ -1655,7 +1787,7 @@ app.get('/portal/:portal_id/request_reset', async (req, res) => {
     }
 });
 
-app.post('/portal/:portal_id/request_reset', upload.none(), async (req, res) => {
+app.post('/portal/:portal_id/request_reset', loginLimiter, upload.none(), async (req, res) => {
     const { portal_id } = req.params;
     const email = req.body.email ? req.body.email.toLowerCase().trim() : '';
 
@@ -1732,6 +1864,13 @@ app.post('/portal/:portal_id/logout', (req, res) => {
         delete req.session.portal_user_email;
         delete req.session.portal_access;
         req.session.save(() => {
+            insightsClient.trackEvent({
+            name: "logout_from_portal",
+            properties: {
+                portail: portal_id,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
             res.json({ status: "success", redirect_url: "/portals" });
         });
         return;
@@ -1741,6 +1880,13 @@ app.post('/portal/:portal_id/logout', (req, res) => {
             console.error("Erreur destruction session:", err);
             return res.status(500).json({ status: "error" });
         }
+        insightsClient.trackEvent({
+            name: "logout_from_portal",
+            properties: {
+                portail: portal_id,
+                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            }
+        });
         res.json({ status: "success", redirect_url: `/portal/${portal_id}/login` });
     });
 });
