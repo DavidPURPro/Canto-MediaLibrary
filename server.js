@@ -435,6 +435,14 @@ app.get('/getAToken', async (req, res) => {
         req.session.user_email = email;
         req.session.username = email.split('@')[0];
         req.session.is_admin = isAdmin;
+        if (insightsClient) {
+            insightsClient.trackEvent({
+                name: "login_reussi",
+                properties: {
+                    utilisateur: email
+                }
+            });
+        }
         const nextUrl = req.session.nextUrl || '/';
         delete req.session.nextUrl;
         
@@ -455,7 +463,8 @@ app.get('/logout', (req, res) => {
                 utilisateur: userEmailToLog 
             }
         });
-        const postLogoutUri = `${req.protocol}://${req.get('host')}/login`;
+        const domaine = process.env.WEBSITE_HOSTNAME ? `https://${process.env.WEBSITE_HOSTNAME}` : `${req.protocol}://${req.get('host')}`;
+        const postLogoutUri = `${domaine}/login`;
         const aadLogout = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri=${postLogoutUri}`;
         res.redirect(aadLogout);
     });
@@ -912,7 +921,15 @@ app.post('/create_folder', loginRequiredJson, upload.none(), async (req, res) =>
             [name, parent_id]
         );
         const folder_id = result.rows[0].id;
-        
+        if (insightsClient) {
+            insightsClient.trackEvent({
+                name: "Folder_Cree",
+                properties: {
+                    dossier_nom: name,
+                    utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                }
+            });
+        }
         res.json({ 
             status: "success", 
             folder: { id: folder_id, name: name, parent_id: parent_id } 
@@ -1697,6 +1714,15 @@ app.get('/portal/:portal_id/login', async (req, res) => {
             return res.redirect(`/portal/${slug}`);
         }
         res.render('portal_login.html', { portal_id: slug, portal_name: portal.name, error: null });
+        if (insightsClient) {
+                insightsClient.trackEvent({
+                    name: "login_portail_reussi",
+                    properties: {
+                        utilisateur: email,
+                        portail: portal_name
+                    }
+                });
+        }
     } catch (error) {
         console.error("Erreur GET login:", error);
         res.status(500).send("Erreur serveur lors de l'affichage de la connexion");

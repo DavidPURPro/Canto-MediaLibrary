@@ -1,26 +1,13 @@
 {
   "name": "app_service",
   "version": "1.0.0",
-  "description": "��#\u0000 \u0000T\u0000r\u0000i\u0000g\u0000g\u0000e\u0000r\u0000\r\u0000 \u0000",
+  "description": "Media Library",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/D4VID93/pur-flaskapi.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/D4VID93/pur-flaskapi/issues"
-  },
-  "homepage": "https://github.com/D4VID93/pur-flaskapi#readme",
   "dependencies": {
-    "@azure/msal-node": "^5.1.3",
+    "@azure/msal-node": "^5.1.5",
     "@azure/storage-blob": "^12.31.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "applicationinsights": "^3.14.0",
