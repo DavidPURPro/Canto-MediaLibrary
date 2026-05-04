@@ -11,8 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/portal_page_style.css') }}">
 </head>
-<body data-portal-id="{{ portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
-
+<body data-portal-id="{{ portal.id }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
   <header>
   <div class="header-left">
     <a href="https://pur.co" target="_blank">

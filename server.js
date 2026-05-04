@@ -1455,6 +1455,7 @@ app.get('/portal/:portal_id', async (req, res) => {
 
         const portal_data = {
             id: portalRow.id,
+            slug: slug,
             name: portalRow.name,
             url: portalRow.url,
             access: portalRow.access,
@@ -1715,15 +1716,6 @@ app.get('/portal/:portal_id/login', async (req, res) => {
             return res.redirect(`/portal/${slug}`);
         }
         res.render('portal_login.html', { portal_id: slug, portal_name: portal.name, error: null });
-        if (insightsClient) {
-                insightsClient.trackEvent({
-                    name: "login_portail_reussi",
-                    properties: {
-                        utilisateur: email,
-                        portail: portal_name
-                    }
-                });
-        }
     } catch (error) {
         console.error("Erreur GET login:", error);
         res.status(500).send("Erreur serveur lors de l'affichage de la connexion");
@@ -1758,6 +1750,16 @@ app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, re
             req.session.portal_user_email = email;
             req.session.portal_access = real_portal_id; 
             await pool.query("UPDATE portal_users SET last_login = NOW() WHERE id = $1;", [user.rows[0].id]);
+            if (insightsClient) {
+                insightsClient.trackEvent({
+                    name: "login_portail_reussi",
+                    properties: {
+                        utilisateur: email,
+                        portail: portal_name
+                    }
+                });
+
+        }
             res.redirect(`/portal/${slug}`);
         } 
         else {

@@ -334,7 +334,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function copyCurrentPortalLink() {
-    const portalLink = window.location.href;
+    const baseUrl = window.location.origin;
+    const portalSlug = document.body.getAttribute('data-portal-slug');
+    const portalLink = `${baseUrl}/portal/${portalSlug}/login`;
     navigator.clipboard.writeText(portalLink).then(() => {
       const originalText = copyPortalLinkBtn.innerHTML;
       copyPortalLinkBtn.innerHTML = '✓ Copied!';
