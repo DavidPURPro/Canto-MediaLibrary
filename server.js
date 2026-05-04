@@ -464,13 +464,14 @@ app.get('/logout', (req, res) => {
             }
         });
         const domaine = process.env.WEBSITE_HOSTNAME ? `https://${process.env.WEBSITE_HOSTNAME}` : `${req.protocol}://${req.get('host')}`;
-        const postLogoutUri = `${domaine}/login`;
-        const aadLogout = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri=${postLogoutUri}`;
+        const postLogoutUri = `${domaine}/login`;        
+        const postLogoutUriEncoded = encodeURIComponent(postLogoutUri);        
+        const aadLogout = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri=${postLogoutUriEncoded}`;
         res.redirect(aadLogout);
     });
 });
 
-//convertir les octets (Bytes) en texte lisible (KB, MB, GB)
+//convertir les octets en texte lisible (KB, MB, GB)
 function formatBytes(bytes) {
     if (!bytes || bytes === 0) return "0Bytes";
     if (bytes >= 1024 ** 3) return (bytes / (1024 ** 3)).toFixed(2) + "GB";
