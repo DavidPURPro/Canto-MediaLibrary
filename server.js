@@ -1773,79 +1773,91 @@ app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, re
 
 // reset password
 app.get('/portal/:portal_id/reset_password/:token', async (req, res) => {
-    const { portal_id, token } = req.params;
+    const identifier = req.params.portal_id;
+    const { token } = req.params;
+    
+    const portal = await getPortalInfo(identifier);
+    if (!portal) return res.status(404).send("Portail introuvable.");
+    
     const result = await pool.query(
         "SELECT id, email FROM portal_users WHERE reset_token = $1 AND reset_token_expiry > NOW() AND portal_id = $2;",
-        [token, portal_id]
+        [token, portal.id]
     );
 
     if (result.rows.length === 0) return res.send("Lien invalide ou expiré.");
-    res.render('portal_reset_password.html', { portal_id, token, email: result.rows[0].email });
+    
+    const slug = portal.slug || portal.id;
+    res.render('portal_reset_password.html', { portal_id: slug, token, email: result.rows[0].email });
 });
 
 app.post('/portal/:portal_id/reset_password/:token', upload.none(), async (req, res) => {
-    const { portal_id, token } = req.params;
+    const identifier = req.params.portal_id;
+    const { token } = req.params;
     const { password, confirm_password } = req.body;
 
     if (password !== confirm_password) return res.send("Passwords do not match");
 
+    const portal = await getPortalInfo(identifier);
+    if (!portal) return res.status(404).send("Portail introuvable.");
+
     const hashedPassword = await bcrypt.hash(password, 10);
     await pool.query(
         "UPDATE portal_users SET password = $1, reset_token = NULL, reset_token_expiry = NULL WHERE reset_token = $2 AND portal_id = $3;",
-        [hashedPassword, token, portal_id]
+        [hashedPassword, token, portal.id]
     );
 
-    res.redirect(`/portal/${portal_id}/login`);
+    const slug = portal.slug || portal.id;
+    res.redirect(`/portal/${slug}/login`);
 });
 
 app.get('/portal/:portal_id/request_reset', async (req, res) => {
-    const { portal_id } = req.params;
     try {
-        const result = await pool.query("SELECT name FROM portals WHERE id = $1;", [portal_id]);
-        if (result.rows.length === 0) {
+        const identifier = req.params.portal_id;
+        const portal = await getPortalInfo(identifier);
+        if (!portal) {
             req.flash('error', 'Portal not found');
             return res.redirect('/portals');
         }
+        const slug = portal.slug || portal.id;
         res.render('portal_request_reset.html', { 
-            portal_id: portal_id, 
-            portal_name: result.rows[0].name 
+            portal_id: slug, 
+            portal_name: portal.name 
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).send("Erreur serveur");
+        console.error("Erreur GET request_reset:", error);
+        res.status(500).send("Server Error");
     }
 });
 
 app.post('/portal/:portal_id/request_reset', loginLimiter, upload.none(), async (req, res) => {
-    const { portal_id } = req.params;
+    const identifier = req.params.portal_id;
     const email = req.body.email ? req.body.email.toLowerCase().trim() : '';
-
     try {
-        // verifie si l'utilisateur existe pour ce portail
+        const portal = await getPortalInfo(identifier);
+        if (!portal) {
+            req.flash('error', 'Portal not found');
+            return res.redirect('/portals');
+        }
+        const real_portal_id = portal.id;
+        const slug = portal.slug || real_portal_id;
+        // verif si l'utilisateur existe pour ce portail
         const userRes = await pool.query(
             "SELECT id FROM portal_users WHERE email = $1 AND portal_id = $2;",
-            [email, portal_id]
+            [email, real_portal_id]
         );
-
         if (userRes.rows.length > 0) {
-            // generer token expiration
-            const token = crypto.randomBytes(32).toString('hex');
+            const token = require('crypto').randomBytes(32).toString('hex');
             const expiry = new Date();
             expiry.setHours(expiry.getHours() + 24);
             await pool.query(
                 "UPDATE portal_users SET reset_token = $1, reset_token_expiry = $2 WHERE email = $3 AND portal_id = $4;",
-                [token, expiry, email, portal_id]
+                [token, expiry, email, real_portal_id]
             );
-
-            // email
-            const portalRes = await pool.query("SELECT name FROM portals WHERE id = $1;", [portal_id]);
-            const portal_name = portalRes.rows[0].name;
-            const resetUrl = `${req.protocol}://${req.get('host')}/portal/${portal_id}/reset_password/${token}`;
-
-            const subject = `Resetting your password - ${portal_name}`;
+            const resetUrl = `${req.protocol}://${req.get('host')}/portal/${slug}/reset_password/${token}`;
+            const subject = `Resetting your password - ${portal.name}`;
             const body = `Hello,
 
-                          You have requested to reset your password for the ${portal_name} portal.
+                          You have requested to reset your password for the ${portal.name} portal.
 
                           Please click the following link to set a new password:
 
@@ -1860,19 +1872,21 @@ app.post('/portal/:portal_id/request_reset', loginLimiter, upload.none(), async 
 
             if (emailSent) {
                 req.flash('success', 'A reset email has been sent');
-                return res.redirect(`/portal/${portal_id}/login`);
-            } else {
+                return res.redirect(`/portal/${slug}/login`);
+            } 
+            else {
                 req.flash('error', 'Error sending email');
             }
-        } else {
+        } 
+        else {
             req.flash('error', 'Email not found for this portal');
         }
 
-        res.redirect(`/portal/${portal_id}/request_reset`);
+        res.redirect(`/portal/${slug}/request_reset`);
     } catch (error) {
         console.error("Erreur request_reset:", error);
         req.flash('error', 'An error occurred');
-        res.redirect(`/portal/${portal_id}/request_reset`);
+        res.redirect(`/portal/${req.params.portal_id}/request_reset`);
     }
 });
 
