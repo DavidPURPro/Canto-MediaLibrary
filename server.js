@@ -131,7 +131,7 @@ const rateLimit = require('express-rate-limit');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+//app.set('trust proxy', 1); // a mettre en prod avec secure : true
 app.use(session({
     secret: process.env.SECRET_KEY || 'super_secret_key_de_secours',
     resave: false,
@@ -215,6 +215,17 @@ env.addFilter('max', function(array) {
 env.addFilter('min', function(array) {
     if (!array || array.length === 0) return 0;
     return Math.min(...array);
+});
+
+env.addFilter('date', function(dateObj) {
+    if (!dateObj) return "";
+    const d = new Date(dateObj);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
 });
 
 async function sendEmail(toEmail, subject, body) {
@@ -374,12 +385,12 @@ function loginRequiredJson(req, res, next) {
     next();
 }
 
-/*function adminRequired(req, res, next) {
+function adminRequired(req, res, next) {
     if (!req.session || !req.session.is_admin) {
         return res.status(403).send("Accès Administrateur Requis");
     }
     next();
-}*/
+}
 
 
 // routes authentification msal entra id 
@@ -835,14 +846,16 @@ app.post('/upload', loginRequiredJson, (req, res, next) => {
             }
 
             uploaded_urls.push(blob_url);
-        }
-        insightsClient.trackEvent({
-            name: "Fichier_upload",
-            properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            if (typeof insightsClient !== 'undefined' && insightsClient) {
+                insightsClient.trackEvent({
+                    name: "Fichier_upload",
+                    properties: {
+                        fichier: filename,
+                        utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                    }
+                });
             }
-        });
+        }
         res.json({ status: "success", urls: uploaded_urls });
 
     } catch (error) {
@@ -950,11 +963,12 @@ app.post('/delete_folder', loginRequiredJson, upload.none(), async (req, res) =>
             return res.status(400).json({ status: "error", message: "ID du dossier requis" });
         }
 
-        await pool.query("DELETE FROM folders WHERE id = $1;", [folder_id]);
+        const delRes = await pool.query("DELETE FROM folders WHERE id = $1 RETURNING name;", [folder_id]);
+        const folderName = delRes.rows.length > 0 ? delRes.rows[0].name : "Dossier Inconnu";
         insightsClient.trackEvent({
             name: "Folder_Supprime",
             properties: {
-                dossier_id: folder_id,
+                dossier_nom: folderName,
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
             }
         });
@@ -1138,7 +1152,7 @@ app.post('/sync_file_folder', loginRequiredJson, upload.none(), async (req, res)
     }
 });
 
-app.post('/remove_file_folder', upload.none(), async (req, res) => {
+app.post('/remove_file_folder', loginRequiredJson, upload.none(), async (req, res) => {
     const filename = req.body.filename;
     if (!filename) {
         return res.status(400).json({ 
@@ -1162,7 +1176,7 @@ app.post('/remove_file_folder', upload.none(), async (req, res) => {
 });
 
 // réassigner fichier a un folder
-app.post('/assign_file_folder', upload.none(), async (req, res) => {
+app.post('/assign_file_folder', loginRequiredJson, upload.none(), async (req, res) => {
     const { filename, folder_id } = req.body;
     if (!filename || !folder_id) {
         return res.status(400).json({ 
@@ -1196,7 +1210,7 @@ app.post('/assign_file_folder', upload.none(), async (req, res) => {
 });
 
 // réassigner fichier a un portail
-app.post('/assign_file_portal', upload.none(), async (req, res) => {
+app.post('/assign_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
     const { filename, portal_id } = req.body;
 
     try {
@@ -1225,7 +1239,7 @@ app.post('/assign_file_portal', upload.none(), async (req, res) => {
     }
 });
 
-app.get('/get_document_info/:id', async (req, res) => {
+app.get('/get_document_info/:id', loginRequiredJson, async (req, res) => {
     const docId = req.params.id;
     try {
         const query = `
@@ -1407,7 +1421,7 @@ app.get('/portal/:portal_id', async (req, res) => {
         const isPortalUser = !!req.session.portal_user_email;
         const isAuthorizedPortalUser = isPortalUser && (req.session.portal_access == real_portal_id); 
 
-        if (isPortalUser && !isAuthorizedPortalUser && !isGlobalAuth) {
+        if (!isGlobalAuth && !isAuthorizedPortalUser) {
             return res.redirect(`/portal/${slug}/login`);
         }
 
@@ -1503,7 +1517,7 @@ app.post('/add_portal', loginRequiredJson, async (req, res) => {
         insightsClient.trackEvent({
             name: "portal added",
             properties: {
-                portal_id: name,
+                portail_nom: name,
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
             }
         });
@@ -1544,7 +1558,7 @@ app.post('/delete_portal/:portal_id', loginRequiredJson, upload.none(), async (r
             insightsClient.trackEvent({
             name: "portal deleted",
             properties: {
-                portail_nom: pId,
+                portail_nom: delRes.rows[0].name,
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
             }
         });
@@ -1755,7 +1769,7 @@ app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, re
                     name: "login_portail_reussi",
                     properties: {
                         utilisateur: email,
-                        portail: portal_name
+                        portail: portal.name
                     }
                 });
 
@@ -1902,18 +1916,21 @@ app.get('/logout_portal', (req, res) => {
 
 app.post('/portal/:portal_id/logout', (req, res) => {
     const portal_id = req.params.portal_id;
+    const userEmailToLog = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
     if (req.session.user_email) {
         delete req.session.portal_user_id;
         delete req.session.portal_user_email;
         delete req.session.portal_access;
         req.session.save(() => {
-            insightsClient.trackEvent({
-            name: "logout_from_portal",
-            properties: {
-                portail: portal_id,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+            if (insightsClient) {
+                insightsClient.trackEvent({
+                    name: "logout_from_portal",
+                    properties: {
+                        portail: portal_id,
+                        utilisateur: userEmailToLog 
+                    }
+                });
             }
-        });
             res.json({ status: "success", redirect_url: "/portals" });
         });
         return;
@@ -1923,13 +1940,15 @@ app.post('/portal/:portal_id/logout', (req, res) => {
             console.error("Erreur destruction session:", err);
             return res.status(500).json({ status: "error" });
         }
-        insightsClient.trackEvent({
-            name: "logout_from_portal",
-            properties: {
-                portail: portal_id,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
-            }
-        });
+        if (insightsClient) {
+            insightsClient.trackEvent({
+                name: "logout_from_portal",
+                properties: {
+                    portail: portal_id,
+                    utilisateur: userEmailToLog 
+                }
+            });
+        }
         res.json({ status: "success", redirect_url: `/portal/${portal_id}/login` });
     });
 });
@@ -1965,21 +1984,95 @@ app.get('/get_portal_url/:portal_id', loginRequiredJson, async (req, res) => {
     }
 });
 
-app.get('/get_all_portals', async (req, res) => {
+app.get('/admin/users', loginRequiredHtml, adminRequired, async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, name FROM portals ORDER BY name ASC;");
-        res.json({ portals: result.rows });
+        const usersResult = await pool.query(`
+            SELECT pu.id, pu.email, pu.last_login, p.name as portal_name, p.id as portal_id
+            FROM portal_users pu
+            JOIN portals p ON pu.portal_id = p.id
+            ORDER BY pu.email ASC;
+        `);
+        const portalsResult = await pool.query("SELECT id, name FROM portals ORDER BY name ASC;");
+        res.render('admin_users.html', {
+            users: usersResult.rows,
+            portals: portalsResult.rows,
+            is_admin: req.session.is_admin,
+            username: req.session.username
+        });
     } catch (error) {
-        res.status(500).json({ status: "error" });
+        console.error("Erreur /admin/users:", error);
+        res.status(500).send("Server error while loading the administration page.");
     }
 });
 
-app.get('/get_folders', async (req, res) => {
+// nouvelle user pour un portail
+app.post('/admin/add_user', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, name FROM folders ORDER BY name ASC;");
-        res.json({ folders: result.rows });
+        const { email, password, portal_id } = req.body;
+        if (!email || !password || !portal_id) {
+            return res.status(400).json({ status: "error", message: "Email, password and portal are required." });
+        }
+        const safeEmail = email.toLowerCase().trim();
+        // verifier que user existe deja pour ce portail
+        const checkRes = await pool.query("SELECT id FROM portal_users WHERE email = $1 AND portal_id = $2;", [safeEmail, portal_id]);
+        if (checkRes.rows.length > 0) {
+            return res.status(400).json({ status: "error", message: "This user already has access to this portal." });
+        }
+        // hasher le mdp 
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query(
+            "INSERT INTO portal_users (email, password, portal_id) VALUES ($1, $2, $3);",
+            [safeEmail, hashedPassword, portal_id]
+        );
+        if (typeof insightsClient !== 'undefined' && insightsClient) {
+            insightsClient.trackEvent({
+                name: "Admin_Ajout_Utilisateur",
+                properties: { email_cible: safeEmail, admin: req.session.user_email }
+            });
+        }
+        res.json({ status: "success", message: "user created successfully" });
     } catch (error) {
-        res.status(500).json({ status: "error" });
+        console.error("Erreur add_user:", error);
+        res.status(500).json({ status: "error", message: "Error creating user" });
+    }
+});
+
+// modifi mdp d'un user deja présent
+app.post('/admin/update_password', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+    try {
+        const { user_id, new_password } = req.body;
+        if (!user_id || !new_password) {
+            return res.status(400).json({ status: "error", message: "Username and new password required" });
+        }
+
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+        await pool.query("UPDATE portal_users SET password = $1 WHERE id = $2;", [hashedPassword, user_id]);
+        
+        res.json({ status: "success", message: "The password has been updated" });
+    } catch (error) {
+        console.error("Erreur update_password:", error);
+        res.status(500).json({ status: "error", message: "Server error during update" });
+    }
+});
+
+// suppr utilisateur
+app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        if (!user_id) return res.status(400).json({ status: "error", message: "Missing user ID" });
+
+        await pool.query("DELETE FROM portal_users WHERE id = $1;", [user_id]);
+        
+        if (typeof insightsClient !== 'undefined' && insightsClient) {
+            insightsClient.trackEvent({
+                name: "Admin_Suppression_Utilisateur",
+                properties: { admin: req.session.user_email }
+            });
+        }
+        res.json({ status: "success", message: "User access has been revoked" });
+    } catch (error) {
+        console.error("Erreur delete_user:", error);
+        res.status(500).json({ status: "error", message: "Server error during deletion." });
     }
 });
 
