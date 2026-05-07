@@ -52,4 +52,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addForm) addForm.addEventListener('submit', (e) => submitForm(e, '/admin/add_user', 'addModal'));
     if (editForm) editForm.addEventListener('submit', (e) => submitForm(e, '/admin/update_password', 'editModal'));
     if (deleteForm) deleteForm.addEventListener('submit', (e) => submitForm(e, '/admin/delete_user', 'deleteModal'));
+    const searchInput = document.getElementById('userSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const filter = this.value.toLowerCase();
+            const rows = document.querySelectorAll('.admin-table tbody tr');
+
+            rows.forEach(row => {
+                if (row.cells.length <= 1) return; 
+                const email = row.cells[0].textContent.toLowerCase();
+                const portal = row.cells[1].textContent.toLowerCase();
+                if (email.includes(filter) || portal.includes(filter)) {
+                    row.style.display = '';
+                } 
+                else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
 });

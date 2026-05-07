@@ -141,10 +141,11 @@ function renderFolder(folder, parentElement) {
         </button>
     </div>
   ` : ''; 
+  const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-cliquez pour renommer" style="cursor: text;"` : '';
   folderName.innerHTML = `
-    <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+    <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
         <span class="folder-icon">${iconHtml}</span>
-        <span class="folder-title" style="font-weight: 500; color: #334155;">${folder.name}</span>
+        <span class="folder-title" style="font-weight: 500; color: #334155; flex-grow: 1;" ${renameAction}>${folder.name}</span>
     </div>
     ${adminButtons}
   `;
@@ -259,6 +260,61 @@ function deleteFolder(folderId) {
     }
   })
   .catch(error => console.error('Error deleting folder:', error));
+}
+
+// fonction rename dossier double clic
+function renameFolder(element, folderId) {
+    if (element.querySelector('input')) return;
+    const currentName = element.textContent.trim();    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;    
+    input.style.width = "100%";
+    input.style.padding = "2px 5px";
+    input.style.border = "1px solid #0078d4";
+    input.style.borderRadius = "4px";
+    input.style.fontFamily = "inherit";
+    input.style.fontSize = "inherit";
+    element.textContent = '';
+    element.appendChild(input);
+    input.focus();
+    input.select();
+    const saveRename = async () => {
+        const newName = input.value.trim();        
+        if (!newName || newName === currentName) {
+            element.textContent = currentName;
+            return;
+        }
+
+        element.textContent = "...";
+        const formData = new FormData();
+        formData.append('folder_id', folderId);
+        formData.append('new_name', newName);
+        try {
+            const response = await fetch('/rename_folder', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.status === 'success') {
+                element.textContent = result.new_name;
+            } 
+            else {
+                alert("Erreur : " + result.message);
+                element.textContent = currentName;
+            }
+        } catch (error) {
+            alert("Erreur de connexion.");
+            element.textContent = currentName;
+        }
+    };
+
+    input.addEventListener('blur', saveRename); 
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            input.blur(); 
+        }
+    });
 }
 
 function createHeaderBubbles() {

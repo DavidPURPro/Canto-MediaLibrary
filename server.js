@@ -387,7 +387,10 @@ function loginRequiredJson(req, res, next) {
 
 function adminRequired(req, res, next) {
     if (!req.session || !req.session.is_admin) {
-        return res.status(403).send("Accès Administrateur Requis");
+        if (req.method === 'GET' && !req.headers.accept?.includes('application/json')) {
+            return res.redirect('/');
+        }
+        return res.status(403).json({ status: "error", message: "Admin Access Required" });
     }
     next();
 }
@@ -673,7 +676,7 @@ function buildFolderHierarchy(folders) {
     return rootFolders;
 }
 
-app.get('/upload', loginRequiredHtml, async (req, res) => {
+app.get('/upload', loginRequiredHtml, adminRequired, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
         const folders = buildFolderHierarchy(result.rows);
@@ -766,7 +769,7 @@ app.get('/upload', loginRequiredHtml, async (req, res) => {
 });
 */
 
-app.post('/upload', loginRequiredJson, (req, res, next) => {
+app.post('/upload', loginRequiredJson, adminRequired, (req, res, next) => {
     uploadStream.array("files")(req, res, function (err) {
         if (err) {
             if (err.message.startsWith('Extension_Error')) {
@@ -921,7 +924,7 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
 });
 
 // routes gestion folders
-app.post('/create_folder', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/create_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const name = req.body.name;
         const parent_id = (req.body.parent_id && req.body.parent_id !== "none") ? req.body.parent_id : null;
@@ -955,7 +958,7 @@ app.post('/create_folder', loginRequiredJson, upload.none(), async (req, res) =>
 });
 
 // supprimer un dossier
-app.post('/delete_folder', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/delete_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const folder_id = req.body.folder_id;
 
@@ -979,7 +982,40 @@ app.post('/delete_folder', loginRequiredJson, upload.none(), async (req, res) =>
     }
 });
 
-app.post('/update_file_folder', loginRequiredJson, upload.none(), async (req, res) => {
+// Renommer un dossier
+app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+    try {
+        const { folder_id, new_name } = req.body;
+        if (!folder_id || !new_name || new_name.trim() === "") {
+            return res.status(400).json({ status: "error", message: "ID et nouveau nom valides requis" });
+        }
+        const cleanName = new_name.trim();
+        // maj en BDD
+        const result = await pool.query(
+            "UPDATE folders SET name = $1 WHERE id = $2 RETURNING id, name;",
+            [cleanName, folder_id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ status: "error", message: "Dossier introuvable" });
+        }
+        if (typeof insightsClient !== 'undefined' && insightsClient) {
+            insightsClient.trackEvent({
+                name: "Folder_Renomme",
+                properties: {
+                    nouveau_nom: cleanName,
+                    dossier_id: folder_id,
+                    admin: req.session.user_email
+                }
+            });
+        }
+        res.json({ status: "success", new_name: cleanName });
+    } catch (error) {
+        console.error("Erreur rename_folder:", error);
+        res.status(500).json({ status: "error", message: "Erreur lors du renommage en BDD" });
+    }
+});
+
+app.post('/update_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         let folder_id = req.body.folder_id;
@@ -1100,7 +1136,7 @@ app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
 
 // routes suppr et syncro
 // retier un fichier de son dossier
-app.post('/remove_file_from_folder', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/remove_file_from_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         
@@ -1152,7 +1188,7 @@ app.post('/sync_file_folder', loginRequiredJson, upload.none(), async (req, res)
     }
 });
 
-app.post('/remove_file_folder', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/remove_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     const filename = req.body.filename;
     if (!filename) {
         return res.status(400).json({ 
@@ -1176,7 +1212,7 @@ app.post('/remove_file_folder', loginRequiredJson, upload.none(), async (req, re
 });
 
 // réassigner fichier a un folder
-app.post('/assign_file_folder', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/assign_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     const { filename, folder_id } = req.body;
     if (!filename || !folder_id) {
         return res.status(400).json({ 
@@ -1269,12 +1305,12 @@ app.get('/get_document_info/:id', loginRequiredJson, async (req, res) => {
 
 // routes suppr et maj fichiers
 // afficher la page
-app.get('/delete', loginRequiredHtml, (req, res) => {
+app.get('/delete', loginRequiredHtml, adminRequired, (req, res) => {
     res.render('delete.html');
 });
 
 // suppr définitivement un fichier (Azure + bdd)
-app.post('/delete', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         const confirmation = req.body.confirmation === "on";
@@ -1323,7 +1359,7 @@ app.post('/delete', loginRequiredJson, upload.none(), async (req, res) => {
 });
 
 // maj le statut exclusif
-app.post('/update_exclusive', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/update_exclusive', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         const is_exclusive = req.body.is_exclusive === 'true';

@@ -112,3 +112,22 @@
     border-radius: 4px; 
     cursor: pointer; 
 }
+
+.search-container {
+    margin-bottom: 20px;
+}
+
+.search-container input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.search-container input:focus {
+    border-color: #0078d4;
+    outline: none;
+}
