@@ -194,6 +194,40 @@ function setupModals() {
     }
 }
 
+function initAboutModal() {
+    const aboutModal = document.getElementById('aboutModal');
+    const openBtn = document.getElementById('openAboutBtn');
+    const closeBtn = document.getElementById('closeAboutBtn');
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (!aboutModal) return; 
+    if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            aboutModal.classList.add('active');
+            if (profileDropdown) {
+                profileDropdown.classList.remove('active');
+            }
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            aboutModal.classList.remove('active');
+        });
+    }
+    window.addEventListener('click', (e) => {
+        if (e.target === aboutModal) {
+            aboutModal.classList.remove('active');
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && aboutModal.classList.contains('active')) {
+            aboutModal.classList.remove('active');
+        }
+    });
+}
+
+initAboutModal();
+
 window.prepareDelete = (id, name) => {
     portalToDeleteId = id;
     document.getElementById('portalToDeleteName').textContent = name;

@@ -17,6 +17,8 @@ header {
     font-size: 2.8rem;
     font-weight: 800;
     text-align: center;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-weight: bold !important;
     background: linear-gradient(
         to right, 
         #ffffff 20%, 

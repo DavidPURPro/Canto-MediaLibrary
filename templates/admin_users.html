@@ -6,7 +6,7 @@
     <title>Administration - Access Management</title>
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/header.css">
-    
+    <link rel="icon" href="{{ url_for('static', filename='icon/favicon.ico') }}" type="image/x-icon">
     <link rel="stylesheet" href="/static/css/admin_style.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
     
     <div class="admin-container">
         <div class="admin-header">
-            <h2>Portal Access Management</h2>
+            <h2 style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Portal Access Management</h2>
             <div>
                 <a href="/index" class="btn-cancel" style="text-decoration: none; color: #333; display: inline-block; margin-right: 15px;">⬅ Return to Library</a>
                 <button class="btn-primary" onclick="openModal('addModal')">+ Add User</button>

@@ -24,20 +24,37 @@
 
   <header>
     <div class="header-bubbles" id="headerBubbles"></div>
-    <a href="https://pur.co" target="_blank">
+    <a href="/index">
     <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
     </a>
-    <h1 class="shimmer-title">Media Library</h1>
-    
+    <h1 class="shimmer-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Media Library</h1>    
     <div class="controls">
       <a href="https://purprojet.sharepoint.com/sites/AdminToolKit/SitePages/PUR-Admin-ToolKit.aspx" class="modern-btn secondary-btn" target="_blank" rel="noopener noreferrer" title="Back to Admin Toolkit">
           <i class="fas fa-toolbox"></i> Admin Toolkit
       </a>
+
+    <div class="sort-dropdown">
+  <button class="modern-btn secondary-btn" id="sectionFilterBtn">
+    <i class="fas fa-folder-open"></i> Section: All
+  </button>
+  <div class="sort-dropdown-content" id="sectionDropdownContent">
+    <button data-section="all">All Sections</button>
+    </div>
+</div>
+
+<div class="sort-dropdown">
+  <button class="modern-btn secondary-btn" id="categoryFilterBtn">
+    <i class="fas fa-list-ul"></i> Category: All
+  </button>
+  <div class="sort-dropdown-content" id="categoryDropdownContent">
+    <button data-category="all">All Categories</button>
+    </div>
+</div>
       
       <div class="controls-container"> 
   <div class="sort-dropdown">
     <button class="modern-btn secondary-btn" id="sortDropdownBtn">
-      <i class="fas fa-sort"></i> Sort: A-Z
+    <i class="fas fa-calendar-alt"></i> Sort: By Date
     </button>
     <div class="sort-dropdown-content">
       <button data-sort="name_asc"><i class="fas fa-sort-alpha-down"></i> A-Z</button>
@@ -83,6 +100,9 @@
         {% if is_admin %}
         <div class="profile-admin-badge"><i class="fas fa-shield-alt"></i> Admin</div>
         {% endif %}
+        <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
+          <i class="fas fa-info-circle"></i> <span>About</span>
+        </div>
         <div class="profile-logout" id="profileLogout">
           <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
         </div>
@@ -125,6 +145,7 @@
         {% for file in files %}
         <div class="gallery-item" data-tags="{{ file.tags | join(', ') | lower }}" data-name="{{ file.nom|lower }}" data-link="{{ file.lien }}" data-filename="{{ file.nom }}" data-description="{{ file.description }}" data-tags="{{ file.tags|tojson }}" data-exclusive="{{ 'true' if file.is_exclusive is true else 'false' }}" {% if file.date_ajout %}data-date="{{ file.date_ajout.strftime('%d-%m-%Y') }}" {% endif %} data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
          data-portal-name="{{ file.portal_name if file.portal_name else 'None' }}" >
+         <div class="select-checkbox"><i class="fas fa-check"></i></div>
           {% set ext = file.nom.split('.')[-1]|lower %}
 
           {% if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp'] %}
@@ -250,6 +271,8 @@
         <div class="modal-tags" id="modalTags"></div>
         
         <div class="modal-meta">
+          <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection"></span></div>
+          <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory"></span></div>
           <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
           <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"></span></div>
         </div>
@@ -305,7 +328,32 @@
       </div>
     </div>
   </div>
+  
+  <div class="bulk-action-bar" id="bulkActionBar" style="display: none;">
+        <div class="bulk-info">
+            <span id="bulkCount">0</span>
+        </div>
+        <div class="bulk-buttons">
+            <button id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
+            <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
+            <button id="bulkCancelBtn" class="bulk-cancel-btn"><i class="fas fa-times"></i></button>
+        </div>
+  </div>
 
+  <div class="about-overlay" id="aboutModal">
+  <div class="about-card">
+    <div class="about-header">
+      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+    </div>
+    <div class="about-body">
+      <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities to operate long-term socio-environmental projects including agroforestry, land preservation and more sustainable agricultural practices.</p>
+    </div>
+    <button class="about-close-btn" id="closeAboutBtn">Close</button>
+  </div>
+</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  
   <script src="{{ url_for('static', filename='js/canto_logic.js') }}"></script>
 </body>
 </html>

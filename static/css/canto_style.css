@@ -1427,7 +1427,7 @@ body.list-view .gallery-item .item-footer {
   animation: pulse-gentle 0.3s ease;
 }
 
-/* ========== MEDIA QUERIES ========== */
+/* MEDIA QUERIES*/
 @media (max-width: 768px) {
   body {
     padding-top: 60px;

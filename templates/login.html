@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - PUR Projet Media Library</title>
+    <title>Connexion - PUR Media Library</title>
     
     <link rel="icon" href="{{ url_for('static', filename='icon/favicon.ico') }}" type="image/x-icon">
     
@@ -17,7 +17,6 @@
     <div class="floating-particles" id="particles"></div>
 
     <div class="pur-logo-container">
-        <a href="https://pur.co" target="_blank">
         <img src="{{ url_for('static', filename='01_New_PUR_LOGO_Color.png') }}" alt="PUR Logo" class="pur-logo">
     </a>
     </div>
@@ -25,7 +24,7 @@
     <div class="login-container">
         <div class="card login-card">
             <div class="card-header login-header">
-                <h4 class="login-title">PUR Projet Media Library</h4>
+                <h4 class="login-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">PUR Media Library</h4>
             </div>
             <div class="card-body">
                 {% set messages = get_flashed_messages(true) %}

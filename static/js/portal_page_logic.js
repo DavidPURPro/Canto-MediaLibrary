@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fileCards.forEach(card => {
       card.addEventListener('click', (e) => {
-        if (!e.target.closest('.download-btn')) {
+        if (!e.target.closest('.download-btn') && !e.target.closest('.select-checkbox')) {
           showFileModal(card);
         }
       });
@@ -190,21 +190,24 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function searchFiles() {
-    const searchTerm = searchInput.value.toLowerCase().trim();
+    const rawSearchTerm = searchInput.value.toLowerCase().trim();
+    const searchWords = rawSearchTerm.split(/\s+/).filter(w => w.length > 0);
     let visibleCount = 0;
     let totalBytes = 0;
-    
     fileCards.forEach(card => {
       const fileName = card.querySelector('.file-name').textContent.toLowerCase();
       const fileDescription = card.querySelector('.file-description').textContent.toLowerCase();
       const fileTags = card.getAttribute('data-tags') || '';
       const fileSizeBytes = parseInt(card.getAttribute('data-size-bytes') || '0');
+      const combinedText = `${fileName} ${fileDescription} ${fileTags}`.toLowerCase();
+      const matchesAll = searchWords.every(word => combinedText.includes(word));
       
-      if (fileName.includes(searchTerm) || fileDescription.includes(searchTerm) || fileTags.includes(searchTerm)) {
+      if (searchWords.length === 0 || matchesAll) {
         card.style.display = 'flex'; 
         visibleCount++;
         totalBytes += fileSizeBytes;
-      } else {
+      } 
+      else {
         card.style.display = 'none';
       }
     });
@@ -396,7 +399,8 @@ document.addEventListener('DOMContentLoaded', function() {
                   btn.onclick = () => addFileToFolder(folder.id, folder.name);
                   folderTree.appendChild(btn);
               });
-          } else {
+          } 
+          else {
               folderTree.innerHTML = '<span style="color:white; font-size:12px;">Aucun dossier trouvé.</span>';
           }
       }).catch(err => {
@@ -442,7 +446,8 @@ document.addEventListener('DOMContentLoaded', function() {
               document.getElementById('currentFolderName').textContent = folderName;
               document.getElementById('folderTree').style.display = 'none';
               alert('Fichier ajouté au dossier : ' + folderName);
-          } else {
+          } 
+          else {
               alert('Erreur : ' + data.message);
           }
       }).catch(err => {
@@ -478,7 +483,138 @@ document.addEventListener('DOMContentLoaded', function() {
           if (data.status === 'success') {
               alert('Fichier retiré du portail.');
               window.location.reload(); 
-          } else { alert('Erreur : ' + data.message); }
+          }
+           else { alert('Erreur : ' + data.message); }
+      });
+  }
+
+  function initAboutModal() {
+    const aboutModal = document.getElementById('aboutModal');
+    const openBtn = document.getElementById('openAboutBtn');
+    const closeBtn = document.getElementById('closeAboutBtn');
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (!aboutModal) return; 
+    if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            aboutModal.classList.add('active');
+            if (profileDropdown) {
+                profileDropdown.classList.remove('active');
+            }
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            aboutModal.classList.remove('active');
+        });
+    }
+    window.addEventListener('click', (e) => {
+        if (e.target === aboutModal) {
+            aboutModal.classList.remove('active');
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && aboutModal.classList.contains('active')) {
+            aboutModal.classList.remove('active');
+        }
+    });
+}
+
+initAboutModal();
+
+
+  // LOGIQUE DE SELECTION MULTIPLE (PORTAILS)
+  let selectedFiles = [];
+  document.addEventListener('click', function(e) {
+      const checkbox = e.target.closest('.select-checkbox');
+      if (checkbox) {
+          e.stopPropagation();
+          const card = checkbox.closest('.file-card');
+          const filename = card.getAttribute('data-filename');
+          const link = card.getAttribute('data-file-url'); 
+          card.classList.toggle('selected');
+          if (card.classList.contains('selected')) {
+              selectedFiles.push({ filename, link });
+          } 
+          else {
+              selectedFiles = selectedFiles.filter(f => f.filename !== filename);
+          }
+          
+          updateBulkActionBar();
+      }
+  });
+
+  function updateBulkActionBar() {
+      const bar = document.getElementById('bulkActionBar');
+      const countSpan = document.getElementById('bulkCount');
+      if (!bar || !countSpan) return;
+
+      if (selectedFiles.length > 0) {
+          bar.style.display = 'flex';
+          countSpan.textContent = selectedFiles.length;
+      } 
+      else {
+          bar.style.display = 'none';
+      }
+  }
+
+  const btnCancel = document.getElementById('bulkCancelBtn');
+  if (btnCancel) {
+      btnCancel.addEventListener('click', () => {
+          selectedFiles = [];
+          document.querySelectorAll('.file-card.selected').forEach(card => {
+              card.classList.remove('selected');
+          });
+          updateBulkActionBar();
+      });
+  }
+
+  const btnCopy = document.getElementById('bulkCopyBtn');
+  if (btnCopy) {
+      btnCopy.addEventListener('click', () => {
+          const linksText = selectedFiles.map(f => `${f.filename} :\r\n${f.link}`).join('\r\n\r\n');
+          navigator.clipboard.writeText(linksText).then(() => {
+              const originalText = btnCopy.innerHTML;
+              btnCopy.innerHTML = `<i class="fas fa-check"></i> Links Copied!`;
+              btnCopy.style.backgroundColor = "#dcfce7";
+              btnCopy.style.color = "#166534";
+              setTimeout(() => {
+                  btnCopy.innerHTML = originalText;
+                  btnCopy.style.backgroundColor = "";
+                  btnCopy.style.color = "";
+              }, 2000);
+          });
+      });
+  }
+
+  const btnDownload = document.getElementById('bulkDownloadBtn');
+  if (btnDownload) {
+      btnDownload.addEventListener('click', async () => {
+          if (selectedFiles.length === 0) return;
+          const originalText = btnDownload.innerHTML;
+          btnDownload.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Compressing...`;
+          btnDownload.disabled = true;
+          try {
+              const zip = new JSZip();
+              const fetchPromises = selectedFiles.map(async (file) => {
+                  const proxyUrl = '/proxy_download?url=' + encodeURIComponent(file.link);
+                  const response = await fetch(proxyUrl);
+                  if (!response.ok) throw new Error("Le téléchargement de " + file.filename + " a échoué.");
+                  const blob = await response.blob();
+                  zip.file(file.filename, blob);
+              });
+              await Promise.all(fetchPromises);
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const portalName = document.querySelector('header h1')?.childNodes[0]?.textContent.trim() || "Portal";
+              saveAs(zipBlob, `PUR_${portalName}_Export.zip`);
+              if(btnCancel) btnCancel.click();
+          } catch (error) {
+              console.error("Erreur ZIP :", error);
+              alert("Une erreur est survenue lors de la création du ZIP. Assurez-vous que les fichiers sont accessibles.");
+          } finally {
+              btnDownload.innerHTML = originalText;
+              btnDownload.disabled = false;
+          }
       });
   }
 

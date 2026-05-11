@@ -17,10 +17,9 @@
 
   <header class="ultra-header">
     <div class="header-container">
-      <a href="https://pur.co" target="_blank">
       <img src="{{ url_for('static', filename='01_New_PUR_LOGO_Color.png') }}" alt="Logo PUR" class="main-logo">
       </a>
-      <h1 class="header-title">Media Library Upload</h1>
+      <h1 class="header-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Media Library Upload</h1>
       <nav class="nav-controls">
         <a href="{{ url_for('index') }}" class="btn-nav-glass"><i class="fas fa-arrow-left"></i> Back to Gallery</a>
       </nav>
@@ -88,9 +87,7 @@
               <div class="form-group half">
                 <label for="filePortal">Add to Portal</label>
                 <select id="filePortal" class="modern-input">
-                  <option value="none">(No portal)</option>
-                  
-                  <!-- Ajoute cette boucle pour lire les données du serveur -->
+                  <option value="none">(No portal)</option>                  
                   {% for portal in portals %}
                     <option value="{{ portal.id }}">{{ portal.name }}</option>
                   {% endfor %}
@@ -98,6 +95,30 @@
                 </select>
               </div>
             </div>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+            <label for="section" style="font-weight: 600; display: block; margin-bottom: 5px;">Section</label>
+            <select name="section" id="section" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <option value="">Select Section</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Events">Events</option>
+                <option value="Corporate">Corporate</option>
+                <option value="Products">Products</option>
+                <option value="Projects">Projects</option>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="category" style="font-weight: 600; display: block; margin-bottom: 5px;">Category</label>
+            <select name="category" id="category" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <option value="">Select Category</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Web Banners">Web Banners</option>
+                <option value="Official Photos">Official Photos</option>
+                <option value="Reports">Reports</option>
+                <option value="Presentations">Presentations</option>
+            </select>
+        </div>
 
             <div class="form-group tags-section">
               <label>Select Tags</label>

@@ -15,10 +15,9 @@
   <header class="ultra-header">
     <div class="header-bubbles" id="headerBubbles"></div>
     <div class="header-container">
-      <a href="https://pur.co" target="_blank">
         <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="main-logo" />
       </a>  
-        <h1 class="shimmer-title">Portals</h1>
+        <h1 class="shimmer-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Portals</h1>
         
         <nav class="nav-controls">
             <a href="{{ url_for('index') }}" class="btn-nav-glass">← Gallery</a>
@@ -38,6 +37,11 @@
                 {% if is_admin %}
                 <div class="profile-admin-badge"><i class="fas fa-shield-alt"></i> Admin</div>
                 {% endif %}
+
+                <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
+                    <i class="fas fa-info-circle"></i> <span>About</span>
+                </div>
+
                 <div class="profile-logout" id="profileLogout" onclick="window.location.href='/logout'">
                   <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
                 </div>
@@ -127,6 +131,18 @@
         </div>
     </div>
   </div>
+
+  <div class="about-overlay" id="aboutModal">
+  <div class="about-card">
+    <div class="about-header">
+      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+    </div>
+    <div class="about-body">
+      <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities to operate long-term socio-environmental projects including agroforestry, land preservation and more sustainable agricultural practices.</p>
+    </div>
+    <button class="about-close-btn" id="closeAboutBtn">Close</button>
+  </div>
+</div>
 
   <script src="{{ url_for('static', filename='js/portals_logic.js') }}"></script>
 </body>

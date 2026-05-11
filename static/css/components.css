@@ -148,9 +148,7 @@
   transform: translateX(-50%) translateY(0);
 }
 
-/* ==========================================
-   MODALES DE PRÉVISUALISATION (Fichiers)
-   ========================================== */
+/*MODALES DE PRÉVISUALISATION */
 .modal-overlay {
   position: fixed; inset: 0; 
   background: rgba(15, 23, 42, 0.5); 
@@ -289,7 +287,6 @@
 }
 .btn-share-modal:hover, #modalCopyBtn:hover { background: #f8fafc !important; transform: translateY(-2px); }
 
-/* Bouton Fermer (La croix) */
 .close-btn {
   position: absolute; top: 15px; right: 15px;
   background: #ffffff; border: 1px solid #e2e8f0;
@@ -345,3 +342,85 @@ a.modern-btn:visited, a.modern-btn:link {
 a.modern-btn.primary-btn { color: white !important; }
 a.modern-btn.secondary-btn { color: white !important; }
 a.modern-btn.danger-btn { color: #ef4444 !important; }
+
+/* MODALE "ABOUT"*/
+.about-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.about-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.about-card {
+  background: #ffffff;
+  width: 90%;
+  max-width: 600px;
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2), 0 10px 10px -5px rgba(0,0,0,0.04);
+  text-align: left;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  transform: translateY(20px);
+  transition: transform 0.3s ease;
+}
+
+.about-overlay.active .about-card {
+  transform: translateY(0);
+}
+
+.about-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.about-header img {
+  height: 50px;
+  object-fit: contain;
+}
+
+
+.about-body p {
+  color: #475569;
+  line-height: 1.6;
+  font-size: 15px;
+  margin-bottom: 30px;
+}
+
+.about-close-btn {
+  background: #16677c;
+  color: #ffffff;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  float: right;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.about-close-btn:hover {
+  background: #0e4f5d;
+}
+
+.about-close-btn:active {
+  transform: scale(0.98);
+}
+
+.profile-about:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

@@ -333,6 +333,208 @@ header {
     display: inline-block;
 }
 
+/* MULTIPLE SELECTION PORTALS */
+.file-card {
+    position: relative; 
+}
+
+.select-checkbox {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+}
+
+.file-card:hover .select-checkbox {
+    border-color: #0078d4;
+}
+
+.file-card.selected .select-checkbox {
+    background: #0078d4;
+    border-color: #0078d4;
+    color: white;
+}
+
+.file-card.selected {
+    outline: 3px solid #0078d4;
+    transform: scale(0.98);
+    transition: transform 0.2s;
+}
+
+/*BARRE D'ACTIONS MULTIPLES */
+.bulk-action-bar {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    padding: 12px 24px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    z-index: 10000;
+    border: 1px solid #e2e8f0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from { transform: translate(-50%, 100px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.bulk-info {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #e2e8f0;
+    padding-right: 20px;
+}
+
+.bulk-info #bulkCount {
+    font-size: 18px;
+    font-weight: 800;
+    color: #16677c;
+}
+
+.bulk-info::after {
+    content: "selected";
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.bulk-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.bulk-btn {
+    font-size: 14px !important;
+    padding: 10px 20px !important;
+    border-radius: 12px !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+}
+
+.bulk-action-bar .primary-btn { background: #0078d4; color: white; }
+.bulk-action-bar .secondary-btn { background: #f1f5f9; color: #334155; }
+
+.bulk-cancel-btn {
+    background: #f1f5f9;
+    color: #64748b;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bulk-cancel-btn:hover { background: #fee2e2; color: #ef4444; }
+
+/* MODALE "ABOUT"  */
+.about-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.about-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.about-card {
+  background: #ffffff;
+  width: 90%;
+  max-width: 600px;
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2), 0 10px 10px -5px rgba(0,0,0,0.04);
+  text-align: left;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  transform: translateY(20px);
+  transition: transform 0.3s ease;
+}
+
+.about-overlay.active .about-card {
+  transform: translateY(0);
+}
+
+.about-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.about-header img {
+  height: 50px;
+  object-fit: contain;
+}
+
+.about-body p {
+  color: #475569;
+  line-height: 1.6;
+  font-size: 15px;
+  margin-bottom: 30px;
+}
+
+.about-close-btn {
+  background: #16677c;
+  color: #ffffff;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  float: right;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.about-close-btn:hover {
+  background: #0e4f5d;
+}
+
+.about-close-btn:active {
+  transform: scale(0.98);
+}
+
+.profile-about:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
 @media (max-width: 900px) {
   header { flex-wrap: wrap; height: auto; justify-content: center; gap: 15px; }
   .header-left, .header-center, .header-right { width: 100%; text-align: center; justify-content: center; }

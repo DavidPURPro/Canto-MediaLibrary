@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileTags = document.getElementById("fileTags");
     const addTagBtn = document.getElementById("addTagBtn");
     const tagsContainer = document.getElementById("tagsContainer");
+    const fileSection = document.getElementById("section");
+    const fileCategory = document.getElementById("category");
     let currentFileIndex = -1;
 
     fetch('/get_portals_list')
@@ -67,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const description = fileDescription.value.trim();
             const eventDate = fileEventDate.value;
             const portalId = document.getElementById('filePortal').value;
+            const section = fileSection ? fileSection.value : "";
+            const category = fileCategory ? fileCategory.value : "";
             const tags = Array.from(tagsContainer.querySelectorAll(".tag"))
                 .map(tag => tag.textContent.replace("×", "").trim());
             
@@ -74,7 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 description,
                 tags,
                 eventDate,
-                portalId
+                portalId, 
+                section,
+                category
             };
 
             updateFileListItem(currentFileIndex, description, tags, eventDate, portalId);
@@ -175,10 +181,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (!alreadyExists) {
                                 filesToUpload.push(zipFile);
                                 openFileDetailsModal(filesToUpload.length - 1);
-                            } else {
+                            } 
+                            else {
                                 duplicateDetected = true;
                             }
-                        } else {
+                        } 
+                        else {
                             forbiddenExtensionDetected = true;
                         }
                     }
@@ -221,12 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tagsContainer.innerHTML = "";
             fileTags.value = "";
             document.getElementById('filePortal').value = "none";
-            
+            if (fileSection) fileSection.value = "";
+            if (fileCategory) fileCategory.value = "";
             if (file.type.startsWith("image/")) {
                 const reader = new FileReader();
                 reader.onload = (e) => { filePreview.src = e.target.result; };
                 reader.readAsDataURL(file);
-            } else {
+            } 
+            else {
                 filePreview.src = "";
                 filePreview.alt = "No preview available";
             }
@@ -235,6 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 fileDescription.value = fileDetails[file.name].description || "";
                 fileEventDate.value = fileDetails[file.name]?.eventDate || "";
                 if(fileDetails[file.name].portalId) document.getElementById('filePortal').value = fileDetails[file.name].portalId;
+                if (fileSection && fileDetails[file.name].section) fileSection.value = fileDetails[file.name].section;
+                if (fileCategory && fileDetails[file.name].category) fileCategory.value = fileDetails[file.name].category;
                 
                 (fileDetails[file.name].tags || []).forEach(tag => {
                     const tagEl = document.createElement("span");
@@ -346,11 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
             msg.className = "message success";
             msg.textContent = `${validFiles.length} file(s) ready to be sent.`;
             sendBtn.disabled = false;
-        } else if (validFiles.length > 0 && tooMany) {
+        } 
+        else if (validFiles.length > 0 && tooMany) {
             msg.className = "message error";
             msg.textContent = `⚠️ You can upload a maximum of ${MAX_FILES} files. Remove ${filesToUpload.length - MAX_FILES} file(s).`;
             sendBtn.disabled = true;
-        } else {
+        } 
+        else {
             msg.className = "message";
             msg.textContent = "";
             sendBtn.disabled = true;
@@ -377,6 +391,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             formData.append("date_events", formattedDate);
             formData.append("portal_ids", details.portalId || "");
+            formData.append("sections", details.section || "");
+            formData.append("categories", details.category || "");
         });
 
         try {
@@ -402,7 +418,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderFileList();
                 msg.className = "message success";
                 msg.innerHTML = '<i class="fas fa-check-circle"></i> Upload successful!';
-            } else {
+            } 
+            else {
                 throw new Error(result.message || "Upload failed");
             }
             

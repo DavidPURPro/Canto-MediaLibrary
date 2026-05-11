@@ -31,8 +31,10 @@ const profileDropdown = document.getElementById('profileDropdown');
 const profileLogout = document.getElementById('profileLogout');
 let currentDownloadLink = null;
 let currentModalFilename = null;
-let currentGlobalSort = 'name_asc';
+let currentGlobalSort = 'date_desc';
 let currentGlobalFilter = 'all';
+let currentSectionFilter = 'all';
+let currentCategoryFilter = 'all';
 
 
 // mappage des types de fichiers
@@ -132,22 +134,26 @@ function renderFolder(folder, parentElement) {
     ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px; margin-right: 8px;"></i>' 
     : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; margin-right: 8px; opacity: 0.7;"></i>';
   const adminButtons = isAdmin ? `
-    <div style="display: flex; gap: 5px;">
         <button class="add-folder-btn" title="Add subfolder" style="background: none; border: none; color: #16677c; cursor: pointer; padding: 2px 4px;">
             <i class="fas fa-plus"></i>
         </button>
         <button class="delete-folder-btn" title="Delete folder" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 2px 4px;">
             <i class="fas fa-times"></i>
         </button>
-    </div>
   ` : ''; 
   const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-cliquez pour renommer" style="cursor: text;"` : '';
+  
   folderName.innerHTML = `
     <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
         <span class="folder-icon">${iconHtml}</span>
         <span class="folder-title" style="font-weight: 500; color: #334155; flex-grow: 1;" ${renameAction}>${folder.name}</span>
     </div>
-    ${adminButtons}
+    <div style="display: flex; gap: 5px; align-items: center;">
+        <button class="download-folder-btn" title="Download folder as ZIP" style="background: none; border: none; color: #10b981; cursor: pointer; padding: 2px 4px;">
+            <i class="fas fa-file-archive"></i>
+        </button>
+        ${adminButtons}
+    </div>
   `;
 
   const subfolders = document.createElement('div');
@@ -162,6 +168,11 @@ function renderFolder(folder, parentElement) {
   }
 
   folderName.addEventListener('click', function(e) {
+    if (e.target.closest('.download-folder-btn')) { 
+      e.stopPropagation();
+      downloadFolderAsZip(folder.id, e.target.closest('.download-folder-btn'));
+      return;
+    }
     if (e.target.closest('.add-folder-btn')) {
       e.stopPropagation();
       if (isAdmin) showFolderInput(subfolders, folder.id);
@@ -514,6 +525,8 @@ function showFileModal(item) {
   const modalTags = document.getElementById('modalTags');
   const modalPreview = document.getElementById('modalPreview');
   const fileModal = document.getElementById('fileModal');
+  const modalSection = document.getElementById('modalSection');
+  const modalCategory = document.getElementById('modalCategory');
   if (modalTitle) modalTitle.textContent = filename;
   if (modalDownloadBtn) modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
   fetch(`/file_details?filename=${encodeURIComponent(filename)}`)
@@ -525,13 +538,16 @@ function showFileModal(item) {
       if (modalDescription) modalDescription.innerHTML = descriptionHTML;
       if (modalAddedDate) modalAddedDate.textContent = data.date_ajout || "Unknown";
       if (modalEventDate) modalEventDate.textContent = data.date_event || "Not specified";
+      if (modalSection) modalSection.textContent = data.section || "None";
+      if (modalCategory) modalCategory.textContent = data.category || "None";
 
       if (modalTags) {
           if (data.tags && data.tags.length > 0) {
               modalTags.innerHTML = data.tags.map(tag => 
                   `<span class="modal-tag">${tag}</span>`
               ).join('');
-          } else {
+          } 
+          else {
               modalTags.innerHTML = "<span class='modal-tag'>No tags</span>";
           }
 
@@ -765,7 +781,8 @@ if (searchInput) {
         if (query.length > 0) {
             currentSearchQuery = query;
             typingTimer = setTimeout(() => executeGlobalSearch(query, 1), doneTypingInterval);
-        } else {
+        } 
+        else {
             window.location.href = window.location.pathname; 
         }
     });
@@ -780,9 +797,10 @@ function executeGlobalSearch(query, page = 1) {
             <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
         </div>`;
     
-    let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}`;     if (currentFolderFilter) {
-        url += `&folder_id=${currentFolderFilter}`;
-    }
+        let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}&section=${currentSectionFilter}&category=${currentCategoryFilter}`;
+        if (currentFolderFilter) {
+          url += `&folder_id=${currentFolderFilter}`;
+        }
     fetch(url) 
         .then(response => response.json())
         .then(data => {
@@ -826,7 +844,7 @@ function executeGlobalSearch(query, page = 1) {
                 }
 
                 if (currentGlobalSort === 'date_desc') {
-                    const fileDate = file.date_ajout || 'Anciens fichiers (Sans date)';
+                    const fileDate = file.date_ajout || 'Old files (undated)';
                     if (fileDate !== currentDateGroup) {
                         currentDateGroup = fileDate;
                         const dateHeaderHtml = `
@@ -847,6 +865,7 @@ function executeGlobalSearch(query, page = 1) {
                          data-tags='${JSON.stringify(file.tags || [])}' 
                          data-exclusive="${isExclusive ? 'true' : 'false'}" 
                          data-date="${file.date_ajout || ''}">
+                         <div class="select-checkbox"><i class="fas fa-check"></i></div>
                         ${mediaHtml}
                         <div class="image-title" title="${file.name}">${file.name}</div>
                         <div class="item-footer">
@@ -1210,7 +1229,9 @@ function setupGalleryItemClicks() {
     item.addEventListener('click', (e) => {
       if (e.target.closest('.copy-link-btn') || 
           e.target.closest('.download-btn') || 
-          e.target.closest('.exclusive-btn')) {
+          e.target.closest('.exclusive-btn') ||
+          e.target.closest('.select-checkbox')
+        ){
         return;
       }
       showFileModal(item);
@@ -1331,6 +1352,7 @@ document.addEventListener('DOMContentLoaded', function() {
   createHeaderBubbles();
   setupTooltips();
   executeGlobalSearch('', 1);
+  loadDynamicFilters();
   
  
   function handleSidebarOnResize() {
@@ -1659,4 +1681,255 @@ function addFileToPortal(targetPortalId, portalName) {
         alert("Erreur lors de l'ajout au portail.");
     });
 }
+
+// ==========================================
+// LOGIQUE DE SÉLECTION MULTIPLE (MULTI-SELECT)
+// ==========================================
+let selectedFiles = [];
+
+// Écouter les clics sur les cases à cocher de la galerie
+document.addEventListener('click', function(e) {
+    const checkbox = e.target.closest('.select-checkbox');
+    if (checkbox) {
+        e.stopPropagation(); // Empêche d'ouvrir la modale du fichier
+        const item = checkbox.closest('.gallery-item');
+        const filename = item.getAttribute('data-filename');
+        const link = item.getAttribute('data-link');
+
+        // Basculer l'état visuel
+        item.classList.toggle('selected');
+
+        // Mettre à jour le tableau des fichiers
+        if (item.classList.contains('selected')) {
+            selectedFiles.push({ filename, link });
+        } else {
+            selectedFiles = selectedFiles.filter(f => f.filename !== filename);
+        }
+        
+        updateBulkActionBar();
+    }
+});
+
+function updateBulkActionBar() {
+    const bar = document.getElementById('bulkActionBar');
+    const countSpan = document.getElementById('bulkCount');
+    
+    if (!bar || !countSpan) return;
+
+    if (selectedFiles.length > 0) {
+        bar.style.display = 'flex';
+        countSpan.textContent = selectedFiles.length;
+    } 
+    else {
+        bar.style.display = 'none';
+    }
+}
+
+ // filtre sur section et catégories 
+    function loadDynamicFilters() {
+    fetch('/get_filters_data')
+        .then(res => res.json())
+        .then(data => {
+            const sectionContent = document.getElementById('sectionDropdownContent');
+            const categoryContent = document.getElementById('categoryDropdownContent');
+            if (!sectionContent || !categoryContent) return;
+
+            sectionContent.innerHTML = '';
+            categoryContent.innerHTML = '';
+
+            //bouton "All Sections" 
+            const allSecBtn = document.createElement('button');
+            allSecBtn.textContent = 'All Sections';
+            allSecBtn.onclick = () => setSectionFilter('all');
+            sectionContent.appendChild(allSecBtn);
+
+            // ajoute les sections de la bdd
+            data.sections.forEach(sec => {
+                const btn = document.createElement('button');
+                btn.textContent = sec;
+                btn.onclick = () => setSectionFilter(sec);
+                sectionContent.appendChild(btn);
+            });
+
+            // bouton "All Categories" 
+            const allCatBtn = document.createElement('button');
+            allCatBtn.textContent = 'All Categories';
+            allCatBtn.onclick = () => setCategoryFilter('all');
+            categoryContent.appendChild(allCatBtn);
+
+            // ajout catégories de la bdd
+            data.categories.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.textContent = cat;
+                btn.onclick = () => setCategoryFilter(cat);
+                categoryContent.appendChild(btn);
+            });
+        })
+        .catch(err => console.error("Erreur chargement filtres :", err));
+    }
+
+    function setSectionFilter(section) {
+        currentSectionFilter = section;
+        document.getElementById('sectionFilterBtn').innerHTML = `<i class="fas fa-folder-open"></i> Section: ${section === 'all' ? 'All' : section}`;
+        executeGlobalSearch(currentSearchQuery, 1);
+    }
+
+    function setCategoryFilter(category) {
+        currentCategoryFilter = category;
+        document.getElementById('categoryFilterBtn').innerHTML = `<i class="fas fa-list-ul"></i> Category: ${category === 'all' ? 'All' : category}`;
+        executeGlobalSearch(currentSearchQuery, 1);
+    }
+
+   
+function initAboutModal() {
+    const aboutModal = document.getElementById('aboutModal');
+    const openBtn = document.getElementById('openAboutBtn');
+    const closeBtn = document.getElementById('closeAboutBtn');
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (!aboutModal) return; 
+    if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            aboutModal.classList.add('active');
+            if (profileDropdown) {
+                profileDropdown.classList.remove('active');
+            }
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            aboutModal.classList.remove('active');
+        });
+    }
+    window.addEventListener('click', (e) => {
+        if (e.target === aboutModal) {
+            aboutModal.classList.remove('active');
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && aboutModal.classList.contains('active')) {
+            aboutModal.classList.remove('active');
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initAboutModal);
+
+// annuler la sélection
+document.addEventListener('DOMContentLoaded', () => {
+    const btnCancel = document.getElementById('bulkCancelBtn');
+    if (btnCancel) {
+        btnCancel.addEventListener('click', () => {
+            selectedFiles = [];
+            document.querySelectorAll('.gallery-item.selected').forEach(item => {
+                item.classList.remove('selected');
+            });
+            updateBulkActionBar();
+        });
+    }
+
+    // bouton copier tous les liens
+    const btnCopy = document.getElementById('bulkCopyBtn');
+    if (btnCopy) {
+        btnCopy.addEventListener('click', () => {
+            const linksText = selectedFiles.map(f => `${f.filename} :\r\n${f.link}`).join('\r\n\r\n');
+
+            navigator.clipboard.writeText(linksText).then(() => {
+                const oldContent = btnCopy.innerHTML;
+                btnCopy.innerHTML = `<i class="fas fa-check"></i> Links Copied!`;
+                btnCopy.style.backgroundColor = "#dcfce7";
+                btnCopy.style.color = "#166534";
+                setTimeout(() => {
+                    btnCopy.innerHTML = oldContent;
+                    btnCopy.style.backgroundColor = "";
+                    btnCopy.style.color = "";
+                }, 2000);
+            });
+        });
+    }
+
+    // télécharger tous les fichiers sélectionnés
+    const btnDownload = document.getElementById('bulkDownloadBtn');
+    if (btnDownload) {
+        btnDownload.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            const originalText = btnDownload.innerHTML;
+            btnDownload.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Compressing...`;
+            btnDownload.disabled = true;
+            try {
+                const zip = new JSZip();
+                const fetchPromises = selectedFiles.map(async (file) => {
+                    const proxyUrl = '/proxy_download?url=' + encodeURIComponent(file.link);
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) throw new Error("download " + file.filename + " failed");
+                    const blob = await response.blob();
+                    zip.file(file.filename, blob)
+                });
+                await Promise.all(fetchPromises);
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                saveAs(zipBlob, "PUR_Media_Export.zip");
+                document.getElementById('bulkCancelBtn').click();
+            } catch (error) {
+                console.error("Error ZIP :", error);
+                alert("An error occurred while creating the ZIP file. Please ensure that the files are accessible.");
+            } finally {
+                btnDownload.innerHTML = originalText;
+                btnDownload.disabled = false;
+            }
+        });
+    }
+
+// ==========================================
+// TÉLÉCHARGEMENT D'UN DOSSIER COMPLET (ZIP)
+// ==========================================
+window.downloadFolderAsZip = async function(folderId, btnElement) {
+    const originalHtml = btnElement.innerHTML;
+    btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btnElement.disabled = true;
+
+    try {
+        const res = await fetch(`/api/export_folder_zip/${folderId}`);
+        const data = await res.json();
+
+        if (data.status !== 'success') throw new Error(data.message);
+        if (data.files.length === 0) {
+            alert("This folder and its sub-folders are empty.");
+            return;
+        }
+
+        // Petit indicateur visuel
+        const btnContainer = btnElement.parentElement;
+        let msgSpan = document.createElement('span');
+        msgSpan.style.cssText = "font-size: 10px; color: #10b981; font-weight: bold;";
+        msgSpan.textContent = "Zipping...";
+        btnContainer.appendChild(msgSpan);
+
+        const zip = new JSZip();
+        
+        // On télécharge chaque fichier via le proxy CORS et on le range à sa place !
+        const fetchPromises = data.files.map(async (file) => {
+            const proxyUrl = '/proxy_download?url=' + encodeURIComponent(file.url);
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error("Erreur sur " + file.filename);
+            const blob = await response.blob();
+            
+            // LA MAGIE EST ICI : file.path contient l'arborescence (ex: "MonDossier/SousDossier/Image.jpg")
+            zip.file(file.path, blob); 
+        });
+
+        await Promise.all(fetchPromises);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        saveAs(zipBlob, `PUR_${data.folderName}.zip`);
+
+        msgSpan.remove();
+    } catch (err) {
+        console.error(err);
+        alert("An error occurred while creating the folder ZIP.");
+    } finally {
+        btnElement.innerHTML = originalHtml;
+        btnElement.disabled = false;
+    }
+};
+
+});
 

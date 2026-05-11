@@ -70,7 +70,10 @@ const AzureStreamStorage = {
             const maxBuffers = 20;
 
             await blockBlobClient.uploadStream(file.stream, bufferSize, maxBuffers, {
-                blobHTTPHeaders: { blobContentType: file.mimetype }
+                blobHTTPHeaders: { 
+                    blobContentType: file.mimetype,
+                    blobContentDisposition: 'inline' 
+                }
             });
             
             const properties = await blockBlobClient.getProperties();
@@ -549,6 +552,8 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         const offset = (page - 1) * per_page;
         const sort = req.query.sort || 'name_asc';
         const filter = req.query.filter || 'all';
+        const sectionFilter = req.query.section; 
+        const categoryFilter = req.query.category;
         const ext = {
             images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
             videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
@@ -565,10 +570,13 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         `;
         const params = [];
         if (filename) {
-            const searchTerm = `%${filename}%`;
-            params.push(searchTerm, searchTerm, searchTerm);
-            const pLen = params.length;
-            query += ` AND (nom_fichier ILIKE $${pLen - 2} OR description ILIKE $${pLen - 1} OR tags::text ILIKE $${pLen})`;
+            const searchWords = filename.split(/\s+/).filter(w => w.length > 0);
+            for (const word of searchWords) {
+                const searchTerm = `%${word}%`;
+                params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+                const pLen = params.length;
+                query += ` AND (nom_fichier ILIKE $${pLen - 4} OR description ILIKE $${pLen - 3} OR tags::text ILIKE $${pLen - 2} OR section ILIKE $${pLen - 1} OR category ILIKE $${pLen})`;
+            }
         }
 
         if (tags && tags.length > 0) {
@@ -600,6 +608,15 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
             query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.presentations.join(',')}])`;
         } else if (filter === 'others') {
             query += ` AND LOWER(nom_fichier) NOT LIKE ANY(ARRAY[${allKnownExts.join(',')}])`;
+        }
+
+        if (sectionFilter && sectionFilter !== 'all') {
+            params.push(sectionFilter);
+            query += ` AND section = $${params.length}`;
+        }
+        if (categoryFilter && categoryFilter !== 'all') {
+            params.push(categoryFilter);
+            query += ` AND category = $${params.length}`;
         }
 
         // trie
@@ -691,96 +708,18 @@ app.get('/upload', loginRequiredHtml, adminRequired, async (req, res) => {
     }
 });
 
-/*app.post('/upload', loginRequiredJson, upload.array("files"), async (req, res) => {
-    try {
-        const files = req.files || [];
-        const descriptions = [].concat(req.body.descriptions || []);
-        const tags_list = [].concat(req.body.tags || []);
-        const date_events = [].concat(req.body.date_events || []);
-        const folder_ids = [].concat(req.body.folder_ids || []);
-        const portal_ids = [].concat(req.body.portal_ids || []);
-        
-        const forbidden_extensions = [".heic", ".thm"];
-        const uploaded_urls = [];
-        const currentDate = new Date().toISOString().split('T')[0]; 
-
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const originalName = file.originalname;
-            const filename = sanitize(originalName).replace(/\s+/g, '_'); 
-            const ext = require('path').extname(filename).toLowerCase();
-
-            if (forbidden_extensions.includes(ext)) {
-                return res.status(400).json({ status: "error", message: `Extension '${ext}' non autorisée` });
-            }
-
-            const description = descriptions[i] || "";
-            let tags = [];
-            try { tags = JSON.parse(tags_list[i] || "[]"); } catch (e) { }
-            const folder_id = folder_ids[i] || null;
-            const portal_id = (portal_ids[i] && portal_ids[i] !== "none") ? portal_ids[i] : null;
-            let date_event = null;
-            if (date_events[i]) {
-                const parts = date_events[i].split('-');
-                if (parts.length === 3) date_event = `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-
-            // upload dans azure
-            const blockBlobClient = containerClient.getBlockBlobClient(filename);
-            await blockBlobClient.uploadData(file.buffer); 
-            const blob_url = blockBlobClient.url;
-
-            // enregistre dans la bdd
-            await pool.query(`
-                INSERT INTO documents (
-                    nom_fichier, lien_telechargement, description, tags, 
-                    date_ajout, date_event, folder_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
-            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id]);
-
-            if (portal_id) {
-                let file_type = "Other";
-                if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) file_type = "Image";
-                else if (['.mp4', '.mov', '.avi', '.wmv'].includes(ext)) file_type = "Video";
-                else if (['.pdf'].includes(ext)) file_type = "PDF";
-                else if (['.doc', '.docx'].includes(ext)) file_type = "Document";
-                else if (['.xls', '.xlsx'].includes(ext)) file_type = "Spreadsheet";
-                const size_bytes = file.size;
-                let size_display;
-                if (size_bytes >= 1024 ** 3) size_display = (size_bytes / (1024 ** 3)).toFixed(2) + "GB";
-                else if (size_bytes >= 1024 ** 2) size_display = (size_bytes / (1024 ** 2)).toFixed(2) + "MB";
-                else if (size_bytes >= 1024) size_display = (size_bytes / 1024).toFixed(2) + "KB";
-                else size_display = size_bytes + "Bytes";
-                await pool.query(`
-                    INSERT INTO portal_files (portal_id, filename, description, file_url, file_type, upload_date, size_bytes, size)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
-                `, [portal_id, filename, description || "No description", blob_url, file_type, currentDate, size_bytes, size_display]);
-            }
-
-            uploaded_urls.push(blob_url);
-        }
-
-        res.json({ status: "success", urls: uploaded_urls });
-
-    } catch (error) {
-        console.error("Erreur lors de l'upload:", error);
-        res.status(500).json({ status: "error", message: "Erreur lors de l'upload" });
-    }
-});
-*/
-
 app.post('/upload', loginRequiredJson, adminRequired, (req, res, next) => {
     uploadStream.array("files")(req, res, function (err) {
         if (err) {
             if (err.message.startsWith('Extension_Error')) {
                 const ext = err.message.split(':')[1];
-                return res.status(400).json({ status: "error", message: `Extension '${ext}' non autorisée` });
+                return res.status(400).json({ status: "error", message: `Extension '${ext}' not allowed` });
             }
             if (err.message.startsWith('FileExists_Error')) {
                 const fname = err.message.split(':')[1];
                 return res.status(400).json({ 
                     status: "error", 
-                    message: `Le fichier '${fname}' existe déjà dans la base. Veuillez le renommer avant de l'uploader.` 
+                    message: `The file '${fname}' already exists in the database. Please rename it before uploading.` 
                 });
             }
             return res.status(500).json({ status: "error", message: "Erreur lors du transfert des fichiers." });
@@ -795,7 +734,8 @@ app.post('/upload', loginRequiredJson, adminRequired, (req, res, next) => {
         const date_events = [].concat(req.body.date_events || []);
         const folder_ids = [].concat(req.body.folder_ids || []);
         const portal_ids = [].concat(req.body.portal_ids || []);
-        
+        const sections = [].concat(req.body.sections || req.body.section || []);
+        const categories = [].concat(req.body.categories || req.body.category || []);
         const uploaded_urls = [];
         const currentDate = new Date().toISOString().split('T')[0]; 
 
@@ -814,6 +754,8 @@ app.post('/upload', loginRequiredJson, adminRequired, (req, res, next) => {
             
             const folder_id = folder_ids[i] || null;
             const portal_id = (portal_ids[i] && portal_ids[i] !== "none") ? portal_ids[i] : null;
+            const section = sections[i] || sections[0] || null;
+            const category = categories[i] || categories[0] || null;
             let date_event = null;
             
             if (date_events[i]) {
@@ -825,9 +767,9 @@ app.post('/upload', loginRequiredJson, adminRequired, (req, res, next) => {
             await pool.query(`
                 INSERT INTO documents (
                     nom_fichier, lien_telechargement, description, tags, 
-                    date_ajout, date_event, folder_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
-            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id]);
+                    date_ajout, date_event, folder_id, section, category
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id, section, category]);
 
             // si associé à un portail, enregistre dans portal_files
             if (portal_id) {
@@ -876,7 +818,7 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
         }
 
         const docResult = await pool.query(`
-            SELECT description, tags, date_ajout, is_exclusive, date_event, folder_id
+            SELECT description, tags, date_ajout, is_exclusive, date_event, folder_id, section, category
             FROM documents
             WHERE nom_fichier = $1;
         `, [filename]);
@@ -911,10 +853,12 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
             description: doc.description || "No description",
             tags: parsedTags,
             date_ajout: formatDate(doc.date_ajout),
-            is_exclusive: Boolean(doc.is_exclusive),
+            is_exclusive : Boolean(doc.is_exclusive),
             date_event: formatDate(doc.date_event),
             folder_id: doc.folder_id,
-            portal_id: portal_id
+            portal_id: portal_id,
+            section : doc.section || "",
+            category : doc.category || ""
         });
 
     } catch (error) {
@@ -982,7 +926,7 @@ app.post('/delete_folder', loginRequiredJson, adminRequired, upload.none(), asyn
     }
 });
 
-// Renommer un dossier
+// rename un dossier
 app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
         const { folder_id, new_name } = req.body;
@@ -990,18 +934,17 @@ app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), asyn
             return res.status(400).json({ status: "error", message: "ID et nouveau nom valides requis" });
         }
         const cleanName = new_name.trim();
-        // maj en BDD
-        const result = await pool.query(
-            "UPDATE folders SET name = $1 WHERE id = $2 RETURNING id, name;",
-            [cleanName, folder_id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ status: "error", message: "Dossier introuvable" });
+        const selectRes = await pool.query("SELECT name FROM folders WHERE id = $1;", [folder_id]);
+        if (selectRes.rows.length === 0) {
+            return res.status(404).json({ status: "error", message: "dossier introuvable" });
         }
+        const ancienNom = selectRes.rows[0].name;
+        await pool.query("UPDATE folders SET name = $1 WHERE id = $2;", [cleanName, folder_id]);
         if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
                 name: "Folder_Renomme",
                 properties: {
+                    ancien_nom: ancienNom,
                     nouveau_nom: cleanName,
                     dossier_id: folder_id,
                     admin: req.session.user_email
@@ -2111,6 +2054,139 @@ app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), 
         res.status(500).json({ status: "error", message: "Server error during deletion." });
     }
 });
+
+// ==========================================
+// ROUTE DE MAINTENANCE : Réparer les fichiers Azure (Forcer l'affichage)
+// ==========================================
+// REGELER AFFICHAGE COPIE LIEN
+/*app.get('/admin/fix_azure_headers', loginRequiredHtml, adminRequired, async (req, res) => {
+    try {
+        // On récupère tous les fichiers de la base
+        const result = await pool.query("SELECT nom_fichier FROM documents");
+        let updatedCount = 0;
+        let missingCount = 0;
+
+        for (let row of result.rows) {
+            const filename = row.nom_fichier;
+            const ext = require('path').extname(filename).toLowerCase();
+
+            // On déduit le bon type MIME selon l'extension
+            let mimeType = 'application/octet-stream';
+            if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
+            else if (ext === '.png') mimeType = 'image/png';
+            else if (ext === '.gif') mimeType = 'image/gif';
+            else if (ext === '.webp') mimeType = 'image/webp';
+            else if (ext === '.pdf') mimeType = 'application/pdf';
+            else if (ext === '.mp4') mimeType = 'video/mp4';
+
+            const blockBlobClient = containerClient.getBlockBlobClient(filename);
+
+            try {
+                // On essaie de forcer Azure à mettre à jour les en-têtes
+                await blockBlobClient.setHTTPHeaders({
+                    blobContentType: mimeType,
+                    blobContentDisposition: 'inline'
+                });
+                updatedCount++;
+            } catch (azureErr) {
+                // Si le fichier n'existe pas sur Azure, on l'ignore et on passe au suivant
+                if (azureErr.statusCode === 404) {
+                    console.warn(`⚠️ Fichier introuvable sur Azure (ignoré) : ${filename}`);
+                    missingCount++;
+                } else {
+                    console.error(`❌ Erreur inattendue pour ${filename}:`, azureErr.message);
+                }
+            }
+        }
+
+        res.send(`
+            <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                <h1 style="color: #166534;">✅ Opération terminée !</h1>
+                <p><strong>${updatedCount} fichiers</strong> ont été mis à jour avec succès sur Azure.</p>
+                <p style="color: #ea580c;"><strong>${missingCount} fichiers fantômes</strong> ont été ignorés (présents en BDD mais absents d'Azure).</p>
+                <p>Les fichiers réparés s'afficheront désormais directement dans le navigateur !</p>
+                <a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #0078d4; color: white; text-decoration: none; border-radius: 6px;">Retour à la galerie</a>
+            </div>
+        `);
+    } catch (error) {
+        console.error("Erreur fix_azure_headers:", error);
+        res.status(500).send("Erreur critique lors de la mise à jour des fichiers. Regarde la console.");
+    }
+});
+*/
+
+// ROUTE PROXY POUR LE TÉLÉCHARGEMENT ZIP 
+const https = require('https'); 
+app.get('/proxy_download', loginRequiredJson, (req, res) => {
+    const fileUrl = req.query.url;
+    if (!fileUrl) return res.status(400).send("URL missing");
+    https.get(fileUrl, (response) => {
+        res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');        
+        response.pipe(res);
+    }).on('error', (err) => {
+        console.error("Proxy download error:", err);
+        res.status(500).send("Erreur de téléchargement du fichier.");
+    });
+});
+
+// recup les sections et catégories uniques pour les filtres
+app.get('/get_filters_data', loginRequiredJson, async (req, res) => {
+    try {
+        const sections = await pool.query("SELECT DISTINCT section FROM documents WHERE section IS NOT NULL AND section != '' ORDER BY section ASC;");
+        const categories = await pool.query("SELECT DISTINCT category FROM documents WHERE category IS NOT NULL AND category != '' ORDER BY category ASC;");
+        res.json({
+            sections: sections.rows.map(r => r.section),
+            categories: categories.rows.map(r => r.category)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// EXPORT COMPLET D'UN DOSSIER EN ZIP (AVEC ARBORESCENCE)
+app.get('/api/export_folder_zip/:folder_id', loginRequiredJson, async (req, res) => {
+    try {
+        const targetFolderId = parseInt(req.params.folder_id);
+        const foldersRes = await pool.query("SELECT id, name, parent_id FROM folders");
+        const folders = foldersRes.rows;
+        const folderMap = new Map();
+        folders.forEach(f => folderMap.set(f.id, f));
+        const targetFolder = folderMap.get(targetFolderId);
+        if (!targetFolder) return res.status(404).json({ status: "error", message: "Dossier introuvable" });
+        const descendants = [];
+        const paths = new Map(); 
+
+        function getDescendants(parentId, currentPath) {
+            const children = folders.filter(f => f.parent_id === parentId);
+            children.forEach(c => {
+                const path = `${currentPath}/${c.name}`;
+                paths.set(c.id, path);
+                descendants.push(c.id);
+                getDescendants(c.id, path); 
+            });
+        }
+
+        paths.set(targetFolderId, targetFolder.name);
+        descendants.push(targetFolderId);
+        getDescendants(targetFolderId, targetFolder.name);
+        const filesRes = await pool.query(
+            "SELECT nom_fichier, lien_telechargement, folder_id FROM documents WHERE folder_id = ANY($1::int[])",
+            [descendants]
+        );
+        const exportData = filesRes.rows.map(file => ({
+            filename: file.nom_fichier,
+            url: file.lien_telechargement,
+            path: `${paths.get(file.folder_id)}/${file.nom_fichier}` 
+        }));
+
+        res.json({ status: "success", folderName: targetFolder.name, files: exportData });
+
+    } catch (error) {
+        console.error("Erreur export ZIP dossier:", error);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
 
 app.listen(PORT, () => {
     console.log(`serv Node.js démarré sur http://localhost:${PORT}`);
