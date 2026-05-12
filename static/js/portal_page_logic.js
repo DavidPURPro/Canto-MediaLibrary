@@ -20,15 +20,42 @@ document.addEventListener('DOMContentLoaded', function() {
   const filesCount = document.getElementById('filesCount');
   const portalFilesCount = document.getElementById('portalFilesCount');
   const portalTotalSize = document.getElementById('portalTotalSize');
+  let myFavorites = [];
 
   setProfileButtonColor();
   setupEventListeners();
 
+  fetch('/my_favorites')
+      .then(res => res.json())
+      .then(data => {
+          if (data.status === 'success') {
+              myFavorites = data.favorites;
+              document.querySelectorAll('.file-card').forEach(card => {
+                  const filename = card.getAttribute('data-filename');
+                  if (myFavorites.includes(filename)) {
+                      const btn = card.querySelector('.favorite-btn');
+                      if (btn) {
+                          btn.classList.add('is-favorited');
+                          btn.querySelector('i').className = 'fas fa-heart';
+                      }
+                  }
+              });
+          }
+      });
+
   function setupEventListeners() {
+    const modalFavBtn = document.getElementById('modalFavoriteBtn');
+    if (modalFavBtn) {
+        modalFavBtn.addEventListener('click', (e) => {
+            if (currentModalFilename) {
+                toggleFavorite(e, currentModalFilename);
+            }
+        });
+    }
     const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
     if (btnRemoveFolder) {
         btnRemoveFolder.addEventListener('click', function() {
-            if (confirm("Voulez-vous vraiment retirer ce fichier de son dossier ?")) {
+            if (confirm("Do you really want to remove this file from its folder ?")) {
                 removeFileFromFolder();
             }
         });
@@ -236,6 +263,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const folderName = card.getAttribute('data-folder-name') || 'None';
     
     currentModalFilename = filename;
+    const modalFavBtn = document.getElementById('modalFavoriteBtn');
+    if (modalFavBtn) {
+        const isFav = myFavorites.includes(filename);
+        modalFavBtn.classList.toggle('is-favorited', isFav);
+        modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+    }
     document.getElementById('modalTitle').textContent = filename;
     document.getElementById('modalDescription').textContent = card.getAttribute('data-description') || 'No description available.';
     document.getElementById('currentFolderName').textContent = folderName;
@@ -557,6 +590,40 @@ initAboutModal();
           bar.style.display = 'none';
       }
   }
+
+  // fonction favoris
+  window.toggleFavorite = function(event, filename) {
+      event.stopPropagation();
+      const formData = new FormData();
+      formData.append('filename', filename);
+      fetch('/toggle_favorite', {
+          method: 'POST',
+          body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+          if (data.status === 'success') {
+              const isFav = data.is_favorited;
+              if (isFav) {
+                  if (!myFavorites.includes(filename)) myFavorites.push(filename);
+              } 
+              else {
+                  myFavorites = myFavorites.filter(name => name !== filename);
+              }
+              const safeFilename = filename.replace(/"/g, '\\"');
+              const cardBtn = document.querySelector(`.file-card[data-filename="${safeFilename}"] .favorite-btn`);
+              if (cardBtn) {
+                  cardBtn.classList.toggle('is-favorited', isFav);
+                  cardBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+              }
+              const modalFavBtn = document.getElementById('modalFavoriteBtn');
+              if (modalFavBtn && currentModalFilename === filename) {
+                  modalFavBtn.classList.toggle('is-favorited', isFav);
+                  modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+              }
+          }
+      });
+  };
 
   const btnCancel = document.getElementById('bulkCancelBtn');
   if (btnCancel) {

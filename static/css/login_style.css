@@ -8,7 +8,6 @@
 body {
     margin: 0;
     padding: 0;
-    /* L'URL est en chemin absolu pour fonctionner depuis le dossier CSS */
     background: linear-gradient(to bottom, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.2) 100%), 
                 url('/static/foret.jpg') no-repeat center center fixed;
     background-size: cover;
@@ -204,6 +203,45 @@ body {
     opacity: 0.7;
     filter: blur(1px);
     background: rgba(52, 152, 219, 0.6); 
+}
+
+/*  FOOTER LEGAL (LOGIN) */
+.login-legal-footer {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    z-index: 100;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); 
+}
+
+.login-legal-footer a {
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    transition: all var(--transition-speed);
+    font-weight: 500;
+}
+
+.login-legal-footer a:hover {
+    color: #ffffff;
+    text-decoration: underline;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+.login-legal-footer .separator {
+    margin: 0 12px;
+    opacity: 0.6;
+}
+
+@media (max-width: 576px) {
+    .login-legal-footer {
+        bottom: 15px;
+        font-size: 11px;
+    }
 }
 
 @keyframes float {

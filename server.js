@@ -596,7 +596,12 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         // filtre par caté 
         if (filter === 'exclusive') {
             query += ` AND is_exclusive = TRUE`;
-        } else if (filter === 'images') {
+        } else if (filter === 'favorites') {
+            const user_email = req.session.user_email || req.session.portal_user_email;
+            params.push(user_email);
+            query += ` AND nom_fichier IN (SELECT filename FROM user_favorites WHERE user_email = $${params.length})`;
+        } 
+        else if (filter === 'images') {
             query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.images.join(',')}])`;
         } else if (filter === 'videos') {
             query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.videos.join(',')}])`;
@@ -1282,7 +1287,8 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
 
         // suppr du site principal
         await pool.query("DELETE FROM documents WHERE nom_fichier = $1;", [filename]);
-
+        // suppr aussi du coup des favoris
+        await pool.query("DELETE FROM user_favorites WHERE filename = $1;", [filename]);
         for (let portal_id of affectedPortals) {
             await updatePortalStats(portal_id);
         }
@@ -2184,6 +2190,58 @@ app.get('/api/export_folder_zip/:folder_id', loginRequiredJson, async (req, res)
     } catch (error) {
         console.error("Erreur export ZIP dossier:", error);
         res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+// ajout ou retire un favori
+app.post('/toggle_favorite', loginRequiredJson, upload.none(), async (req, res) => {
+    try {
+        const filename = req.body.filename;
+        const user_email = req.session.user_email || req.session.portal_user_email;
+        if (!filename || !user_email) {
+            return res.status(400).json({ status: "error", message: "Paramètres manquants" });
+        }
+        const checkRes = await pool.query(
+            "SELECT id FROM user_favorites WHERE user_email = $1 AND filename = $2;",
+            [user_email, filename]
+        );
+        let is_favorited = false;
+        if (checkRes.rows.length > 0) {
+            await pool.query(
+                "DELETE FROM user_favorites WHERE user_email = $1 AND filename = $2;",
+                [user_email, filename]
+            );
+            is_favorited = false;
+        } 
+        else {
+            await pool.query(
+                "INSERT INTO user_favorites (user_email, filename) VALUES ($1, $2);",
+                [user_email, filename]
+            );
+            is_favorited = true;
+        }
+
+        res.json({ status: "success", is_favorited: is_favorited });
+    } catch (error) {
+        console.error("Erreur toggle_favorite:", error);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+// recup liste de tous les fav de l'utilisateur actif
+app.get('/my_favorites', loginRequiredJson, async (req, res) => {
+    try {
+        const user_email = req.session.user_email || req.session.portal_user_email;
+        if (!user_email) return res.json({ status: "success", favorites: [] });
+        const result = await pool.query(
+            "SELECT filename FROM user_favorites WHERE user_email = $1;",
+            [user_email]
+        );
+        const favoritesList = result.rows.map(row => row.filename);
+        res.json({ status: "success", favorites: favoritesList });
+    } catch (error) {
+        console.error("Erreur my_favorites:", error);
+        res.status(500).json({ status: "error", favorites: [] });
     }
 });
 

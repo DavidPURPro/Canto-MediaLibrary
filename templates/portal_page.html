@@ -169,7 +169,10 @@
               </div>
             </div>
 
-            <div class="file-actions">
+            <div class="file-actions" style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+              <button class="favorite-btn" onclick="toggleFavorite(event, this.closest('.file-card').getAttribute('data-filename'))">
+                <i class="far fa-heart"></i>
+              </button>
               {% if portal.access == 'Public' or is_admin %}
                 <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
               {% else %}
@@ -217,6 +220,10 @@
           <button class="modal-action-btn" id="removeFromPortalBtn" style="background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); color: #fecaca; display: none;">Remove from Portal</button>
           <div class="portal-list" id="portalList" style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
         </div>
+
+        <button class="modal-action-btn" id="modalFavoriteBtn" style="flex: 0 0 auto; width: auto; padding: 0 20px; font-size: 20px;">
+            <i class="far fa-heart"></i>
+          </button>
 
         {% if portal.access == 'Public' or is_admin %}
           <button class="modal-action-btn" id="modalCopyBtn">Copy Link</button>

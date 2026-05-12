@@ -35,6 +35,7 @@ let currentGlobalSort = 'date_desc';
 let currentGlobalFilter = 'all';
 let currentSectionFilter = 'all';
 let currentCategoryFilter = 'all';
+let myFavorites = [];
 
 
 // mappage des types de fichiers
@@ -527,6 +528,12 @@ function showFileModal(item) {
   const fileModal = document.getElementById('fileModal');
   const modalSection = document.getElementById('modalSection');
   const modalCategory = document.getElementById('modalCategory');
+  const modalFavBtn = document.getElementById('modalFavoriteBtn');
+    if (modalFavBtn) {
+        const isFav = myFavorites.includes(filename);
+        modalFavBtn.classList.toggle('is-favorited', isFav);
+        modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+    }
   if (modalTitle) modalTitle.textContent = filename;
   if (modalDownloadBtn) modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
   fetch(`/file_details?filename=${encodeURIComponent(filename)}`)
@@ -856,6 +863,7 @@ function executeGlobalSearch(query, page = 1) {
                 }
 
                 const isExclusive = file.is_exclusive === true || file.is_exclusive === 'true';
+                const isFavorited = myFavorites.includes(file.name);
                 const cardHtml = `
                     <div class="gallery-item" 
                          data-name="${file.name.toLowerCase()}" 
@@ -869,6 +877,11 @@ function executeGlobalSearch(query, page = 1) {
                         ${mediaHtml}
                         <div class="image-title" title="${file.name}">${file.name}</div>
                         <div class="item-footer">
+                            <button class="favorite-btn ${isFavorited ? 'is-favorited' : ''}" 
+                                    onclick="toggleFavorite(event, '${file.name}')">
+                                <span class="tooltip">${isFavorited ? 'Remove from favorites' : 'Add to favorites'}</span>
+                                <i class="${isFavorited ? 'fas' : 'far'} fa-heart"></i>
+                            </button>
                             <button class="copy-link-btn" data-link="${file.url}"><span class="tooltip">Copy Link</span><i class="fas fa-link"></i></button>
                             <a href="${file.url}" class="download-btn" download="${file.name}"><span class="tooltip">Download</span><i class="fas fa-download"></i></a>
                             <button class="exclusive-btn ${isExclusive ? 'exclusive' : ''}" data-filename="${file.name}"><span class="tooltip">${isExclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${isExclusive ? 'fas fa-star' : 'far fa-star'}"></i></button>
@@ -927,6 +940,13 @@ document.querySelectorAll('.sort-dropdown-content button[data-sort]').forEach(bu
         executeGlobalSearch(currentSearchQuery, 1);
     });
 });
+
+const modalFavBtn = document.getElementById('modalFavoriteBtn');
+if (modalFavBtn) {
+    modalFavBtn.addEventListener('click', (e) => {
+        toggleFavorite(e, currentModalFilename);
+    });
+}
 
 // slug
 
@@ -1813,6 +1833,43 @@ function initAboutModal() {
     });
 }
 
+window.toggleFavorite = function(event, filename) {
+    event.stopPropagation();
+    const formData = new FormData();
+    formData.append('filename', filename);
+    fetch('/toggle_favorite', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const isFav = data.is_favorited;
+            if (isFav) {
+                if (!myFavorites.includes(filename)) myFavorites.push(filename);
+            } 
+            else {
+                myFavorites = myFavorites.filter(name => name !== filename);
+            }
+            const galleryBtn = document.querySelector(`.gallery-item[data-filename="${filename}"] .favorite-btn`);
+            if (galleryBtn) {
+                galleryBtn.classList.toggle('is-favorited', isFav);
+                galleryBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+                const tooltip = galleryBtn.querySelector('.tooltip');
+                if (tooltip) tooltip.textContent = isFav ? 'Remove from favorites' : 'Add to favorites';
+            }
+            const modalFavBtn = document.getElementById('modalFavoriteBtn');
+            if (modalFavBtn && currentModalFilename === filename) {
+                modalFavBtn.classList.toggle('is-favorited', isFav);
+                modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+            }            
+            if (currentGlobalFilter === 'favorites') {
+                executeGlobalSearch(currentSearchQuery, 1);
+            }
+        }
+    });
+};
+
 document.addEventListener('DOMContentLoaded', initAboutModal);
 
 // annuler la sélection
@@ -1879,9 +1936,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-// ==========================================
-// TÉLÉCHARGEMENT D'UN DOSSIER COMPLET (ZIP)
-// ==========================================
+// download folders
 window.downloadFolderAsZip = async function(folderId, btnElement) {
     const originalHtml = btnElement.innerHTML;
     btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -1890,30 +1945,22 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
     try {
         const res = await fetch(`/api/export_folder_zip/${folderId}`);
         const data = await res.json();
-
         if (data.status !== 'success') throw new Error(data.message);
         if (data.files.length === 0) {
             alert("This folder and its sub-folders are empty.");
             return;
         }
-
-        // Petit indicateur visuel
         const btnContainer = btnElement.parentElement;
         let msgSpan = document.createElement('span');
         msgSpan.style.cssText = "font-size: 10px; color: #10b981; font-weight: bold;";
         msgSpan.textContent = "Zipping...";
         btnContainer.appendChild(msgSpan);
-
         const zip = new JSZip();
-        
-        // On télécharge chaque fichier via le proxy CORS et on le range à sa place !
         const fetchPromises = data.files.map(async (file) => {
             const proxyUrl = '/proxy_download?url=' + encodeURIComponent(file.url);
             const response = await fetch(proxyUrl);
             if (!response.ok) throw new Error("Erreur sur " + file.filename);
             const blob = await response.blob();
-            
-            // LA MAGIE EST ICI : file.path contient l'arborescence (ex: "MonDossier/SousDossier/Image.jpg")
             zip.file(file.path, blob); 
         });
 
@@ -1930,6 +1977,16 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         btnElement.disabled = false;
     }
 };
+
+// charger les favoris de l'utilisateur au chargement
+fetch('/my_favorites')
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            myFavorites = data.favorites;
+            if (typeof executeGlobalSearch === 'function') executeGlobalSearch(currentSearchQuery, 1);
+        }
+    });
 
 });
 

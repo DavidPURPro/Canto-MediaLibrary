@@ -424,3 +424,73 @@ a.modern-btn.danger-btn { color: #ef4444 !important; }
 .profile-about:hover {
   background: rgba(0, 0, 0, 0.05);
 }
+
+.favorite-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 16px;
+    color: #94a3b8; 
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.favorite-btn:hover {
+    transform: scale(1.2);
+    color: #ef4444;
+}
+
+.favorite-btn.is-favorited {
+    color: #ef4444; 
+    animation: heartBeat 0.3s ease-in-out;
+}
+
+@keyframes heartBeat {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+.favorite-btn .tooltip {
+    visibility: hidden;
+    width: 100px;
+    background-color: #334155;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 11px;
+}
+
+.favorite-btn:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+}
+
+#modalFavoriteBtn {
+    font-size: 22px; 
+    padding: 10px;
+    margin-right: 15px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+#modalFavoriteBtn:hover {
+    background-color: #f8fafc;
+}
+
+#modalFavoriteBtn.is-favorited {
+    border-color: #fee2e2;
+    background-color: #fff1f2;
+}

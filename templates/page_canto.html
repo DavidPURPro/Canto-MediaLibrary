@@ -70,6 +70,9 @@
       <i class="fas fa-filter"></i> All Files
     </button>
     <div class="filter-dropdown-content">
+      <button data-filter="favorites" style="color: #ef4444; font-weight: 600;">
+        <i class="fas fa-heart"></i> My Favorites
+      </button>
       <button data-filter="all"><i class="fas fa-th-large"></i> All Files</button>
       <button data-filter="images"><i class="fas fa-image"></i> Images</button>
       <button data-filter="videos"><i class="fas fa-video"></i> Videos</button>
@@ -301,6 +304,9 @@
         </div>
 
         <div class="modal-actions">
+          <button class="favorite-btn" id="modalFavoriteBtn" title="Add to Favorites">
+              <i class="far fa-heart"></i>
+          </button>
           <button class="modern-btn secondary-btn" id="modalCopyBtn">
             <i class="fas fa-link"></i> Copy Link
           </button>
