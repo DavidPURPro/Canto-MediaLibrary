@@ -1299,7 +1299,7 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
             }
         });
-        res.json({ status: "success", message: `Fichier ${filename} supprimé avec succès` });
+        res.json({ status: "success", message: `File ${filename} successfully deleted` });
 
     } catch (error) {
         console.error("Erreur delete_files:", error);

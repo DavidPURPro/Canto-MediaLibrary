@@ -79,20 +79,27 @@
               <textarea id="fileDescription" placeholder="Enter a description for this file"></textarea>
             </div>
             
-            <div class="form-row">
-              <div class="form-group half">
-                <label for="fileEventDate">Event Date</label>
-                <input type="date" id="fileEventDate" class="modern-input">
-              </div>
-              <div class="form-group half">
-                <label for="filePortal">Add to Portal</label>
-                <select id="filePortal" class="modern-input">
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label for="fileEventDate" style="font-weight: 600; display: block; margin-bottom: 5px;">Event Date</label>
+              <input type="date" id="fileEventDate" class="modern-input" style="width: 100%; box-sizing: border-box;">
+            </div>
+
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+              <div class="form-group half" style="flex: 1;">
+                <label for="filePortal" style="font-weight: 600; display: block; margin-bottom: 5px;"><i class="fas fa-globe"></i> Add to Portal</label>
+                <select id="filePortal" class="modern-input" style="width: 100%; box-sizing: border-box;">
                   <option value="none">(No portal)</option>                  
                   {% for portal in portals %}
                     <option value="{{ portal.id }}">{{ portal.name }}</option>
                   {% endfor %}
-                  
                 </select>
+              </div>
+
+              <div class="form-group half" style="flex: 1;">
+                <label for="fileFolder" style="font-weight: 600; display: block; margin-bottom: 5px;"><i class="far fa-folder-open"></i> Assign to Folder</label>
+                <select id="fileFolder" class="modern-input" style="width: 100%; box-sizing: border-box;">
+                  <option value="none">(No folder)</option>
+                  </select>
               </div>
             </div>
 

@@ -40,6 +40,21 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => console.error('Error loading portals:', error));
 
+    fetch('/get_folders')
+        .then(response => response.json())
+        .then(data => {
+            const folderSelect = document.getElementById('fileFolder');
+            if (data.folders) {
+                data.folders.forEach(folder => {
+                    const option = document.createElement('option');
+                    option.value = folder.id;
+                    option.textContent = folder.name;
+                    folderSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Error loading folders:', error));
+
     dropArea.addEventListener("dragover", (e) => {
         e.preventDefault();
         dropArea.classList.add("dragover");
@@ -73,17 +88,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const category = fileCategory ? fileCategory.value : "";
             const tags = Array.from(tagsContainer.querySelectorAll(".tag"))
                 .map(tag => tag.textContent.replace("×", "").trim());
+            const folderId = document.getElementById('fileFolder').value;
             
             fileDetails[file.name] = {
                 description,
                 tags,
                 eventDate,
                 portalId, 
+                folderId,
                 section,
                 category
             };
 
-            updateFileListItem(currentFileIndex, description, tags, eventDate, portalId);
+            updateFileListItem(currentFileIndex, description, tags, eventDate, portalId, folderId);
         }
         closeModal();
     });
@@ -224,13 +241,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index >= 0 && index < filesToUpload.length) {
             currentFileIndex = index;
             const file = filesToUpload[index];
-            
             fileDescription.value = "";
             tagsContainer.innerHTML = "";
             fileTags.value = "";
             document.getElementById('filePortal').value = "none";
+            document.getElementById('fileFolder').value = "none"; 
             if (fileSection) fileSection.value = "";
             if (fileCategory) fileCategory.value = "";
+            
             if (file.type.startsWith("image/")) {
                 const reader = new FileReader();
                 reader.onload = (e) => { filePreview.src = e.target.result; };
@@ -244,7 +262,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (fileDetails[file.name]) {
                 fileDescription.value = fileDetails[file.name].description || "";
                 fileEventDate.value = fileDetails[file.name]?.eventDate || "";
-                if(fileDetails[file.name].portalId) document.getElementById('filePortal').value = fileDetails[file.name].portalId;
+                
+                if(fileDetails[file.name].portalId) {
+                    document.getElementById('filePortal').value = fileDetails[file.name].portalId;
+                }
+                
+                if(fileDetails[file.name].folderId) {
+                    document.getElementById('fileFolder').value = fileDetails[file.name].folderId;
+                }
+
                 if (fileSection && fileDetails[file.name].section) fileSection.value = fileDetails[file.name].section;
                 if (fileCategory && fileDetails[file.name].category) fileCategory.value = fileDetails[file.name].category;
                 
@@ -261,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateFileListItem(index, description, tags, eventDate, portalId) {
+    function updateFileListItem(index, description, tags, eventDate, portalId, folderId) {
         const listItems = fileList.querySelectorAll("li");
         if (index >= 0 && index < listItems.length) {
             const fileNameContainer = listItems[index].querySelector(".file-name-container");
@@ -288,6 +314,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 portalIcon.innerHTML = '<i class="fas fa-globe text-muted"></i>';
                 portalIcon.title = "Will be added to a portal";
                 fileNameContainer.insertBefore(portalIcon, fileNameContainer.firstChild);
+            }
+            if (folderId && folderId !== "none") {
+                const folderIcon = document.createElement("span");
+                folderIcon.className = "status-icon";
+                folderIcon.innerHTML = '<i class="far fa-folder-open text-muted"></i>';
+                folderIcon.title = "Assigned to a folder";
+                fileNameContainer.insertBefore(folderIcon, fileNameContainer.firstChild);
             }
         }
     }
@@ -393,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append("portal_ids", details.portalId || "");
             formData.append("sections", details.section || "");
             formData.append("categories", details.category || "");
-        });
+            formData.append("folder_ids", (details.folderId && details.folderId !== "none") ? details.folderId : "");               });
 
         try {
             loadingSpinner.style.display = "block";
@@ -433,3 +466,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
