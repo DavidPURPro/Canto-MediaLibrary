@@ -18,7 +18,6 @@
     <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
   </a>
   </div>
-  
   <div class="header-center">
     <h1>
       {{ portal.name }}
@@ -77,12 +76,23 @@
     
     <div class="portal-header-section">
       <div class="portal-welcome">Welcome, {{ portal.name }}</div>
-      <div class="portal-subtitle">Explore assets, files and media</div>
+      <div class="portal-subtitle">Explore assets grouped by folder collections</div>
       
-      <div class="search-container">
-        <div class="search-box">
+      <div class="search-container" style="display: flex; gap: 15px; align-items: center; justify-content: center; flex-wrap: wrap;">
+        <div class="search-box" style="margin: 0; flex: 1; max-width: 600px;">
           <input type="text" class="search-input" placeholder="Search files, tags or descriptions..." id="searchInput">
           <button class="search-button" id="searchButton">Search</button>
+        </div>
+
+        <div class="sort-dropdown" style="position: relative; display: inline-block;">
+          <button class="back-btn" id="sortDropdownBtn" style="height: 45px; padding: 0 20px; border-radius: 50px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-calendar-alt"></i> Sort: By Date
+          </button>
+          <div class="sort-dropdown-content" id="sortDropdownContent" style="display: none; position: absolute; right: 0; top: 50px; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); min-width: 160px; box-shadow: 0px 8px 16px rgba(0,0,0,0.3); border-radius: 12px; z-index: 100; overflow: hidden;">
+            <button data-sort="date_desc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-calendar-alt"></i> By Date</button>
+            <button data-sort="name_asc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-sort-alpha-down"></i> A-Z</button>
+            <button data-sort="name_desc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-sort-alpha-up"></i> Z-A</button>
+          </div>
         </div>
       </div>
     </div>
@@ -92,7 +102,7 @@
       <div class="portal-info">
         <div class="portal-details">
           <div class="portal-detail">
-            <span class="detail-label">Files</span>
+            <span class="detail-label">Total Unique Files</span>
             <span class="detail-value" id="portalFilesCount">{{ portal.files_count }}</span>
           </div>
           <div class="portal-detail">
@@ -111,82 +121,95 @@
         <div class="portal-access access-{{ portal.access|lower }}">{{ portal.access }}</div>
       </div>
 
-      <div class="files-section">
-        <div class="section-header">
-          <div class="files-title">Portal Media</div>
-          <div class="files-count" id="filesCount">{{ files|length }} items</div>
-        </div>
+      {% for section in folderSections %}
+      <div class="folder-group-section" style="margin-bottom: 60px;">
         
-        <div class="files-grid" id="filesGrid">
-          {% for file in files %}
-          <div class="file-card" 
-              data-filename="{{ file.filename }}" 
-              data-description="{{ file.description }}" 
-              data-tags="{{ file.tags|join(',') if file.tags else '' }}" 
-              data-filetype="{{ file.file_type }}" 
-              data-date-added="{{ file.upload_date }}" 
-              data-date-event="{{ file.event_date }}" 
-              data-exclusive="{{ 'true' if file.is_exclusive else 'false' }}" 
-              data-size-bytes="{{ file.size_bytes }}"
-              data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
-              data-folder-id="{{ file.folder_id if file.folder_id else '' }}"
-              data-file-url="{{ file.file_url }}">
-              <div class="select-checkbox"><i class="fas fa-check"></i></div>
-            
-            <div class="file-preview">
-              {% if file.file_type == 'Image' %}
-                <img src="{{ file.file_url }}" alt="{{ file.filename }}" loading="lazy">
-              {% elif file.file_type == 'Video' %}
-                <div class="video-overlay"><span class="play-icon">▶</span></div>
-              {% elif file.file_type == 'PDF' %}
-                <div class="pdf-placeholder">
-                  <span class="doc-icon">📄</span>
-                  <span class="doc-type">PDF</span>
-                </div>
-              {% else %}
-                <div class="generic-placeholder">
-                  <span class="doc-icon">📁</span>
-                  <span class="doc-type">FILE</span>
-                </div>
-              {% endif %}
+      <div class="portal-hero" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.55)), url('{{ section.hero_image_url or `/static/No_preview.png` }}'); height: 35vh; border-radius: 16px; background-size: cover; background-position: center; display: flex; align-items: center; padding-left: 40px; margin-bottom: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">            <div class="hero-content" style="color: white; text-align: left;">
+      <h2 style="font-size: 2.2rem; font-weight: 800; margin: 0 0 5px 0; text-shadow: 0 2px 8px rgba(0,0,0,0.4);">
+          <span style="color: #fffefe;">🗁</span> {{ section.folder_name }}
+      </h2>                
+      <p style="margin: 0; font-size: 1.05rem; opacity: 0.9; text-shadow: 0 2px 4px rgba(0,0,0,0.4);">Contains {{ section.files|length }} assets</p>
             </div>
-
-            <div class="file-info">
-              <div class="file-name">{{ file.filename }}</div>
-              <div class="file-description">{{ file.description }}</div>
-              
-              {% if file.tags %}
-              <div class="file-tags">
-                {% for tag in file.tags %}
-                <span class="file-tag">{{ tag.strip() }}</span>
-                {% endfor %}
-              </div>
-              {% endif %}
-              
-              <div class="file-details">
-                <span class="file-type">{{ file.file_type }}</span>
-                <span>{{ file.size }}</span>
-              </div>
-            </div>
-
-            <div class="file-actions" style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
-              <button class="favorite-btn" onclick="toggleFavorite(event, this.closest('.file-card').getAttribute('data-filename'))">
-                <i class="far fa-heart"></i>
-              </button>
-              {% if portal.access == 'Public' or is_admin %}
-                <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
-              {% else %}
-                <span class="view-only-tag"> View Only</span>
-              {% endif %}
-            </div>
-          </div>
-          {% else %}
-          <div class="no-files" style="grid-column: 1 / -1; text-align: center; padding: 40px; background: rgba(255,255,255,0.1); border-radius: 20px;">
-            <p>No files found in this portal.</p>
-          </div>
-          {% endfor %}
         </div>
+
+        <div class="files-section" id="filesSection_{{ section.folder_id }}">
+          <div class="files-grid" id="filesGrid_{{ section.folder_id }}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px;">
+            {% for file in section.files %}
+            <div class="file-card" 
+                data-filename="{{ file.filename }}" 
+                data-description="{{ file.description }}" 
+                data-tags="{{ file.tags|join(',') if file.tags else '' }}" 
+                data-filetype="{{ file.file_type }}" 
+                data-date-added="{{ file.upload_date }}" 
+                data-date-event="{{ file.event_date }}" 
+                data-exclusive="{{ 'true' if file.is_exclusive else 'false' }}" 
+                data-size-bytes="{{ file.size_bytes }}"
+                data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
+                data-folder-id="{{ file.folder_id if file.folder_id else '' }}"
+                data-file-url="{{ file.file_url }}">
+                <div class="select-checkbox"><i class="fas fa-check"></i></div>
+              
+              <div class="file-preview">
+                {% if file.file_type == 'Image' %}
+                  <img src="{{ file.file_url }}" alt="{{ file.filename }}" loading="lazy">
+                {% elif file.file_type == 'Video' %}
+                  <div class="video-overlay"><span class="play-icon">▶</span></div>
+                {% elif file.file_type == 'PDF' %}
+                  <div class="pdf-placeholder">
+                    <span class="doc-icon">📄</span>
+                    <span class="doc-type">PDF</span>
+                  </div>
+                {% else %}
+                  <div class="generic-placeholder">
+                    <span class="doc-icon">🗁</span>
+                    <span class="doc-type">FILE</span>
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="file-info">
+                <div class="file-name">{{ file.filename }}</div>
+                <div class="file-description">{{ file.description }}</div>
+                
+                {% if file.tags %}
+                <div class="file-tags">
+                  {% for tag in file.tags %}
+                  <span class="file-tag">{{ tag | trim }}</span>
+                  {% endfor %}
+                </div>
+                {% endif %}
+                
+                <div class="file-details">
+                  <span class="file-type">{{ file.file_type }}</span>
+                  <span>{{ file.size }}</span>
+                  {% if file.upload_date %}
+                    <span class="file-date" style="opacity: 0.6; font-size: 12px; margin-left: auto;"><i class="far fa-calendar-alt"></i> {{ file.upload_date }}</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="file-actions" style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+                <button class="favorite-btn" onclick="toggleFavorite(event, this.closest('.file-card').getAttribute('data-filename'))">
+                  <i class="far fa-heart"></i>
+                </button>
+                {% if portal.access == 'Public' or is_admin %}
+                  <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
+                {% else %}
+                  <span class="view-only-tag"> View Only</span>
+                {% endif %}
+              </div>
+            </div>
+            {% else %}
+            <div class="no-files" style="grid-column: 1 / -1; text-align: center; padding: 40px; background: rgba(255,255,255,0.1); border-radius: 20px;">
+              <p>No files found in this collection.</p>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
       </div>
+      {% endfor %}
+
     </div>
   </div>
 
@@ -221,14 +244,16 @@
           <div class="portal-list" id="portalList" style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
         </div>
 
-        <button class="modal-action-btn" id="modalFavoriteBtn" style="flex: 0 0 auto; width: auto; padding: 0 20px; font-size: 20px;">
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button class="modal-action-btn" id="modalFavoriteBtn" style="flex: 0 0 auto; width: auto; padding: 0 20px; font-size: 20px;">
             <i class="far fa-heart"></i>
           </button>
-
-        {% if portal.access == 'Public' or is_admin %}
-          <button class="modal-action-btn" id="modalCopyBtn">Copy Link</button>
-          <a href="#" class="modal-action-btn" id="modalDownloadBtn" download>Download File</a>
-        {% endif %}
+  
+          {% if portal.access == 'Public' or is_admin %}
+            <button class="modal-action-btn" id="modalCopyBtn" style="flex: 1;">Copy Link</button>
+            <a href="#" class="modal-action-btn" id="modalDownloadBtn" download style="flex: 1; text-align: center; background: #0078d4; border: none;">Download</a>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>

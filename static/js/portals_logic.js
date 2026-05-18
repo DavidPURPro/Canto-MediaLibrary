@@ -238,3 +238,118 @@ window.closeDeleteModal = () => {
     document.getElementById('deletePortalModal').classList.remove('active');
 };
 
+// charger dossiers sous forme de cases à cocher
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('/get_folders')
+        .then(res => res.json())
+        .then(data => {
+            const checklistNew = document.getElementById('newPortalFoldersChecklist');
+            const checklistExisting = document.getElementById('existingPortalFoldersChecklist');
+            if (data.folders) {
+                data.folders.forEach(folder => {
+                    const createCheckboxItem = (prefixId) => {
+                        const label = document.createElement('label');
+                        label.style.display = 'flex';
+                        label.style.alignItems = 'center';
+                        label.style.gap = '8px';
+                        label.style.marginBottom = '6px';
+                        label.style.cursor = 'pointer';
+                        label.style.color = '#334155';
+                        label.style.fontWeight = '500';
+                        label.innerHTML = `
+                            <input type="checkbox" value="${folder.id}" id="${prefixId}_${folder.id}" style="width:16px; height:16px; cursor:pointer;">
+                            <span>🗁 ${folder.name}</span>
+                        `;
+                        return label;
+                    };
+
+                    if (checklistNew) checklistNew.appendChild(createCheckboxItem('new_f'));
+                    if (checklistExisting) checklistExisting.appendChild(createCheckboxItem('exist_f'));
+                });
+            }
+        })
+        .catch(err => console.error("Erreur de chargement des dossiers :", err));
+});
+
+document.getElementById('portalForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const submitBtn = this.querySelector('.btn-primary-confirm');
+    submitBtn.textContent = 'Creating...';
+    submitBtn.disabled = true;
+    // recup les dossiers cochés dans la création
+    const checkedBoxes = document.querySelectorAll('#newPortalFoldersChecklist input[type="checkbox"]:checked');
+    const folderIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    const portalData = {
+        name: document.getElementById('portalName').value.trim(),
+        access: document.getElementById('portalAccess').value || 'Public',
+        linked_folder_ids: JSON.stringify(folderIds) // Envoyer le tableau transformé en chaîne
+    };
+
+    fetch('/add_portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(portalData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.reload();
+        } 
+        else {
+            alert('Error: ' + data.message);
+            submitBtn.textContent = 'Create Portal';
+            submitBtn.disabled = false;
+        }
+    });
+});
+
+let portalToLink_id = null;
+window.prepareLinkFolder = function(portalId, portalName) {
+    portalToLink_id = portalId;
+    document.getElementById('linkPortalNameText').textContent = portalName;    
+    document.querySelectorAll('#existingPortalFoldersChecklist input[type="checkbox"]').forEach(cb => cb.checked = false);    
+    fetch(`/portal_folders/${portalId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.folder_ids) {
+                data.folder_ids.forEach(folderId => {
+                    const cb = document.getElementById(`exist_f_${folderId}`);
+                    if (cb) cb.checked = true;
+                });
+            }
+            document.getElementById('linkFolderModal').classList.add('active');
+        });
+};
+
+// save la liste des dossiers cochés
+document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () => {
+    if (!portalToLink_id) return;    
+    const checkedBoxes = document.querySelectorAll('#existingPortalFoldersChecklist input[type="checkbox"]:checked');
+    const folderIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    const formData = new FormData();
+    formData.append('portal_id', portalToLink_id);
+    formData.append('folder_ids', JSON.stringify(folderIds)); // Tableau converti en String JSON
+    const btn = document.getElementById('confirmLinkFolderBtn');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    
+    fetch('/link_portal_to_folder', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            document.getElementById('linkFolderModal').classList.remove('active');
+            alert("Success! The portal connections have been updated.");
+            location.reload();
+        } 
+        else {
+            alert("Error: " + data.message);
+            btn.innerHTML = 'Save Link';
+        }
+    })
+    .catch(err => {
+        console.error("Error linking folder:", err);
+        btn.innerHTML = 'Save Link';
+    });
+});

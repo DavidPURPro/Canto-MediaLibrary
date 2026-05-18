@@ -342,24 +342,57 @@
         <div class="bulk-buttons">
             <button id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
             <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
+            
+            {% if is_admin %}
+            <button id="bulkRemoveFolderBtn" class="modern-btn danger-btn bulk-btn" style="background: #d64141e3;">
+              <i class="fas fa-folder-minus"></i> Remove from Folder
+            </button>
+
+            <button id="bulkFolderBtn" class="modern-btn secondary-btn bulk-btn" style="background: #8b5cf6; color: rgb(12, 12, 12);">
+              <i class="fas fa-folder-plus"></i> Move To Folder
+            </button>
+            {% endif %}
+            
             <button id="bulkCancelBtn" class="bulk-cancel-btn"><i class="fas fa-times"></i></button>
         </div>
   </div>
 
   <div class="about-overlay" id="aboutModal">
-  <div class="about-card">
-    <div class="about-header">
-      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+    <div class="about-card">
+      <div class="about-header">
+        <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+      </div>
+      <div class="about-body">
+        <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities to operate long-term socio-environmental projects including agroforestry, land preservation and more sustainable agricultural practices.</p>
+      </div>
+      <button class="about-close-btn" id="closeAboutBtn">Close</button>
     </div>
-    <div class="about-body">
-      <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities to operate long-term socio-environmental projects including agroforestry, land preservation and more sustainable agricultural practices.</p>
-    </div>
-    <button class="about-close-btn" id="closeAboutBtn">Close</button>
   </div>
-</div>
+
+  <div class="confirm-modal" id="bulkFolderModal">
+    <div class="confirm-content" style="text-align: left; max-width: 450px; padding: 30px;">
+        <h3 style="margin-top: 0; color: #1e293b; font-size: 20px;">
+            <i class="fas fa-folder-plus" style="color: #8b5cf6; margin-right: 8px;"></i> Move to Folder
+        </h3>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Choose a destination folder for the selected files.</p>
+        
+        <div class="form-group">
+            <select id="bulkFolderSelect" style="width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 14px; background-color: #f8fafc; cursor: pointer; color: #334155;">
+                <option value="none">No folder (Root)</option>
+            </select>
+        </div>
+        
+        <div class="confirm-buttons" style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="confirm-btn cancel" onclick="document.getElementById('bulkFolderModal').classList.remove('active')">Cancel</button>
+            <button class="confirm-btn proceed" id="confirmBulkFolderBtn" style="background: #8b5cf6; color: white; opacity: 1;">Apply to selection</button>
+        </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-  
   <script src="{{ url_for('static', filename='js/canto_logic.js') }}"></script>
+</body>
+</html>
 </body>
 </html>

@@ -254,6 +254,26 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if(portalFilesCount) portalFilesCount.textContent = visibleCount;
     if(portalTotalSize) portalTotalSize.textContent = totalSizeFormatted;
+    document.querySelectorAll('.files-grid').forEach(grid => {
+        let hasVisibleCards = false;
+        let currentHeader = null; 
+        Array.from(grid.children).forEach(child => {
+            if (child.classList.contains('date-group-header')) {
+                if (currentHeader) {
+                    currentHeader.style.display = hasVisibleCards ? 'block' : 'none';
+                }
+                currentHeader = child;
+                hasVisibleCards = false; 
+            } else if (child.classList.contains('file-card')) {
+                if (child.style.display !== 'none') {
+                    hasVisibleCards = true;
+                }
+            }
+        });
+        if (currentHeader) {
+            currentHeader.style.display = hasVisibleCards ? 'block' : 'none';
+        }
+    });
   }
 
   function showFileModal(card) {
@@ -425,7 +445,7 @@ document.addEventListener('DOMContentLoaded', function() {
               data.folders.forEach(folder => {
                   const btn = document.createElement('button');
                   btn.style.cssText = "width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; color: white; cursor: pointer; margin-bottom: 5px; text-align: left; transition: background 0.2s;";
-                  btn.innerHTML = `📁 ${folder.name}`;
+                  btn.innerHTML = `🗁 ${folder.name}`;
                   btn.onmouseover = () => btn.style.background = "rgba(255,255,255,0.15)";
                   btn.onmouseout = () => btn.style.background = "rgba(255,255,255,0.05)";
                   
@@ -685,6 +705,80 @@ initAboutModal();
       });
   }
 
+  // LOGIQUE DE TRI SÉCURISÉE (CÔTÉ CLIENT)
+  const sortDropdownBtn = document.getElementById('sortDropdownBtn');
+  const sortDropdownContent = document.getElementById('sortDropdownContent');
+  function applySortAndGroup(grid, sortType) {
+      const cards = Array.from(grid.querySelectorAll('.file-card'));      
+      grid.querySelectorAll('.date-group-header').forEach(h => h.remove());
+
+      cards.sort((a, b) => {
+          if (sortType === 'name_asc') {
+              return (a.getAttribute('data-filename') || "").localeCompare(b.getAttribute('data-filename') || "");
+          }
+          else if (sortType === 'name_desc') {
+              return (b.getAttribute('data-filename') || "").localeCompare(a.getAttribute('data-filename') || "");
+          } 
+          else if (sortType === 'date_desc') {
+              const parseDate = (dStr) => {
+                  if (!dStr || dStr.trim() === '') return 0;
+                  const parts = dStr.split('-');
+                  if (parts.length === 3) {
+                      return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+                  }
+                  return 0;
+              };
+              return parseDate(b.getAttribute('data-date-added')) - parseDate(a.getAttribute('data-date-added'));
+          }
+          return 0;
+      });
+      
+      if (sortType === 'date_desc') {
+          let currentDateGroup = null;
+          cards.forEach(card => {
+              const fileDate = card.getAttribute('data-date-added') || 'Old files (undated)';
+              if (fileDate !== currentDateGroup) {
+                  currentDateGroup = fileDate;
+                  const dateHeader = document.createElement('div');
+                  dateHeader.className = 'date-group-header';
+                  dateHeader.style.cssText = 'grid-column: 1 / -1; font-size: 22px; font-weight: 800; color: #16677c; margin-top: 20px; margin-bottom: 5px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; width: 100%;';
+                  dateHeader.textContent = fileDate;
+                  grid.appendChild(dateHeader);
+              }
+              grid.appendChild(card);
+          });
+      } 
+      else {
+          cards.forEach(card => grid.appendChild(card));
+      }
+  }
+
+  document.querySelectorAll('.files-grid').forEach(grid => {
+      applySortAndGroup(grid, 'date_desc');
+  });
+
+  if (sortDropdownBtn && sortDropdownContent) {
+      sortDropdownBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isDisplayed = sortDropdownContent.style.display === 'block';
+          sortDropdownContent.style.display = isDisplayed ? 'none' : 'block';
+      });
+      document.addEventListener('click', () => {
+          sortDropdownContent.style.display = 'none';
+      });
+      sortDropdownContent.querySelectorAll('button[data-sort]').forEach(button => {
+          button.addEventListener('click', (e) => {
+              const sortType = e.currentTarget.getAttribute('data-sort');
+              sortDropdownBtn.innerHTML = e.currentTarget.innerHTML;
+
+              // Retrier toutes les grilles selon le choix (A-Z ou Date)
+              document.querySelectorAll('.files-grid').forEach(grid => {
+                  applySortAndGroup(grid, sortType);
+              });
+          });
+      });
+  }
+  
 });
 
 window.addEventListener('pageshow', function(event) {

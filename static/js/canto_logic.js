@@ -1978,6 +1978,111 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
     }
 };
 
+    // logique selection en masse pour assigner fichier a folder
+    const bulkFolderBtn = document.getElementById('bulkFolderBtn');
+    const bulkFolderModal = document.getElementById('bulkFolderModal');
+    const bulkFolderSelect = document.getElementById('bulkFolderSelect');
+    const confirmBulkFolderBtn = document.getElementById('confirmBulkFolderBtn');
+
+    if (bulkFolderBtn) {
+        bulkFolderBtn.addEventListener('click', () => {
+            if (selectedFiles.length === 0) return;
+            bulkFolderSelect.innerHTML = '<option value="none">No folder (Root)</option>';
+            fetch('/get_folders')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.folders) {
+                        data.folders.forEach(folder => {
+                            const opt = document.createElement('option');
+                            opt.value = folder.id;
+                            opt.textContent = `🗁 ${folder.name}`;
+                            bulkFolderSelect.appendChild(opt);
+                        });
+                    }
+                    bulkFolderModal.classList.add('active');
+                })
+                .catch(err => console.error("Erreur de chargement des dossiers :", err));
+        });
+    }
+
+    if (confirmBulkFolderBtn) {
+        confirmBulkFolderBtn.addEventListener('click', () => {
+            if (selectedFiles.length === 0) return;
+            const targetFolderId = bulkFolderSelect.value;
+            const filenamesArray = selectedFiles.map(f => f.filename);
+            confirmBulkFolderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Moving...';
+            confirmBulkFolderBtn.disabled = true;
+            const formData = new FormData();
+            formData.append('folder_id', targetFolderId);
+            formData.append('filenames', JSON.stringify(filenamesArray)); 
+            fetch('/bulk_update_file_folder', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    bulkFolderModal.classList.remove('active');
+                    alert(`Success! ${filenamesArray.length} items moved.`);                    
+                    document.getElementById('bulkCancelBtn').click();                    
+                    location.reload();
+                }
+                 else {
+                    alert("Error: " + data.message);
+                }
+            })
+            .catch(err => {
+                console.error("Erreur lors du déplacement en masse :", err);
+            })
+            .finally(() => {
+                confirmBulkFolderBtn.innerHTML = 'Apply to selection';
+                confirmBulkFolderBtn.disabled = false;
+            });
+        });
+    }
+
+    // logique selection en masse pour retirer fichier d'un folder
+    const bulkRemoveFolderBtn = document.getElementById('bulkRemoveFolderBtn');
+
+    if (bulkRemoveFolderBtn) {
+        bulkRemoveFolderBtn.addEventListener('click', () => {
+            if (selectedFiles.length === 0) return;
+            if (!confirm(`Are you sure you want to remove ${selectedFiles.length} item(s) from their folders?`)) {
+                return;
+            }
+            const filenamesArray = selectedFiles.map(f => f.filename);
+            const originalHtml = bulkRemoveFolderBtn.innerHTML;
+            bulkRemoveFolderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Removing...';
+            bulkRemoveFolderBtn.disabled = true;
+            const formData = new FormData();
+            formData.append('folder_id', 'none'); 
+            formData.append('filenames', JSON.stringify(filenamesArray));
+
+            fetch('/bulk_update_file_folder', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`Success! ${filenamesArray.length} items have been removed from their folders.`);
+                    document.getElementById('bulkCancelBtn').click();
+                    location.reload();
+                } 
+                else {
+                    alert("Error: " + data.message);
+                }
+            })
+            .catch(err => {
+                console.error("Erreur lors du retrait en masse :", err);
+            })
+            .finally(() => {
+                bulkRemoveFolderBtn.innerHTML = originalHtml;
+                bulkRemoveFolderBtn.disabled = false;
+            });
+        });
+    }
+
 // charger les favoris de l'utilisateur au chargement
 fetch('/my_favorites')
     .then(res => res.json())

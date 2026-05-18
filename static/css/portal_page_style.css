@@ -581,6 +581,41 @@ header {
     background: rgba(239, 68, 68, 0.15);
 }
 
+.portal-hero {
+    height: 60vh;
+    width: 100%;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: white;
+    margin-bottom: 40px;
+}
+
+.hero-content h1 {
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin-bottom: 15px;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.scroll-to-files {
+    background: white;
+    color: #16677c;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 50px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.scroll-to-files:hover {
+    transform: scale(1.05);
+}
+
 @media (max-width: 900px) {
   header { flex-wrap: wrap; height: auto; justify-content: center; gap: 15px; }
   .header-left, .header-center, .header-right { width: 100%; text-align: center; justify-content: center; }
