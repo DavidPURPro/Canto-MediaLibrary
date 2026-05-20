@@ -178,7 +178,8 @@ app.use((req, res, next) => {
             for (const msg of flashes[category]) {
                 if (withCategories) {
                     messages.push([category === 'error' ? 'danger' : category, msg]);
-                } else {
+                } 
+                else {
                     messages.push(msg);
                 }
             }
@@ -975,34 +976,64 @@ app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), asyn
     }
 });
 
-app.post('/update_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/update_file_folder', async (req, res) => {
     try {
-        const filename = req.body.filename;
-        let folder_id = req.body.folder_id;
-
-        if (!folder_id || folder_id === "none") {
-            folder_id = null;
+        const filename = req.body?.filename || req.query?.filename;
+        const folder_id = req.body?.folder_id || req.query?.folder_id;
+        if (!filename || !folder_id) {
+            return res.status(400).json({ status: 'error', message: 'Paramètres manquants' });
         }
+        const docCheck = await pool.query("SELECT * FROM documents WHERE nom_fichier = $1", [filename]);
+        if (docCheck.rows.length > 0) {
+            await pool.query("UPDATE documents SET folder_id = $1 WHERE nom_fichier = $2", [folder_id, filename]);
+        } 
+        else {
+            const portalFileCheck = await pool.query("SELECT * FROM portal_files WHERE filename = $1", [filename]);
 
-        if (!filename) {
-            return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
-        }
+            if (portalFileCheck.rows.length > 0) {
+                const fileData = portalFileCheck.rows[0];
+                await pool.query(`
+                    INSERT INTO documents (nom_fichier, lien_telechargement, description, type_doc, folder_id, date_ajout)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
+                `, [fileData.filename, fileData.file_url, fileData.description, fileData.file_type, folder_id]);
 
-        await pool.query(
-            "UPDATE documents SET folder_id = $1 WHERE nom_fichier = $2;",
-            [folder_id, filename]
-        );
-        insightsClient.trackEvent({
-            name: "update_file_folder",
-            properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                await pool.query("DELETE FROM portal_files WHERE filename = $1", [filename]);
+            } 
+            else {
+                return res.status(404).json({ status: 'error', message: 'Fichier introuvable dans la base.' });
             }
-        });
-        res.json({ status: "success" });
+        }
+        res.json({ status: 'success', message: 'Fichier assigné avec succès.' });
+        
     } catch (error) {
-        console.error("Erreur update_file_folder:", error);
-        res.status(500).json({ status: "error", message: error.message });
+        console.error("Erreur critique /update_file_folder :", error);
+        res.status(500).json({ status: 'error', message: 'Erreur interne du serveur' });
+    }
+});
+
+
+app.post('/r_file_folder', async (req, res) => {
+    try {
+        const filename = req.body?.filename || req.query?.filename;
+        const portal_id = req.body?.portal_id || req.query?.portal_id || req.session?.portal_access;
+        if (!filename) return res.status(400).json({ status: 'error', message: 'Nom de fichier manquant' });
+        const docCheck = await pool.query("SELECT * FROM documents WHERE nom_fichier = $1", [filename]);
+        if (docCheck.rows.length > 0) {
+            const docData = docCheck.rows[0];
+            await pool.query(`
+                INSERT INTO portal_files (portal_id, filename, file_url, description, file_type, upload_date)
+                VALUES ($1, $2, $3, $4, $5, NOW())
+            `, [portal_id, docData.nom_fichier, docData.lien_telechargement, docData.description, docData.type_doc]);
+            await pool.query("DELETE FROM documents WHERE nom_fichier = $1", [filename]);
+
+            res.json({ status: 'success', message: 'Fichier retiré du dossier et remis à la racine.' });
+        } 
+        else {
+            res.status(404).json({ status: 'error', message: 'Fichier introuvable.' });
+        }
+    } catch (error) {
+        console.error("Erreur critique /r_file_folder :", error);
+        res.status(500).json({ status: 'error', message: 'Erreur serveur' });
     }
 });
 
@@ -1453,114 +1484,184 @@ app.get('/portal/:portal_id', async (req, res) => {
         if (identifier == real_portal_id.toString() && portalRow.slug) {
             return res.redirect(`/portal/${portalRow.slug}`);
         }
+        
+        const isAdmin = req.session.is_admin === true; 
+        const isGlobalAuth = !!req.session.user_email; 
+        const isAuthorizedPortalUser = !!req.session.portal_user_email && (req.session.portal_access == real_portal_id); 
+        if (!isGlobalAuth && !isAuthorizedPortalUser) return res.redirect(`/portal/${slug}/login`);
+        const linkedFoldersRes = await pool.query(`
+            SELECT f.id, f.name, f.creation_date FROM folders f
+            JOIN portal_folders pf ON f.id = pf.folder_id
+            WHERE pf.portal_id = $1 ORDER BY f.name;
+        `, [real_portal_id]);
+        
+        const projectCards = [];
+        for (let folder of linkedFoldersRes.rows) {
+            const coverRes = await pool.query(`
+                SELECT lien_telechargement FROM documents 
+                WHERE folder_id = $1 
+                AND (nom_fichier ILIKE '%.png' OR nom_fichier ILIKE '%.jpg' OR nom_fichier ILIKE '%.jpeg' OR nom_fichier ILIKE '%.webp' OR nom_fichier ILIKE '%.gif')
+                LIMIT 1;
+            `, [folder.id]);
+            const heroUrl = coverRes.rows.length > 0 ? coverRes.rows[0].lien_telechargement : null;            
+            let year = folder.creation_date ? new Date(folder.creation_date).getFullYear() : '2024';
+            projectCards.push({
+                folder_id: folder.id,
+                folder_name: folder.name,
+                hero_image_url: heroUrl,
+                year: year
+            });
+        }
+
+        const formatDate = (dateString) => {
+            if (!dateString) return 'N/A';
+            const d = new Date(dateString);
+            if (isNaN(d.getTime())) return 'N/A'; 
+            return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}`;        };
+        
+        portalRow.display_creation_date = formatDate(portalRow.creation_date);
+        portalRow.display_last_sync = formatDate(portalRow.last_sync);
+        portalRow.display_size = portalRow.size || '0 B';    
+        const looseFilesRes = await pool.query(`
+            SELECT pf.*,d.folder_id,f.name AS folder_name
+            FROM portal_files pf
+            LEFT JOIN documents d ON d.nom_fichier = pf.filename
+            LEFT JOIN folders f ON f.id = d.folder_id
+            WHERE pf.portal_id = $1 
+            ORDER BY pf.upload_date DESC NULLS LAST;
+        `, [real_portal_id]);
+
+        const looseFiles = looseFilesRes.rows.map(row => ({
+            filename: row.filename,
+            file_url: row.file_url,
+            description: row.description || "No description",
+            file_type: row.file_type || (row.filename && row.filename.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'Image' : 'File'),
+            size: row.size || '0 B', 
+            upload_date: formatDate(row.upload_date || row.created_at),
+            folder_name: row.folder_name || null
+        }));
+
+        res.render('portal_page.html', { 
+            portal: portalRow, 
+            projectCards: projectCards, 
+            looseFiles: looseFiles,
+            is_admin: isAdmin,
+            user_email: req.session.user_email || req.session.portal_user_email,
+            username: req.session.username || "Client"
+        });
+        
+    } catch (error) {
+        console.error("Erreur Vitrine Portail :", error); 
+        res.status(500).send("Erreur serveur");
+    }
+});
+
+// sandbox (vue)
+app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, res) => {
+    const identifier = req.params.portal_id; 
+    const targetFolderId = parseInt(req.params.folder_id, 10);
+
+    try {
+        const portalRes = await pool.query("SELECT * FROM portals WHERE id::text = $1 OR slug = $1;", [identifier]);
+        if (portalRes.rows.length === 0) return res.redirect('/portals');
+        const portalRow = portalRes.rows[0];
+        const real_portal_id = portalRow.id; 
+        const slug = portalRow.slug || real_portal_id; 
         const isAdmin = req.session.is_admin === true; 
         const isGlobalAuth = !!req.session.user_email; 
         const isAuthorizedPortalUser = !!req.session.portal_user_email && (req.session.portal_access == real_portal_id); 
 
         if (!isGlobalAuth && !isAuthorizedPortalUser) return res.redirect(`/portal/${slug}/login`);
 
-        // ----------------------------------------------------
-        // NOUVEAU : Formatage ultra-sécurisé de la date 
-        // (Force le format JJ-MM-AAAA quoi qu'il arrive)
-        // ----------------------------------------------------
-        const formatSafeDate = (dObj) => {
-            if (!dObj) return "";
-            const d = new Date(dObj);
-            if (isNaN(d.getTime())) return "";
+        const rootCheck = await pool.query("SELECT folder_id FROM portal_folders WHERE portal_id = $1;", [real_portal_id]);
+        const allowedRoots = rootCheck.rows.map(r => r.folder_id);
+        const allFoldersRes = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
+        const allFolders = allFoldersRes.rows;
+        let currentRoot = null;
+        let tempId = targetFolderId;
+        while(tempId) {
+            if (allowedRoots.includes(tempId)) {
+                currentRoot = tempId;
+            }
+            const parent = allFolders.find(f => f.id === tempId);
+            tempId = parent ? parent.parent_id : null;
+        }
+        if (!currentRoot && !isAdmin) {
+            return res.status(403).send("Access denied: This folder does not belong to your account.");
+        }
+        if (!currentRoot && isAdmin) currentRoot = targetFolderId;
+        let allowedDescendants = new Set([currentRoot]);
+        let added = true;
+        while(added) {
+            added = false;
+            for(let f of allFolders) {
+                if (f.parent_id && allowedDescendants.has(f.parent_id) && !allowedDescendants.has(f.id)) {
+                    allowedDescendants.add(f.id);
+                    added = true;
+                }
+            }
+        }
+
+        let projectFoldersIds = new Set([...allowedDescendants]);
+        let pId = allFolders.find(f => f.id === currentRoot)?.parent_id;
+        while(pId) {
+            projectFoldersIds.add(pId);
+            pId = allFolders.find(f => f.id === pId)?.parent_id;
+        }
+        
+        const projectFolders = allFolders.filter(f => projectFoldersIds.has(f.id));
+        const filesRes = await pool.query(`
+            SELECT d.id as doc_id, d.nom_fichier as filename, d.lien_telechargement as file_url, 
+                   d.description, d.date_ajout, d.date_event, d.tags, d.is_exclusive, f.name as folder_name, d.folder_id,
+                   d.section, d.category
+            FROM documents d
+            LEFT JOIN folders f ON d.folder_id = f.id
+            WHERE d.folder_id = ANY($1::int[]) 
+            ORDER BY d.date_ajout DESC NULLS LAST;
+        `, [Array.from(projectFoldersIds)]);
+
+        const formatDate = (dateObj) => {
+            if (!dateObj) return 'N/A';
+            const d = new Date(dateObj);
+            if (isNaN(d.getTime())) return 'N/A';
             return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}`;
         };
 
-        const linkedFoldersRes = await pool.query(`
-            SELECT f.id, f.name FROM folders f
-            JOIN portal_folders pf ON f.id = pf.folder_id
-            WHERE pf.portal_id = $1 ORDER BY f.name;
-        `, [real_portal_id]);
+        const files = filesRes.rows.map(row => {
+            let parsedTags = [];
+            try {
+                if (typeof row.tags === 'string') parsedTags = JSON.parse(row.tags);
+                else if (Array.isArray(row.tags)) parsedTags = row.tags;
+            } catch(e) {}
 
-        const folderSections = [];
-        const processedFilenames = new Set();
-
-        for (let folder of linkedFoldersRes.rows) {
-            const filesRes = await pool.query(`
-                SELECT d.id as doc_id, d.nom_fichier as filename, d.lien_telechargement as file_url, 
-                       d.description, d.date_ajout, d.date_event, d.tags, d.is_exclusive, f.name as folder_name
-                FROM documents d
-                LEFT JOIN folders f ON d.folder_id = f.id
-                WHERE d.folder_id = $1 ORDER BY d.date_ajout DESC;
-            `, [folder.id]);
-
-            let heroUrl = null;
-            const firstImage = filesRes.rows.find(f => 
-                ['.png', '.jpg', '.jpeg', '.gif', '.webp'].some(ext => f.filename.toLowerCase().endsWith(ext))
-            );
-            if (firstImage) heroUrl = firstImage.file_url;
-
-            const sectionFiles = filesRes.rows.map(f => {
-                processedFilenames.add(f.filename);
-                let parsedTags = [];
-                try { parsedTags = JSON.parse(f.tags || "[]"); } catch(e){}
-                return {
-                    filename: f.filename, description: f.description || "No description",
-                    file_url: f.file_url, file_type: ['.mp4','.mov'].some(ext => f.filename.toLowerCase().endsWith(ext)) ? "Video" : "Image",
-                    tags: parsedTags, is_exclusive: Boolean(f.is_exclusive), folder_name: f.folder_name,
-                    upload_date: formatSafeDate(f.date_ajout),  // Utilisation de la date sécurisée
-                    event_date: formatSafeDate(f.date_event),   // Utilisation de la date sécurisée
-                    size_bytes: 0,
-                    size: "Unknown size" // Protection si la taille est manquante
-                };
-            });
-
-            folderSections.push({
-                folder_id: folder.id,
-                folder_name: folder.name,
-                hero_image_url: heroUrl,
-                files: sectionFiles
-            });
-        }
-        
-        const manualFilesRes = await pool.query(`
-            SELECT pf.*, d.tags, d.is_exclusive, d.date_ajout, d.date_event FROM portal_files pf 
-            LEFT JOIN documents d ON pf.filename = d.nom_fichier
-            WHERE pf.portal_id = $1;
-        `, [real_portal_id]);
-
-        const manualFiles = [];
-        let total_bytes = 0;
-        manualFilesRes.rows.forEach(f => {
-            total_bytes += parseInt(f.size_bytes || 0, 10);
-            if (!processedFilenames.has(f.filename)) {
-                let parsedTags = [];
-                try { parsedTags = JSON.parse(f.tags || "[]"); } catch(e){}
-                manualFiles.push({
-                    filename: f.filename, description: f.description, file_url: f.file_url,
-                    file_type: f.file_type, tags: parsedTags, is_exclusive: Boolean(f.is_exclusive), folder_name: "General Assets",
-                    upload_date: formatSafeDate(f.date_ajout) || formatSafeDate(f.upload_date), // Sécurité maximale
-                    event_date: formatSafeDate(f.date_event),
-                    size_bytes: f.size_bytes,
-                    size: f.size
-                });
-            }
+            return {
+                name: row.filename,
+                url: row.file_url,
+                description: row.description || "No description",
+                tags: parsedTags,
+                is_exclusive: Boolean(row.is_exclusive),
+                date_ajout: formatDate(row.date_ajout),
+                date_event: formatDate(row.date_event),
+                folder_id: row.folder_id,
+                section: row.section || "",
+                category: row.category || ""
+            };
         });
 
-        if (manualFiles.length > 0) {
-            folderSections.push({
-                folder_id: 'manual', folder_name: 'General Assets', hero_image_url: null, files: manualFiles
-            });
-        }
-
-        const portal_data = {
-            id: portalRow.id, slug: slug, name: portalRow.name, access: portalRow.access,
-            files_count: processedFilenames.size + manualFiles.length, size: formatBytes(total_bytes),
-            creation_date: portalRow.creation_date ? new Date(portalRow.creation_date).toLocaleDateString('fr-FR').replace(/\//g, '-') : "",
-            last_sync: portalRow.last_sync ? new Date(portalRow.last_sync).toLocaleDateString('fr-FR').replace(/\//g, '-') : ""
-        };
-
-        res.render('portal_page.html', { 
-          portal: portal_data, folderSections: folderSections, is_admin: isAdmin,
-          user_email: req.session.user_email || req.session.portal_user_email,
-          username: req.session.username || "User", is_global_auth: isGlobalAuth
+        res.render('page_canto.html', {
+            username: req.session.username || (req.session.portal_user_email ? req.session.portal_user_email.split('@')[0] : "Client"),
+            user_email: req.session.user_email || req.session.portal_user_email,
+            is_admin: isAdmin,
+            is_sandbox: true,
+            portal_slug: slug,
+            current_folder_id: targetFolderId,
+            project_folders_json: JSON.stringify(projectFolders),
+            sandbox_files_json: JSON.stringify(files)
         });
+
     } catch (error) {
-        console.error(error); res.status(500).send("Erreur serveur");
+        console.error("Erreur critique Sandbox:", error);
+        res.status(500).send("Erreur serveur.");
     }
 });
 

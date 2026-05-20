@@ -219,7 +219,8 @@ function showFolderInput(parentElement, parentId = null) {
       isHandled = true; 
       createFolder(this.value.trim(), parentId);
       if (this.parentNode) this.remove();
-    } else if (e.key === 'Escape' && !isHandled) {
+    } 
+    else if (e.key === 'Escape' && !isHandled) {
       isHandled = true; 
       if (this.parentNode) this.remove();
     }
@@ -511,13 +512,33 @@ function showFileModal(item) {
   currentModalFilename = item.getAttribute('data-filename');
   const filename = currentModalFilename;
   const link = item.getAttribute('data-link');
-  const ext = getFileExtension(filename);
+  const ext = getFileExtension(filename); 
   const folderNameFromCard = item.getAttribute('data-folder-name') || 'None';
   const portalNameFromCard = item.getAttribute('data-portal-name') || 'None';
+  
   const folderNameSpan = document.getElementById('currentFolderName');
   if (folderNameSpan) folderNameSpan.textContent = folderNameFromCard;
   const portalNameSpan = document.getElementById('currentPortalName');
   if (portalNameSpan) portalNameSpan.textContent = portalNameFromCard;
+  
+  const btnAddPortal = document.getElementById('addToPortalBtn');
+  const btnRemovePortal = document.getElementById('removeFromPortalBtn');
+
+  if (portalNameFromCard !== 'None' && portalNameFromCard !== '') {
+      if (btnAddPortal) {
+          btnAddPortal.textContent = 'Change Portal';
+          btnAddPortal.style.display = 'block';
+      }
+      if (btnRemovePortal) btnRemovePortal.style.display = 'block'; 
+  } 
+  else {
+      if (btnAddPortal) {
+          btnAddPortal.textContent = 'Assign to Portal';
+          btnAddPortal.style.display = 'block';
+      }
+      if (btnRemovePortal) btnRemovePortal.style.display = 'none'; 
+  }
+  
   const modalTitle = document.getElementById('modalTitle');
   const modalDownloadBtn = document.getElementById('modalDownloadBtn');
   const modalDescription = document.getElementById('modalDescription');
@@ -529,13 +550,15 @@ function showFileModal(item) {
   const modalSection = document.getElementById('modalSection');
   const modalCategory = document.getElementById('modalCategory');
   const modalFavBtn = document.getElementById('modalFavoriteBtn');
-    if (modalFavBtn) {
-        const isFav = myFavorites.includes(filename);
-        modalFavBtn.classList.toggle('is-favorited', isFav);
-        modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
-    }
+  
+  if (modalFavBtn) {
+      const isFav = myFavorites.includes(filename);
+      modalFavBtn.classList.toggle('is-favorited', isFav);
+      modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
+  }
   if (modalTitle) modalTitle.textContent = filename;
   if (modalDownloadBtn) modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
+  
   fetch(`/file_details?filename=${encodeURIComponent(filename)}`)
     .then(response => response.json())
     .then(data => {
@@ -549,54 +572,58 @@ function showFileModal(item) {
       if (modalCategory) modalCategory.textContent = data.category || "None";
 
       if (modalTags) {
+          modalTags.innerHTML = ''; 
           if (data.tags && data.tags.length > 0) {
-              modalTags.innerHTML = data.tags.map(tag => 
-                  `<span class="modal-tag">${tag}</span>`
-              ).join('');
-          } 
-          else {
+              data.tags.forEach(tag => {
+                  const tagText = tag.trim();
+                  const tagSpan = document.createElement('span');
+                  tagSpan.className = 'modal-tag';
+                  tagSpan.textContent = tagText;
+                  tagSpan.style.cursor = 'pointer';
+                  tagSpan.style.transition = 'opacity 0.2s';
+                  tagSpan.onmouseover = () => { tagSpan.style.opacity = '0.7'; };
+                  tagSpan.onmouseout = () => { tagSpan.style.opacity = '1'; };
+                  tagSpan.addEventListener('click', () => {
+                      if (fileModal) {
+                          fileModal.classList.remove('active');
+                          document.body.style.overflow = 'auto'; 
+                      }
+                      const searchInput = document.getElementById('searchInput');
+                      if (searchInput) {
+                          searchInput.value = tagText;
+                          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                  });
+                  modalTags.appendChild(tagSpan);
+              });
+          } else {
               modalTags.innerHTML = "<span class='modal-tag'>No tags</span>";
           }
-
-          if (data.is_exclusive) {
-              modalTags.innerHTML += `<span class="modal-tag" style="background-color:#d9534f;color:white;">★ Exclusive</span>`;
-          }
       }      
+      
       if (typeof updateFolderButtons === 'function') updateFolderButtons(!!data.folder_id);
       if (typeof loadFoldersForModal === 'function') loadFoldersForModal(data.folder_id);
       if (typeof loadPortalsForModal === 'function') loadPortalsForModal(data.portal_id);
     })
     .catch(error => {
       console.error('Error fetching file details:', error);
-      if (modalDescription) modalDescription.innerHTML = "<p>Error loading details</p>";
-      if (modalTags) modalTags.innerHTML = "<span class='modal-tag'>Error</span>";
-      if (typeof updateFolderButtons === 'function') updateFolderButtons(false);
     });
+    
   let previewContent = '';
-  
   if (fileTypeMap.images.includes(ext)) {
       previewContent = `<img src="${link}" alt="${filename}" style="max-width:100%; max-height:80vh; object-fit:contain;" />`;
   } else if (fileTypeMap.videos.includes(ext)) {
-      previewContent = `<video controls autoplay style="width:100%; max-height:80vh;">
-                        <source src="${link}" type="video/${ext.slice(1)}">
-                        Your browser does not support the video.
-                      </video>`;
+      previewContent = `<video controls autoplay style="width:100%; max-height:80vh;"><source src="${link}" type="video/${ext.slice(1)}"></video>`;
   } else if (fileTypeMap.audio.includes(ext)) {
-      previewContent = `<audio controls autoplay style="width:100%;">
-                        <source src="${link}" type="audio/${ext.slice(1)}">
-                        Your browser does not support audio.
-                      </audio>`;
+      previewContent = `<audio controls autoplay style="width:100%;"><source src="${link}" type="audio/${ext.slice(1)}"></audio>`;
   } else if (ext === '.pdf') {
       previewContent = `<iframe src="${link}" width="100%" height="100%" style="border:none;"></iframe>`;
   } else if (['.docx', '.pptx'].includes(ext)) {
-      previewContent = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(link)}" 
-                            width="100%" height="100%" style="border:none;"></iframe>`;
+      previewContent = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(link)}" width="100%" height="100%" style="border:none;"></iframe>`;
   } else {
-      previewContent = `<div class="file-preview" style="width:100%; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                        <div style="font-size:24px; margin-bottom:10px;">${ext.toUpperCase()}</div>
-                        <div>Preview not available</div>
-                      </div>`;
+      previewContent = `<div class="file-preview" style="width:100%; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;"><div style="font-size:24px; margin-bottom:10px;">${ext.toUpperCase()}</div><div>Preview not available</div></div>`;
   }
+  
   if (modalPreview) modalPreview.innerHTML = previewContent;  
   if (fileModal) {
       fileModal.classList.add('active');
@@ -639,9 +666,24 @@ function loadFoldersForModal(currentFolderId) {
     .catch(error => console.error('Error loading folders:', error));
     
 }
+/*
 // assigner au portail
     const btnAddPortal = document.getElementById('addToPortalBtn');
     const portalList = document.getElementById('portalList');
+    if (portalNameFromCard !== 'None' && portalNameFromCard !== '') {
+        if (btnAddPortal) {
+            btnAddPortal.textContent = 'Change Portal';
+            btnAddPortal.style.display = 'block';
+        }
+        if (btnRemovePortal) btnRemovePortal.style.display = 'block'; 
+    } 
+    else {
+        if (btnAddPortal) {
+            btnAddPortal.textContent = 'Assign to Portal';
+            btnAddPortal.style.display = 'block';
+        }
+        if (btnRemovePortal) btnRemovePortal.style.display = 'none'; 
+    }
     if (btnAddPortal && portalList) {
         const newBtnAddPortal = btnAddPortal.cloneNode(true);
         btnAddPortal.parentNode.replaceChild(newBtnAddPortal, btnAddPortal);
@@ -667,7 +709,8 @@ function loadFoldersForModal(currentFolderId) {
                             btn.onclick = () => window.addFileToPortal(portal.id, portal.name);
                             portalList.appendChild(btn);
                         });
-                    } else {
+                    } 
+                    else {
                         portalList.innerHTML = '<span style="font-size:12px;">Aucun portail trouvé.</span>';
                     }
                 })
@@ -675,18 +718,21 @@ function loadFoldersForModal(currentFolderId) {
                     console.error("Erreur Fetch Portails :", err);
                     portalList.innerHTML = '<span style="color:red; font-size:12px;">Erreur de chargement</span>';
                 });
-            } else {
+            } 
+            else {
                 portalList.style.display = 'none';
             }
         });
     }
+*/
 
 const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
 if (btnRemoveFolder) {
     btnRemoveFolder.addEventListener('click', function() {
         if (isAdmin) {
             removeFileFromFolder(currentModalFilename);
-        } else {
+        } 
+        else {
             alert("You don't have permission to perform this action. Only administrators can modify folders.");
         }
     });
@@ -1169,6 +1215,21 @@ if (addMainFolderBtn) {
           }
       });
   }
+
+  // add to portal
+  const btnAddPortal = document.getElementById('addToPortalBtn');
+  if (btnAddPortal) {
+      btnAddPortal.addEventListener('click', function() {
+          if (isAdmin) {
+              const portalList = document.getElementById('portalList');
+              if (portalList) {
+                  portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
+              }
+          } else {
+              alert("You don't have permission to perform this action. Only administrators can modify portals.");
+          }
+      });
+  }
 }
 
 
@@ -1429,7 +1490,6 @@ function setProfileButtonColor() {
 
 function enforceNonAdminLock() {
   const adminButtons = document.querySelectorAll('.add-folder-btn, .delete-folder-btn, .add-main-folder-btn');
-  
   adminButtons.forEach(button => {
     if (!isAdmin) {
       button.classList.add('disabled');
@@ -1448,19 +1508,17 @@ function loadPortalsForModal(currentPortalId) {
   fetch('/get_all_portals')
     .then(response => response.json())
     .then(data => {
-      // 1. Mettre à jour le nom du portail (VISIBLE POUR TOUT LE MONDE)
       if (currentPortalId) {
         const currentPortal = data.portals.find(p => p.id == currentPortalId);
         document.getElementById('currentPortalName').textContent = currentPortal 
             ? currentPortal.name 
             : "Unknown";
-      } else {
+      }
+       else {
         document.getElementById('currentPortalName').textContent = "None";
       }
-
-      // 2. Créer la liste des boutons (UNIQUEMENT POUR LES ADMINS)
       const portalList = document.getElementById('portalList');
-      if (!portalList) return; // Si non-admin, on s'arrête ici !
+      if (!portalList) return; 
 
       portalList.innerHTML = '';
       if(data.portals && data.portals.length > 0) {
@@ -1521,43 +1579,45 @@ function checkFileInPortal(filename, portalId) {
     });
 }
 
+// === ÉCOUTEUR GLOBAL POUR LE RETRAIT D'UN PORTAIL ===
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'removeFromPortalBtn') {
+        if (confirm("Voulez-vous vraiment retirer ce fichier du portail ?")) {
+            removeFileFromPortal();
+        }
+    }
+});
+
 function removeFileFromPortal() {
   if (!currentModalFilename) return;
-  const activeCard = document.querySelector(`.file-card[data-filename="${currentModalFilename}"]`);
-  if (!activeCard) return;
-  const portalId = activeCard.getAttribute('data-portal-id');
-  const portalName = document.getElementById('currentPortalName').textContent;
-  if (!portalId || portalId === 'None' || portalId === '') {
-      alert("Ce fichier n'est associé à aucun portail.");
-      return;
-  }
-  if (!confirm(`Are you sure you want to remove this file from ${portalName}?`)) {
-    return;
-  }
+  const params = new URLSearchParams();
+  params.append('filename', currentModalFilename);
   
-  const formData = new FormData();
-  formData.append('filename', currentModalFilename);
-  formData.append('portal_id', portalId);
-  
-  fetch('/remove_file_from_portal', {
-    method: 'POST',
-    body: formData
+  fetch('/remove_file_portal', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params 
   })
   .then(response => response.json())
   .then(data => {
-    if (data.status === 'success') {
-      document.getElementById('currentPortalName').textContent = "None";
-      if (typeof loadPortalsForModal === "function") loadPortalsForModal(null);
-      if (typeof updatePortalStats === "function") updatePortalStats(portalId);
-      
-      alert('Fichier retiré du portail avec succès !');
-    } else {
-      alert('Error removing from portal: ' + data.message);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('Error removing from portal: ' + error.message);
+      if (data.status === 'success') {
+          document.getElementById('currentPortalName').textContent = 'None';
+          const btnAddPortal = document.getElementById('addToPortalBtn');
+          const btnRemovePortal = document.getElementById('removeFromPortalBtn');
+          if (btnAddPortal) btnAddPortal.textContent = 'Assign to Portal';
+          if (btnRemovePortal) btnRemovePortal.style.display = 'none';
+
+          const safeFilename = currentModalFilename.replace(/"/g, '\\"');
+          const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"]`);
+          if (card) card.setAttribute('data-portal-name', 'None');
+          
+          alert('Fichier retiré du portail avec succès.');
+      } else {
+          alert('Erreur : ' + data.message);
+      }
+  }).catch(err => {
+      console.error('Erreur API:', err);
+      alert("Erreur lors du retrait du fichier.");
   });
 }
 
@@ -1659,6 +1719,7 @@ function syncFolderState(filename) {
     });
 }
 
+/*
 const btnAddPortalbtn = document.getElementById('addToPortalBtn');
 if (btnAddPortalbtn) {
   btnAddPortal.addEventListener('click', function() {
@@ -1670,6 +1731,7 @@ if (btnAddPortalbtn) {
     }
   });
 }
+*/ 
 
 function addFileToPortal(targetPortalId, portalName) {
     if (!currentModalFilename) {
@@ -1690,7 +1752,7 @@ function addFileToPortal(targetPortalId, portalName) {
 
             const portalList = document.getElementById('portalList');
             if (portalList) portalList.style.display = 'none';
-            alert('Fichier assigné au portail : ' + portalName);
+            alert('File assigned to the portal : ' + portalName);
         } 
         else {
             alert('Erreur : ' + data.message);
@@ -1702,12 +1764,8 @@ function addFileToPortal(targetPortalId, portalName) {
     });
 }
 
-// ==========================================
-// LOGIQUE DE SÉLECTION MULTIPLE (MULTI-SELECT)
-// ==========================================
+// MULTI-SELECT
 let selectedFiles = [];
-
-// Écouter les clics sur les cases à cocher de la galerie
 document.addEventListener('click', function(e) {
     const checkbox = e.target.closest('.select-checkbox');
     if (checkbox) {
@@ -1715,11 +1773,7 @@ document.addEventListener('click', function(e) {
         const item = checkbox.closest('.gallery-item');
         const filename = item.getAttribute('data-filename');
         const link = item.getAttribute('data-link');
-
-        // Basculer l'état visuel
         item.classList.toggle('selected');
-
-        // Mettre à jour le tableau des fichiers
         if (item.classList.contains('selected')) {
             selectedFiles.push({ filename, link });
         } else {
@@ -1762,7 +1816,6 @@ function updateBulkActionBar() {
             allSecBtn.textContent = 'All Sections';
             allSecBtn.onclick = () => setSectionFilter('all');
             sectionContent.appendChild(allSecBtn);
-
             // ajoute les sections de la bdd
             data.sections.forEach(sec => {
                 const btn = document.createElement('button');
@@ -2043,7 +2096,6 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
 
     // logique selection en masse pour retirer fichier d'un folder
     const bulkRemoveFolderBtn = document.getElementById('bulkRemoveFolderBtn');
-
     if (bulkRemoveFolderBtn) {
         bulkRemoveFolderBtn.addEventListener('click', () => {
             if (selectedFiles.length === 0) return;

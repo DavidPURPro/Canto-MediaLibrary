@@ -11,87 +11,90 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/portal_page_style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+
 </head>
 <body data-portal-id="{{ portal.id }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
-  <header>
-  <div class="header-left">
-    <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
-  </a>
-  </div>
-  <div class="header-center">
-    <h1>
-      {{ portal.name }}
-      {% if portal.access == 'Private' %}
-        <span class="badge-confidential">STRICTLY CONFIDENTIAL</span>
-      {% endif %}
-    </h1>
-  </div>
   
-  <div class="header-right">
-    <div class="controls">
-      <a href="/portals" class="back-btn">← Portals</a>
-      
-      {% if user_email and 'pur.co' in user_email %}
-      <a href="/" class="back-btn"> Library</a>
-      {% endif %}
-      
-      {% if portal.access == 'Public' or is_admin %}
-      <button class="back-btn" id="copyPortalLinkBtn" title="Copy portal link"> Copy Link</button>
-      {% endif %}
+  <header>
+    <div class="header-left">
+      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
     </div>
-      
-    <div class="profile-container">
-      <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
-        {% if user_email %}
-          {% set parts = user_email.split('@')[0].split('.') %}
-          {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
-        {% else %}
-          ?
+    <div class="header-center">
+      <h1>
+        {{ portal.name }}
+        {% if portal.access == 'Private' %}
+          <span class="badge-confidential">STRICTLY CONFIDENTIAL</span>
         {% endif %}
-      </button>
-      <div class="profile-dropdown" id="profileDropdown">
-        <div class="profile-email" id="profileEmail">{{ user_email or 'Not logged in' }}</div>
-        
-        {% if is_admin %}
-          <div class="profile-admin-badge" style="padding: 10px; border-bottom: 1px solid var(--gray-200); color: #d9534f; font-weight: bold; font-size: 13px;">
-            <i class="fas fa-shield-alt"></i> Admin
-          </div>
+      </h1>
+    </div>
+    
+    <div class="header-right">
+      <div class="controls">
+        <a href="/portals" class="back-btn">← Portals</a>
+        {% if user_email and 'pur.co' in user_email %}
+          <a href="/" class="back-btn"> Library</a>
         {% endif %}
-
-        <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
-          <i class="fas fa-info-circle"></i> <span>About</span>
-        </div>
-        
-        {% if not is_global_auth %}
-          <div class="profile-logout" id="profileLogout" style="cursor: pointer;">
-            <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
-          </div>
+        {% if portal.access == 'Public' or is_admin %}
+          <button class="back-btn" id="copyPortalLinkBtn" title="Copy portal link"> Copy Link</button>
         {% endif %}
       </div>
+        
+      <div class="profile-container">
+        <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
+          {% if user_email %}
+            {% set parts = user_email.split('@')[0].split('.') %}
+            {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+          {% else %}
+            ?
+          {% endif %}
+        </button>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-email" id="profileEmail">{{ user_email or 'Not logged in' }}</div>
+          {% if is_admin %}
+            <div class="profile-admin-badge" style="padding: 10px; border-bottom: 1px solid var(--gray-200); color: #d9534f; font-weight: bold; font-size: 13px;">
+              <i class="fas fa-shield-alt"></i> Admin
+            </div>
+          {% endif %}
+          <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
+            <i class="fas fa-info-circle"></i> <span>About</span>
+          </div>
+          {% if not is_global_auth %}
+            <div class="profile-logout" id="profileLogout" style="cursor: pointer;">
+              <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
+            </div>
+          {% endif %}
+        </div>
+      </div>
     </div>
-  </div>
-</header>
+  </header>
 
   <div class="portal-container">
     
     <div class="portal-header-section">
-      <div class="portal-welcome">Welcome, {{ portal.name }}</div>
-      <div class="portal-subtitle">Explore assets grouped by folder collections</div>
+      <div style="display: flex; justify-content: center; margin-bottom: 40px; margin-top: 20px;">
+        <div class="epic-title-glass-capsule" style="padding: 15px 40px;">
+          <i class="fas fa-door-open epic-title-icon" style="font-size: 2rem;"></i>
+          <h1 class="epic-folder-group-title" style="font-size: 2.5rem !important;">Welcome, {{ portal.name }}!</h1>
+        </div>
+      </div>
       
-      <div class="search-container" style="display: flex; gap: 15px; align-items: center; justify-content: center; flex-wrap: wrap;">
-        <div class="search-box" style="margin: 0; flex: 1; max-width: 600px;">
-          <input type="text" class="search-input" placeholder="Search files, tags or descriptions..." id="searchInput">
-          <button class="search-button" id="searchButton">Search</button>
+      <div class="search-container" style="display: flex; gap: 20px; align-items: center; justify-content: center; width: 100%; max-width: 900px; margin: 0 auto;">
+        
+        <div class="showcase-search-glass" style="display: flex; align-items: center; background: #ffffff; border-radius: 50px; padding: 6px 6px 6px 25px; flex: 1; box-shadow: 0 15px 35px rgba(0,0,0,0.25);">
+          <i class="fas fa-search" style="color: #94a3b8; font-size: 1.1rem; margin-right: 12px;"></i>
+          <input type="text" class="showcase-search-input" placeholder="Search folders & files..." id="searchInput" style="flex: 1; border: none; background: transparent; font-size: 1.05rem; color: #1e293b; outline: none;">
+          <button class="search-button" id="searchButton" style="background: #16677c; color: white; padding: 10px 25px; border-radius: 40px; cursor: pointer; font-weight: 600; font-size: 14px; transition: var(--transition);">Search</button>
         </div>
 
         <div class="sort-dropdown" style="position: relative; display: inline-block;">
-          <button class="back-btn" id="sortDropdownBtn" style="height: 45px; padding: 0 20px; border-radius: 50px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-            <i class="fas fa-calendar-alt"></i> Sort: By Date
+          <button class="back-btn" id="sortDropdownBtn" style="height: 52px; padding: 0 25px; border-radius: 50px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; backdrop-filter: blur(10px);">
+            <i class="fas fa-calendar-alt"></i> Sort: Recent First
           </button>
-          <div class="sort-dropdown-content" id="sortDropdownContent" style="display: none; position: absolute; right: 0; top: 50px; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); min-width: 160px; box-shadow: 0px 8px 16px rgba(0,0,0,0.3); border-radius: 12px; z-index: 100; overflow: hidden;">
-            <button data-sort="date_desc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-calendar-alt"></i> By Date</button>
-            <button data-sort="name_asc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-sort-alpha-down"></i> A-Z</button>
-            <button data-sort="name_desc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-sort-alpha-up"></i> Z-A</button>
+          <div class="sort-dropdown-content" id="sortDropdownContent" style="display: none; position: absolute; right: 0; top: 60px; background: rgba(20, 20, 25, 0.95); backdrop-filter: blur(15px); border: 1px solid var(--glass-border); min-width: 180px; box-shadow: var(--glass-shadow); border-radius: 14px; z-index: 100; overflow: hidden;">
+            <button data-sort="date_desc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-calendar-alt"></i> Recent First</button>
+            <button data-sort="name_asc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-sort-alpha-down"></i> A-Z (Name)</button>
+            <button data-sort="name_desc" style="color: white; padding: 12px 16px; display: block; width: 100%; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s;"><i class="fas fa-sort-alpha-up"></i> Z-A (Name)</button>
           </div>
         </div>
       </div>
@@ -102,206 +105,295 @@
       <div class="portal-info">
         <div class="portal-details">
           <div class="portal-detail">
-            <span class="detail-label">Total Unique Files</span>
-            <span class="detail-value" id="portalFilesCount">{{ portal.files_count }}</span>
+            <span class="detail-label">Total Unique Folders</span>
+            <span class="detail-value" id="showcaseFoldersCount">{{ projectCards|length }}</span>
+          </div>
+          <div class="portal-detail">
+            <span class="detail-label">Total Files</span>
+            <span class="detail-value" id="portalFilesCount">{{ looseFiles|length }}</span>
           </div>
           <div class="portal-detail">
             <span class="detail-label">Total Size</span>
-            <span class="detail-value" id="portalTotalSize">{{ portal.size }}</span>
+            <span class="detail-value" id="portalTotalSize">{{ portal.display_size }}</span>
           </div>
           <div class="portal-detail">
             <span class="detail-label">Created</span>
-            <span class="detail-value">{{ portal.creation_date }}</span>
-          </div>
-          <div class="portal-detail">
-            <span class="detail-label">Last Sync</span>
-            <span class="detail-value">{{ portal.last_sync }}</span>
+            <span class="detail-value">{{ portal.display_creation_date }}</span>
           </div>
         </div>
         <div class="portal-access access-{{ portal.access|lower }}">{{ portal.access }}</div>
       </div>
 
-      {% for section in folderSections %}
-      <div class="folder-group-section" style="margin-bottom: 60px;">
+      <div class="showcase-grid-epic" id="foldersContainerGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 60px 40px; margin-top: 50px;">
+        {% for card in projectCards %}
         
-      <div class="portal-hero" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.55)), url('{{ section.hero_image_url or `/static/No_preview.png` }}'); height: 35vh; border-radius: 16px; background-size: cover; background-position: center; display: flex; align-items: center; padding-left: 40px; margin-bottom: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">            <div class="hero-content" style="color: white; text-align: left;">
-      <h2 style="font-size: 2.2rem; font-weight: 800; margin: 0 0 5px 0; text-shadow: 0 2px 8px rgba(0,0,0,0.4);">
-          <span style="color: #fffefe;">🗁</span> {{ section.folder_name }}
-      </h2>                
-      <p style="margin: 0; font-size: 1.05rem; opacity: 0.9; text-shadow: 0 2px 4px rgba(0,0,0,0.4);">Contains {{ section.files|length }} assets</p>
+        <div class="epic-folder-block" data-name="{{ card.folder_name }}" data-year="{{ card.year }}">
+          <div class="epic-title-glass-capsule">
+            <i class="far fa-folder-open epic-title-icon"></i>
+            <h2 class="epic-folder-group-title">{{ card.folder_name }}</h2>
+          </div>
+          
+          <article class="epic-glass-card" onclick="window.location.href='/portal/{{ portal.slug }}/folder/{{ card.folder_id }}'" style="position: relative; width: 100%; height: 280px; cursor: pointer; overflow: hidden; background: rgba(25, 25, 35, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); border-radius: var(--radius-lg); transition: var(--transition);">
+            <div class="epic-card-year" style="position: absolute; top: 15px; left: 15px; font-size: 1.05rem; font-weight: 500; color: var(--text-main); z-index: 10; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">
+              {{ card.year }}
             </div>
+            
+            <div class="epic-card-media" style="width: 100%; height: 100%;">
+              {% if card.hero_image_url %}
+                <img src="{{ card.hero_image_url }}" alt="{{ card.folder_name }}" loading="lazy" class="epic-card-img" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
+              {% else %}
+                <div class="epic-card-empty" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 4rem; color: rgba(255,255,255,0.15); background: rgba(0,0,0,0.2);">
+                  <i class="far fa-folder-open"></i>
+                </div>
+              {% endif %}
+              <div class="epic-media-overlay" style="position: absolute; inset: 0; background: rgba(0, 0, 0, 0.1); transition: background 0.3s ease;"></div>
+            </div>
+            
+            <div class="epic-card-hover-blur" style="position: absolute; inset: 0; background: rgba(20, 25, 35, 0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; color: #ffffff; font-weight: 600; font-size: 1.15rem;">
+              <span>Explore the collection <i class="fas fa-arrow-right" style="margin-left: 8px;"></i></span>
+            </div>
+          </article>
         </div>
+        {% endfor %}
+      </div>
 
-        <div class="files-section" id="filesSection_{{ section.folder_id }}">
-          <div class="files-grid" id="filesGrid_{{ section.folder_id }}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px;">
-            {% for file in section.files %}
-            <div class="file-card" 
-                data-filename="{{ file.filename }}" 
-                data-description="{{ file.description }}" 
-                data-tags="{{ file.tags|join(',') if file.tags else '' }}" 
-                data-filetype="{{ file.file_type }}" 
-                data-date-added="{{ file.upload_date }}" 
-                data-date-event="{{ file.event_date }}" 
-                data-exclusive="{{ 'true' if file.is_exclusive else 'false' }}" 
-                data-size-bytes="{{ file.size_bytes }}"
-                data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
-                data-folder-id="{{ file.folder_id if file.folder_id else '' }}"
-                data-file-url="{{ file.file_url }}">
-                <div class="select-checkbox"><i class="fas fa-check"></i></div>
-              
-              <div class="file-preview">
-                {% if file.file_type == 'Image' %}
-                  <img src="{{ file.file_url }}" alt="{{ file.filename }}" loading="lazy">
-                {% elif file.file_type == 'Video' %}
-                  <div class="video-overlay"><span class="play-icon">▶</span></div>
-                {% elif file.file_type == 'PDF' %}
-                  <div class="pdf-placeholder">
-                    <span class="doc-icon">📄</span>
-                    <span class="doc-type">PDF</span>
-                  </div>
-                {% else %}
-                  <div class="generic-placeholder">
-                    <span class="doc-icon">🗁</span>
-                    <span class="doc-type">FILE</span>
-                  </div>
-                {% endif %}
-              </div>
+      <div id="searchEmptyState" style="display: none; text-align: center; padding: 60px 20px; background: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(15px); border-radius: var(--radius-lg); margin-top: 50px;">
+        <div style="font-size: 3rem; color: var(--text-muted); margin-bottom: 15px;"><i class="fas fa-search-minus"></i></div>
+        <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #ffffff;">No results</h3>
+        <p style="color: var(--text-muted);">No data matches your search.</p>
+      </div>
 
-              <div class="file-info">
-                <div class="file-name">{{ file.filename }}</div>
-                <div class="file-description">{{ file.description }}</div>
-                
-                {% if file.tags %}
-                <div class="file-tags">
-                  {% for tag in file.tags %}
-                  <span class="file-tag">{{ tag | trim }}</span>
-                  {% endfor %}
-                </div>
-                {% endif %}
-                
-                <div class="file-details">
-                  <span class="file-type">{{ file.file_type }}</span>
-                  <span>{{ file.size }}</span>
-                  {% if file.upload_date %}
-                    <span class="file-date" style="opacity: 0.6; font-size: 12px; margin-left: auto;"><i class="far fa-calendar-alt"></i> {{ file.upload_date }}</span>
-                  {% endif %}
-                </div>
-              </div>
-
-              <div class="file-actions" style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
-                <button class="favorite-btn" onclick="toggleFavorite(event, this.closest('.file-card').getAttribute('data-filename'))">
-                  <i class="far fa-heart"></i>
-                </button>
-                {% if portal.access == 'Public' or is_admin %}
-                  <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
-                {% else %}
-                  <span class="view-only-tag"> View Only</span>
-                {% endif %}
-              </div>
-            </div>
-            {% else %}
-            <div class="no-files" style="grid-column: 1 / -1; text-align: center; padding: 40px; background: rgba(255,255,255,0.1); border-radius: 20px;">
-              <p>No files found in this collection.</p>
-            </div>
-            {% endfor %}
+      {% if looseFiles and looseFiles|length > 0 %}
+      <div class="loose-files-section" style="margin-top: 80px; padding-top: 50px; border-top: 1px solid rgba(255,255,255,0.1);">
+        
+        <div style="display: flex; justify-content: flex-start; margin-bottom: 30px;">
+          <div class="epic-title-glass-capsule" style="padding: 10px 25px;">
+            <i class="fas fa-file-alt epic-title-icon"></i>
+            <h2 class="epic-folder-group-title">Portal Files</h2>
           </div>
         </div>
 
+        <div class="files-grid" id="looseFilesGrid">
+          {% for file in looseFiles %}
+          <div class="file-card" 
+               data-filename="{{ file.filename }}" 
+               data-file-url="{{ file.file_url }}" 
+               data-filetype="{{ file.file_type }}"
+               data-description="{{ file.description }}"
+               data-date-added="{{ file.upload_date }}"
+               data-size-bytes="{{ file.size }}"
+               data-section="Not specified"
+               data-category="Not specified"
+               data-date-event="Not specified"
+              data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
+               style="cursor: pointer;">
+            
+            <div class="select-checkbox"><i class="fas fa-check"></i></div>
+            
+            <div class="file-preview">
+              {% if file.file_type == 'Image' %}
+                <img src="{{ file.file_url }}" alt="{{ file.filename }}" loading="lazy">
+              {% elif file.file_type == 'Video' %}
+                <div class="video-overlay"><span class="play-icon">▶</span></div>
+                <video src="{{ file.file_url }}" style="width: 100%; height: 100%; object-fit: cover;"></video>
+              {% else %}
+                <div class="generic-placeholder">
+                  <span class="doc-icon">📄</span>
+                  <span class="doc-type">{{ file.file_type | upper }}</span>
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="file-info">
+              <div class="file-name" title="{{ file.filename }}">{{ file.filename }}</div>
+              <div class="file-description">{{ file.description }}</div>
+              
+              <div class="file-details">
+                <span class="file-type">{{ file.size }}</span>
+                {% if file.upload_date %}
+                  <span class="file-date" style="opacity: 0.6; font-size: 12px; margin-left: auto;"><i class="far fa-calendar-alt"></i> {{ file.upload_date }}</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="file-actions" style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+              <button class="favorite-btn" onclick="toggleFavorite(event, '{{ file.filename }}')">
+                <i class="far fa-heart"></i>
+              </button>
+              {% if portal.access == 'Public' or is_admin %}
+                <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
+              {% else %}
+                <span class="view-only-tag"> View Only</span>
+              {% endif %}
+            </div>
+
+          </div>
+          {% endfor %}
+        </div>
       </div>
-      {% endfor %}
+      {% endif %}
 
     </div>
   </div>
 
   <div class="modal-overlay" id="fileModal">
     <div class="modal-content">
-      <button class="close-btn" id="closeModal">&times;</button>
+      <button class="close-btn" id="closeModal"><i class="fas fa-times"></i></button>
       
-      <div class="modal-preview" id="modalPreview"></div>
+      <div class="modal-preview" id="modalPreview">
+      </div>
       
       <div class="modal-info">
-        <div class="modal-title" id="modalTitle"></div>
+        <h2 class="modal-title" id="modalTitle"></h2>
         <div class="modal-description" id="modalDescription"></div>
-        
-        <div class="modal-dates">
-          <div><strong>Added on:</strong> <span id="modalAddedDate"></span></div>
-          <div><strong>Event Date:</strong> <span id="modalEventDate"></span></div>
-        </div>
         
         <div class="modal-tags" id="modalTags"></div>
         
-        <div class="folder-selector" id="folderSelector" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
-          <div style="margin-bottom: 10px;"><strong>Current Folder:</strong> <span id="currentFolderName">None</span></div>
-          <button class="modal-action-btn" id="addToFolderBtn">Add to Folder</button>
-          <button class="modal-action-btn" id="removeFromFolderBtn" style="background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); color: #fecaca; display: none;">Remove from Folder</button>
-          <div class="folder-tree" id="folderTree" style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+        <div class="modal-meta">
+          <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection"></span></div>
+          <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory"></span></div>
+          <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
+          <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"></span></div>
         </div>
-
-        <div class="portal-selector" id="portalSelector" style="margin-top: 15px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 15px; margin-bottom: 15px;">
-          <div style="margin-bottom: 10px;"><strong>Current Portal:</strong> <span id="currentPortalName">None</span></div>
-          <button class="modal-action-btn" id="addToPortalBtn">Add to Portal</button>
-          <button class="modal-action-btn" id="removeFromPortalBtn" style="background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); color: #fecaca; display: none;">Remove from Portal</button>
-          <div class="portal-list" id="portalList" style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
-        </div>
-
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-          <button class="modal-action-btn" id="modalFavoriteBtn" style="flex: 0 0 auto; width: auto; padding: 0 20px; font-size: 20px;">
-            <i class="far fa-heart"></i>
-          </button>
-  
-          {% if portal.access == 'Public' or is_admin %}
-            <button class="modal-action-btn" id="modalCopyBtn" style="flex: 1;">Copy Link</button>
-            <a href="#" class="modal-action-btn" id="modalDownloadBtn" download style="flex: 1; text-align: center; background: #0078d4; border: none;">Download</a>
+        
+        <div class="folder-selector" id="folderSelector">
+          <h4><i class="far fa-folder-open"></i> Folder Assignment</h4>
+          <div class="current-status"><strong>Current:</strong> <span id="currentFolderName">None</span></div>
+          
+          {% if is_admin %}
+          <div class="action-group">
+            <button class="modern-btn secondary-btn" id="addToFolderBtn">Change Folder</button>
+            <button class="modern-btn danger-btn" id="removeFromFolderBtn" style="display: none;">Remove</button>
+          </div>
+          <div class="folder-tree" id="folderTree" style="display: none;"></div>
           {% endif %}
         </div>
+
+        <div class="portal-selector" id="portalSelector">
+          <h4><i class="fas fa-globe"></i> Portal Assignment</h4>
+          <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
+          
+          {% if is_admin %}
+          <div class="action-group">
+            <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
+            <button class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none;">Remove</button>
+          </div>
+          <div class="portal-list" id="portalList" style="display: none;"></div>
+          {% endif %}
+        </div>
+
+        <div class="modal-actions">
+          <button class="favorite-btn" id="modalFavoriteBtn" title="Add to Favorites">
+              <i class="far fa-heart"></i>
+          </button>
+          <button class="modern-btn secondary-btn" id="modalCopyBtn">
+            <i class="fas fa-link"></i> Copy Link
+          </button>
+          <a href="#" class="modern-btn primary-btn" id="modalDownloadBtn" download>
+            <i class="fas fa-download"></i> Download
+          </a>
+        </div>
       </div>
+    </div>
+  </div>
+
+  <div class="about-overlay" id="aboutModal">
+    <div class="about-card">
+      <div class="about-header">
+        <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+      </div>
+      <div class="about-body">
+        <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities.</p>
+      </div>
+      <button class="about-close-btn" id="closeAboutBtn">Close</button>
     </div>
   </div>
 
   <div class="bulk-action-bar" id="bulkActionBar" style="display: none;">
-      <div class="bulk-info">
-          <span class="bulk-badge" id="bulkCount">0</span>
-      </div>
-      <div class="bulk-buttons">
-          <button id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
-          <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
-          <button id="bulkCancelBtn" class="bulk-cancel-btn"><i class="fas fa-times"></i></button>
-      </div>
-
+        <div class="bulk-info">
+            <span id="bulkCount">0</span>
+        </div>
+        <div class="bulk-buttons">
+            <button id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
+            <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
+            <button id="bulkCancelBtn" class="bulk-cancel-btn"><i class="fas fa-times"></i></button>
+        </div>
   </div>
-  <div class="about-overlay" id="aboutModal">
-  <div class="about-card">
-    <div class="about-header">
-      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
-    </div>
-    <div class="about-body">
-      <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities to operate long-term socio-environmental projects including agroforestry, land preservation and more sustainable agricultural practices.</p>
-    </div>
-    <button class="about-close-btn" id="closeAboutBtn">Close</button>
-  </div>
-</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
   <script src="{{ url_for('static', filename='js/portal_page_logic.js') }}"></script>
 
-  {% if portal.access == 'Private' and not is_admin %}
   <script>
-      document.addEventListener('contextmenu', function(e) {
-          if (['IMG', 'VIDEO', 'IFRAME'].includes(e.target.tagName) || e.target.closest('#modalPreview')) {
-              e.preventDefault();
-              alert("This portal is private. Downloading and copying are disabled.");
-              return false;
+    document.addEventListener('DOMContentLoaded', () => {
+      
+      const searchInput = document.getElementById('searchInput');
+      const searchButton = document.getElementById('searchButton');
+      const folders = document.querySelectorAll('.epic-folder-block');
+      const searchEmptyState = document.getElementById('searchEmptyState');
+      
+     function filterFolders() {
+        if (!searchInput) return;
+        const query = searchInput.value.toLowerCase().trim();
+        const searchWords = query.split(/\s+/).filter(w => w.length > 0);
+        
+        let visibleFoldersCount = 0;
+        folders.forEach(folder => {
+          const folderName = (folder.getAttribute('data-name') || '').toLowerCase();
+          const matches = searchWords.every(word => folderName.includes(word));
+          if (searchWords.length === 0 || matches) {
+            folder.style.display = 'flex';
+            visibleFoldersCount++;
+          } else {
+            folder.style.display = 'none';
           }
-      });
-      document.addEventListener('keydown', function(e) {
-          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-              e.preventDefault();
-              alert(" Page saving is disabled on this portal.");
-          }
-      });
+        });
+
+        setTimeout(() => {
+            const visibleFiles = document.querySelectorAll('.file-card[style*="display: flex"], .file-card:not([style*="display: none"])');
+            let filesAreVisible = Array.from(visibleFiles).some(card => card.style.display !== 'none');
+            if (searchEmptyState) {
+                searchEmptyState.style.display = (visibleFoldersCount === 0 && !filesAreVisible) ? 'block' : 'none';
+            }
+        }, 50);
+      }
+      
+      if (searchInput) searchInput.addEventListener('input', filterFolders);
+      if (searchButton) searchButton.addEventListener('click', filterFolders);
+      const sortButtons = document.querySelectorAll('#sortDropdownContent button[data-sort]');
+      const foldersGrid = document.querySelector('.showcase-grid-epic');
+      if (sortButtons.length > 0 && foldersGrid) {
+        sortButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const sortType = btn.getAttribute('data-sort');
+            const blocks = Array.from(foldersGrid.querySelectorAll('.epic-folder-block'));
+            
+            blocks.sort((a, b) => {
+              const nameA = (a.getAttribute('data-name') || '').toLowerCase();
+              const nameB = (b.getAttribute('data-name') || '').toLowerCase();
+              const yearA = parseInt(a.getAttribute('data-year'), 10) || 0;
+              const yearB = parseInt(b.getAttribute('data-year'), 10) || 0;
+
+              if (sortType === 'name_asc') return nameA.localeCompare(nameB);
+              if (sortType === 'name_desc') return nameB.localeCompare(nameA);
+              if (sortType === 'date_desc') return yearB - yearA; 
+              if (sortType === 'date_asc') return yearA - yearB;
+              return 0;
+            });
+            
+            blocks.forEach(block => foldersGrid.appendChild(block));
+          });
+        });
+      }
+    });
+
+    const parseDate = (d) => {
+              if(!d || d === 'N/A') return 0;
+              const parts = d.split('-');
+              if(parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+              return 0;
+    };
   </script>
-  {% endif %}
+
 </body>
 </html>

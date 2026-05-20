@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnRemovePortal = document.getElementById('removeFromPortalBtn');
     if (btnRemovePortal) {
         btnRemovePortal.addEventListener('click', function() {
-            if (confirm("Voulez-vous vraiment retirer ce fichier de ce portail ?")) {
+            if (confirm("Do you really want to remove this file from this portal?")) {
                 removeFileFromPortal();
             }
         });
@@ -221,18 +221,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchWords = rawSearchTerm.split(/\s+/).filter(w => w.length > 0);
     let visibleCount = 0;
     let totalBytes = 0;
+
     fileCards.forEach(card => {
-      const fileName = card.querySelector('.file-name').textContent.toLowerCase();
-      const fileDescription = card.querySelector('.file-description').textContent.toLowerCase();
-      const fileTags = card.getAttribute('data-tags') || '';
-      const fileSizeBytes = parseInt(card.getAttribute('data-size-bytes') || '0');
-      const combinedText = `${fileName} ${fileDescription} ${fileTags}`.toLowerCase();
+      const fileName = (card.querySelector('.file-name')?.textContent || card.getAttribute('data-filename') || '').toLowerCase();
+      let fileDescription = (card.querySelector('.file-description')?.textContent || card.getAttribute('data-description') || '').toLowerCase().trim();
+      if (['no description', 'no description available', 'no description provided.', 'none', 'null'].includes(fileDescription)) {
+          fileDescription = ''; 
+      }
+
+      let fileTags = (card.getAttribute('data-tags') || '').toLowerCase();
+      fileTags = fileTags.replace(/\[|\]|"|'|none|null/g, ' ').trim();
+      const combinedText = ` ${fileName} ${fileDescription} ${fileTags} `;
       const matchesAll = searchWords.every(word => combinedText.includes(word));
       
       if (searchWords.length === 0 || matchesAll) {
         card.style.display = 'flex'; 
         visibleCount++;
-        totalBytes += fileSizeBytes;
+        totalBytes += parseInt(card.getAttribute('data-size-bytes') || '0');
       } 
       else {
         card.style.display = 'none';
@@ -254,25 +259,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if(portalFilesCount) portalFilesCount.textContent = visibleCount;
     if(portalTotalSize) portalTotalSize.textContent = totalSizeFormatted;
+
+    // Gestion des en-têtes de tri par date (si activé)
     document.querySelectorAll('.files-grid').forEach(grid => {
         let hasVisibleCards = false;
         let currentHeader = null; 
         Array.from(grid.children).forEach(child => {
             if (child.classList.contains('date-group-header')) {
-                if (currentHeader) {
-                    currentHeader.style.display = hasVisibleCards ? 'block' : 'none';
-                }
+                if (currentHeader) currentHeader.style.display = hasVisibleCards ? 'block' : 'none';
                 currentHeader = child;
                 hasVisibleCards = false; 
             } else if (child.classList.contains('file-card')) {
-                if (child.style.display !== 'none') {
-                    hasVisibleCards = true;
-                }
+                if (child.style.display !== 'none') hasVisibleCards = true;
             }
         });
-        if (currentHeader) {
-            currentHeader.style.display = hasVisibleCards ? 'block' : 'none';
-        }
+        if (currentHeader) currentHeader.style.display = hasVisibleCards ? 'block' : 'none';
     });
   }
 
@@ -293,27 +294,32 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalDescription').textContent = card.getAttribute('data-description') || 'No description available.';
     document.getElementById('currentFolderName').textContent = folderName;
     
+    // CORRECTION ICI : On lit le nom du portail proprement sans crasher
     const portalNameElem = document.querySelector('header h1');
     const currentPortalSpan = document.getElementById('currentPortalName');
+    let currentPortalName = 'None';
     if (portalNameElem && currentPortalSpan) {
-        currentPortalSpan.textContent = portalNameElem.childNodes[0].textContent.trim();
+        currentPortalName = portalNameElem.childNodes[0].textContent.trim();
+        currentPortalSpan.textContent = currentPortalName;
     }
-    const btnAddFolder = document.getElementById('addToFolderBtn');
-    const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
+
     const btnAddPortal = document.getElementById('addToPortalBtn');
     const btnRemovePortal = document.getElementById('removeFromPortalBtn');
 
-    if (folderName !== 'None' && folderName !== '') {
-        if (btnAddFolder) btnAddFolder.style.display = 'none';
-        if (btnRemoveFolder) btnRemoveFolder.style.display = 'block';
+    if (currentPortalName !== 'None' && currentPortalName !== '') {
+        if (btnAddPortal) {
+            btnAddPortal.textContent = 'Change Portal';
+            btnAddPortal.style.display = 'block';
+        }
+        if (btnRemovePortal) btnRemovePortal.style.display = 'block'; 
     } 
-    
     else {
-        if (btnAddFolder) btnAddFolder.style.display = 'block';
-        if (btnRemoveFolder) btnRemoveFolder.style.display = 'none';
+        if (btnAddPortal) {
+            btnAddPortal.textContent = 'Assign to Portal';
+            btnAddPortal.style.display = 'block';
+        }
+        if (btnRemovePortal) btnRemovePortal.style.display = 'none'; 
     }
-    if (btnAddPortal) btnAddPortal.style.display = 'none';
-    if (btnRemovePortal) btnRemovePortal.style.display = 'block';
 
     const tagsStr = card.getAttribute('data-tags');
     const tags = tagsStr ? tagsStr.split(',').filter(tag => tag.trim() !== '') : [];
@@ -322,9 +328,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (tags.length > 0) {
         tags.forEach(tag => {
+            const tagText = tag.trim();
             const tagElement = document.createElement('span');
             tagElement.className = 'modal-tag';
-            tagElement.textContent = tag.trim();
+            tagElement.textContent = tagText;            
+            tagElement.style.cursor = 'pointer';
+            tagElement.style.transition = 'background 0.2s';
+            tagElement.onmouseover = () => { tagElement.style.background = 'var(--primary-hover)'; };
+            tagElement.onmouseout = () => { tagElement.style.background = 'var(--primary)'; };            
+            tagElement.addEventListener('click', () => {
+                closeFileModal();                
+                if (searchInput) {
+                    searchInput.value = tagText;                    
+                    searchFiles();                    
+                    if (window.scrollY < 300) {
+                        window.scrollTo({ top: 300, behavior: 'smooth' });
+                    }
+                }
+            });
+            
             modalTags.appendChild(tagElement);
         });
     } 
@@ -333,7 +355,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     document.getElementById('modalAddedDate').textContent = card.getAttribute('data-date-added') || 'Unknown';
-    document.getElementById('modalEventDate').textContent = card.getAttribute('data-date-event') || 'Unknown';
+    document.getElementById('modalEventDate').textContent = card.getAttribute('data-date-event') || 'Not specified';
+    
+    const sectionElem = document.getElementById('modalSection');
+    if (sectionElem) sectionElem.textContent = card.getAttribute('data-section') || 'Not specified';
+    
+    const categoryElem = document.getElementById('modalCategory');
+    if (categoryElem) categoryElem.textContent = card.getAttribute('data-category') || 'Not specified';
     if(typeof modalDownloadBtn !== 'undefined' && modalDownloadBtn) {
         modalDownloadBtn.setAttribute('href', downloadUrl);
         modalDownloadBtn.setAttribute('download', filename);
@@ -357,7 +385,6 @@ document.addEventListener('DOMContentLoaded', function() {
         video.appendChild(source);
         modalPreview.appendChild(video);
     } 
-    
     else if (fileType === 'PDF') {
         const iframe = document.createElement('iframe');
         iframe.src = downloadUrl;
@@ -379,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     fileModal.classList.add('active');
-}
+  }
 
   function closeFileModal() {
     fileModal.classList.remove('active');
@@ -407,8 +434,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function loadPortalsForModal() {
       const portalList = document.getElementById('portalList');
-      portalList.innerHTML = '<span style="color:white; font-size:12px;">Chargement...</span>';
-      
+      portalList.innerHTML = '<span style="color:#64748b; font-size:13px; font-weight: 500;">Chargement...</span>';
       fetch('/get_all_portals') 
       .then(response => response.json())
       .then(data => {
@@ -416,26 +442,28 @@ document.addEventListener('DOMContentLoaded', function() {
           if(data.portals && data.portals.length > 0) {
               data.portals.forEach(portal => {
                   const btn = document.createElement('button');
-                  btn.style.cssText = "width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; color: white; cursor: pointer; margin-bottom: 5px; transition: background 0.2s;";
-                  btn.textContent = portal.name;
-                  btn.onmouseover = () => btn.style.background = "rgba(255,255,255,0.15)";
-                  btn.onmouseout = () => btn.style.background = "rgba(255,255,255,0.05)";
+                  btn.style.cssText = "width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; color: #334155; font-weight: 600; cursor: pointer; margin-bottom: 8px; transition: all 0.2s; text-align: left;";
+                  btn.innerHTML = `🌐 ${portal.name}`;
+                  
+                  btn.onmouseover = () => { btn.style.background = "#e2e8f0"; btn.style.borderColor = "#94a3b8"; };
+                  btn.onmouseout = () => { btn.style.background = "#f8fafc"; btn.style.borderColor = "#cbd5e1"; };
                   
                   btn.onclick = () => addFileToPortal(portal.id, portal.name);
                   portalList.appendChild(btn);
               });
-          } else {
-              portalList.innerHTML = '<span style="color:white; font-size:12px;">Aucun portail trouvé.</span>';
+          } 
+          else {
+              portalList.innerHTML = '<span style="color:#64748b; font-size:13px;">Aucun portail trouvé.</span>';
           }
       }).catch(err => {
           console.error("Erreur chargement portails:", err);
-          portalList.innerHTML = '<span style="color:#ff6b6b; font-size:12px;">Erreur de chargement</span>';
+          portalList.innerHTML = '<span style="color:#ef4444; font-size:13px;">Erreur de chargement</span>';
       });
   }
 
   function loadFoldersForModal() {
       const folderTree = document.getElementById('folderTree');
-      folderTree.innerHTML = '<span style="color:white; font-size:12px;">Chargement...</span>';
+      folderTree.innerHTML = '<span style="color:#64748b; font-size:13px; font-weight: 500;">Chargement...</span>';
       
       fetch('/get_folders')
       .then(response => response.json())
@@ -444,21 +472,20 @@ document.addEventListener('DOMContentLoaded', function() {
           if(data.folders && data.folders.length > 0) {
               data.folders.forEach(folder => {
                   const btn = document.createElement('button');
-                  btn.style.cssText = "width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 6px; color: white; cursor: pointer; margin-bottom: 5px; text-align: left; transition: background 0.2s;";
-                  btn.innerHTML = `🗁 ${folder.name}`;
-                  btn.onmouseover = () => btn.style.background = "rgba(255,255,255,0.15)";
-                  btn.onmouseout = () => btn.style.background = "rgba(255,255,255,0.05)";
-                  
+                  btn.style.cssText = "width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; color: #334155; font-weight: 600; cursor: pointer; margin-bottom: 8px; transition: all 0.2s; text-align: left;";
+                  btn.innerHTML = `🗀 ${folder.name}`;
+                  btn.onmouseover = () => { btn.style.background = "#e2e8f0"; btn.style.borderColor = "#94a3b8"; };
+                  btn.onmouseout = () => { btn.style.background = "#f8fafc"; btn.style.borderColor = "#cbd5e1"; };
                   btn.onclick = () => addFileToFolder(folder.id, folder.name);
                   folderTree.appendChild(btn);
               });
           } 
           else {
-              folderTree.innerHTML = '<span style="color:white; font-size:12px;">Aucun dossier trouvé.</span>';
+              folderTree.innerHTML = '<span style="color:#64748b; font-size:13px;">Aucun dossier trouvé.</span>';
           }
       }).catch(err => {
           console.error("Erreur chargement dossiers:", err);
-          folderTree.innerHTML = '<span style="color:#ff6b6b; font-size:12px;">Erreur de chargement</span>';
+          folderTree.innerHTML = '<span style="color:#ef4444; font-size:13px;">Erreur de chargement</span>';
       });
   }
 
@@ -475,30 +502,43 @@ document.addEventListener('DOMContentLoaded', function() {
           if (data.status === 'success') {
               document.getElementById('currentPortalName').textContent = portalName;
               document.getElementById('portalList').style.display = 'none';
-              alert('Fichier ajouté au portail : ' + portalName);
+              alert('File added to portal : ' + portalName);
           } else {
               alert('Erreur : ' + data.message);
           }
       }).catch(err => {
           console.error('Erreur API:', err);
-          alert("Erreur lors de l'ajout au portail.");
+          alert("Error adding to portal.");
       });
   }
 
   function addFileToFolder(targetFolderId, folderName) {
       if (!currentModalFilename) return;
-
-      const formData = new FormData();
-      formData.append('filename', currentModalFilename);
-      formData.append('folder_id', targetFolderId);
-      
-      fetch('/update_file_folder', { method: 'POST', body: formData })
+      const params = new URLSearchParams();
+      params.append('filename', currentModalFilename);
+      params.append('folder_id', targetFolderId);
+      fetch('/update_file_folder', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params 
+      })
       .then(response => response.json())
       .then(data => {
           if (data.status === 'success') {
               document.getElementById('currentFolderName').textContent = folderName;
               document.getElementById('folderTree').style.display = 'none';
-              alert('Fichier ajouté au dossier : ' + folderName);
+              const btnAddFolder = document.getElementById('addToFolderBtn');
+              const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
+              if (btnAddFolder) {
+                  btnAddFolder.style.display = 'block';
+                  btnAddFolder.textContent = 'Change Folder';
+              }
+              if (btnRemoveFolder) btnRemoveFolder.style.display = 'block';              
+              const safeFilename = currentModalFilename.replace(/"/g, '\\"');
+              const card = document.querySelector(`.file-card[data-filename="${safeFilename}"]`);
+              if (card) {
+                  card.setAttribute('data-folder-name', folderName);
+              } 
           } 
           else {
               alert('Erreur : ' + data.message);
@@ -511,16 +551,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function removeFileFromFolder() {
       if (!currentModalFilename) return;
-      const formData = new FormData();
-      formData.append('filename', currentModalFilename);
-      
-      fetch('/r_file_folder', { method: 'POST', body: formData })
+      const params = new URLSearchParams();
+      params.append('filename', currentModalFilename);
+      const currentPortalId = document.body.getAttribute('data-portal-id');
+      if (currentPortalId) params.append('portal_id', currentPortalId);
+      fetch('/r_file_folder', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params 
+      })
       .then(response => response.json())
       .then(data => {
           if (data.status === 'success') {
-              alert('Fichier retiré du dossier.');
-              window.location.reload(); 
-          } else { alert('Erreur : ' + data.message); }
+              document.getElementById('currentFolderName').textContent = 'None';              
+              const btnAddFolder = document.getElementById('addToFolderBtn');
+              const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
+              if (btnAddFolder) {
+                  btnAddFolder.style.display = 'block';
+                  btnAddFolder.textContent = 'Assign to Folder';
+              }
+              if (btnRemoveFolder) btnRemoveFolder.style.display = 'none';
+              const safeFilename = currentModalFilename.replace(/"/g, '\\"');
+              const card = document.querySelector(`.file-card[data-filename="${safeFilename}"]`);
+              if (card) {
+                  card.setAttribute('data-folder-name', 'None');
+              }              
+          } 
+          else { 
+              alert('Erreur : ' + data.message); 
+          }
+      }).catch(err => {
+          console.error('Erreur API:', err);
+          alert("Erreur lors du retrait du fichier.");
       });
   }
 
@@ -534,7 +596,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
           if (data.status === 'success') {
-              alert('Fichier retiré du portail.');
+              alert('File removed from the portal.');
               window.location.reload(); 
           }
            else { alert('Erreur : ' + data.message); }
@@ -770,8 +832,6 @@ initAboutModal();
           button.addEventListener('click', (e) => {
               const sortType = e.currentTarget.getAttribute('data-sort');
               sortDropdownBtn.innerHTML = e.currentTarget.innerHTML;
-
-              // Retrier toutes les grilles selon le choix (A-Z ou Date)
               document.querySelectorAll('.files-grid').forEach(grid => {
                   applySortAndGroup(grid, sortType);
               });

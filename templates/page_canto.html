@@ -18,9 +18,21 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/header.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
+  {% if is_sandbox %}
+  <div style="background: #1e293b; padding: 10px 20px; display: flex; align-items: center;">
+      <a href="/portal/{{ portal_slug }}" style="color: white; text-decoration: none; font-weight: 600;">
+          <i class="fas fa-arrow-left"></i> Return to the portal's showcase
+      </a>
+  </div>
+{% endif %}
 </head>
 
-<body data-is-admin="{{ 'true' if is_admin else 'false' }}">
+<body data-is-admin="{{ 'true' if is_admin else 'false' }}"
+      {% if is_sandbox %}
+      data-is-sandbox="true"
+      data-portal-slug="{{ portal_slug }}"
+      data-folder-id="{{ current_folder_id }}"
+      {% endif %}>
 
   <header>
     <div class="header-bubbles" id="headerBubbles"></div>
@@ -94,18 +106,24 @@
     </div>
     
     <div class="profile-container">
+      {% set active_email = user_email if user_email else (session.get('user_email') or session.get('portal_user_email') or 'Client@portail.com') %}
+      {% set parts = active_email.split('@')[0].split('.') %}
+      
       <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
-        {% set parts = session.get('user_email', '').split('@')[0].split('.') %}
-        {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+        {{ parts[0][0] | upper if parts[0] else 'C' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
       </button>
+      
       <div class="profile-dropdown" id="profileDropdown">
-        <div class="profile-email" id="profileEmail">{{ session.get('user_email', '') }}</div>
+        <div class="profile-email" id="profileEmail">{{ active_email }}</div>
+        
         {% if is_admin %}
         <div class="profile-admin-badge"><i class="fas fa-shield-alt"></i> Admin</div>
         {% endif %}
+        
         <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
           <i class="fas fa-info-circle"></i> <span>About</span>
         </div>
+        
         <div class="profile-logout" id="profileLogout">
           <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
         </div>
@@ -146,7 +164,7 @@
 
       <div class="gallery" id="gallery">
         {% for file in files %}
-        <div class="gallery-item" data-tags="{{ file.tags | join(', ') | lower }}" data-name="{{ file.nom|lower }}" data-link="{{ file.lien }}" data-filename="{{ file.nom }}" data-description="{{ file.description }}" data-tags="{{ file.tags|tojson }}" data-exclusive="{{ 'true' if file.is_exclusive is true else 'false' }}" {% if file.date_ajout %}data-date="{{ file.date_ajout.strftime('%d-%m-%Y') }}" {% endif %} data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
+        <div class="gallery-item" data-tags="{{ file.tags | join(', ') | lower }}" data-name="{{ file.nom|lower }}" data-link="{{ file.lien }}" data-filename="{{ file.nom }}" data-description="{{ file.description }}" data-exclusive="{{ 'true' if file.is_exclusive is true else 'false' }}" {% if file.date_ajout %}data-date="{{ file.date_ajout.strftime('%d-%m-%Y') }}" {% endif %} data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
          data-portal-name="{{ file.portal_name if file.portal_name else 'None' }}" >
          <div class="select-checkbox"><i class="fas fa-check"></i></div>
           {% set ext = file.nom.split('.')[-1]|lower %}
@@ -298,7 +316,10 @@
           <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
           
           {% if is_admin %}
-          <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
+          <div class="action-group">
+            <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
+            <button class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none;">Remove</button>
+          </div>
           <div class="portal-list" id="portalList" style="display: none;"></div>
           {% endif %}
         </div>
@@ -391,7 +412,136 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  {% if is_sandbox %}
+  <script id="sandbox-folders-data" type="application/json">{{ project_folders_json | safe }}</script>
+  <script id="sandbox-files-data" type="application/json">{{ sandbox_files_json | safe }}</script>
+
+  <script>
+    const originalFetch = window.fetch;
+    window.fetch = async function(url, options) {
+        if (url.includes('/get_folders')) {
+            const data = JSON.parse(document.getElementById('sandbox-folders-data').textContent);
+            return new Response(JSON.stringify({ folders: data }), { headers: { 'Content-Type': 'application/json' } });
+        }
+        
+        if (url.includes('/search_file')) {
+            const urlObj = new URL(url, window.location.origin);
+            
+            let requestedFolderId = urlObj.searchParams.get('folder_id') || document.body.getAttribute('data-folder-id');
+            let sortParams = urlObj.searchParams.get('sort') || 'date_desc'; // Par défaut : récent en premier
+            let sectionParams = urlObj.searchParams.get('section');
+            let categoryParams = urlObj.searchParams.get('category');
+            let searchParams = urlObj.searchParams.get('filename');
+            
+            const allData = JSON.parse(document.getElementById('sandbox-files-data').textContent);
+            
+            let filteredData = allData.filter(f => f.folder_id == requestedFolderId);
+            
+            if (sectionParams && sectionParams !== 'all') {
+                filteredData = filteredData.filter(f => f.section === sectionParams);
+            }
+            if (categoryParams && categoryParams !== 'all') {
+                filteredData = filteredData.filter(f => f.category === categoryParams);
+            }
+
+            if (searchParams && searchParams.trim() !== '') {
+                const searchWords = searchParams.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+                filteredData = filteredData.filter(f => {
+                    return searchWords.every(word => {
+                        return (f.name && f.name.toLowerCase().includes(word)) ||
+                               (f.description && f.description.toLowerCase().includes(word)) ||
+                               (f.tags && f.tags.join(' ').toLowerCase().includes(word));
+                    });
+                });
+            }
+
+            // CORRECTIF ALGORITHME DE TRI DES DATES (SANS DATE TOUJOURS AU FOND)
+            filteredData.sort((a, b) => {
+                if (sortParams === 'name_asc') return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+                if (sortParams === 'name_desc') return b.name.toLowerCase().localeCompare(a.name.toLowerCase());
+                
+                // Re-conversion sécurisée du format "DD-MM-YYYY"
+                const parseDate = (dateStr) => {
+                    if (!dateStr || dateStr === 'N/A') return null;
+                    const parts = dateStr.split('-');
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                };
+                
+                const dateA = parseDate(a.date_ajout);
+                const dateB = parseDate(b.date_ajout);
+                
+                // Si une date n'est pas renseignée, elle est systématiquement poussée au fond (valeur la plus basse possible)
+                if (sortParams === 'date_desc') {
+                    if (!dateA) return 1;  // 'a' n'a pas de date -> va après 'b'
+                    if (!dateB) return -1; // 'b' n'a pas de date -> va après 'a'
+                    return dateB - dateA;  // Plus récent en premier
+                }
+                if (sortParams === 'date_asc') {
+                    if (!dateA) return 1;  // Même traitement pour isoler au fond
+                    if (!dateB) return -1;
+                    return dateA - dateB;  // Plus ancien en premier
+                }
+                return 0;
+            });
+            
+            return new Response(JSON.stringify({ 
+                files: filteredData, 
+                total: filteredData.length, 
+                page: 1, 
+                total_pages: 1 
+            }), { headers: { 'Content-Type': 'application/json' } });
+        }
+        return originalFetch(url, options);
+    };
+
+    // Forcer l'ouverture automatique de l'arborescence
+    window.addEventListener('load', () => {
+        const targetFolderId = document.body.getAttribute('data-folder-id');
+        if (!targetFolderId) return;
+
+        const selectActiveFolderInterval = setInterval(() => {
+            const folderNodes = document.querySelectorAll('.folder, [data-folder-id]');
+            let targetNode = null;
+
+            folderNodes.forEach(node => {
+                if (node.getAttribute('data-folder-id') === targetFolderId || node.getAttribute('data-id') === targetFolderId || (node.dataset && node.dataset.id === targetFolderId)) {
+                    targetNode = node;
+                }
+            });
+
+            if (targetNode) {
+                clearInterval(selectActiveFolderInterval);
+                const clickableName = targetNode.querySelector('.folder-name') || targetNode;
+                clickableName.click();
+                
+                if (targetNode.classList.contains('folder-name')) targetNode.classList.add('is-selected');
+                else targetNode.classList.add('active');
+
+                let currentElement = targetNode;
+                while (currentElement && currentElement.id !== 'foldersContainer') {
+                    if (currentElement.classList.contains('folder') || currentElement.classList.contains('subfolders')) {
+                        currentElement.classList.add('active');
+                    }
+                    currentElement = currentElement.parentElement;
+                }
+            }
+        }, 100);
+
+        setTimeout(() => clearInterval(selectActiveFolderInterval), 5000);
+    });
+  </script>
+{% endif %}
   <script src="{{ url_for('static', filename='js/canto_logic.js') }}"></script>
+  <script>
+    const activeFolderId = "{{ current_folder.id }}"; 
+    if(activeFolderId) {
+        document.addEventListener('DOMContentLoaded', () => {
+            const folderNode = document.querySelector(`[data-folder-id="${activeFolderId}"]`);
+            if(folderNode) folderNode.click();
+        });
+    }
+</script>
 </body>
 </html>
 </body>
