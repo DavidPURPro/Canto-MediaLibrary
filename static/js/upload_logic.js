@@ -44,12 +44,19 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             const folderSelect = document.getElementById('fileFolder');
+            const globalFolderSelect = document.getElementById('globalFolder');
             if (data.folders) {
                 data.folders.forEach(folder => {
                     const option = document.createElement('option');
                     option.value = folder.id;
                     option.textContent = folder.name;
                     folderSelect.appendChild(option);
+                    if (globalFolderSelect) {
+                        const globalOption = document.createElement('option');
+                        globalOption.value = folder.id;
+                        globalOption.textContent = folder.name;
+                        globalFolderSelect.appendChild(globalOption);
+                    }
                 });
             }
         })
@@ -407,15 +414,33 @@ document.addEventListener('DOMContentLoaded', () => {
     sendBtn.addEventListener("click", async () => {
         const filesToSend = filesToUpload.slice(0, MAX_FILES);
         if (filesToSend.length === 0) return;
+        const gDesc = document.getElementById('globalDescription')?.value.trim() || "";
+        const gSection = document.getElementById('globalSection')?.value || "";
+        const gCategory = document.getElementById('globalCategory')?.value || "";
+        const gPortal = document.getElementById('globalPortal')?.value || "";
+        const gFolder = document.getElementById('globalFolder')?.value || "";
+        const gTagsRaw = document.getElementById('globalTags')?.value || "";
+        const gTagsArray = gTagsRaw.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
         const formData = new FormData();
         const url = `/upload`;
-        
         filesToSend.forEach((file) => {
             formData.append("files", file);
             const details = fileDetails[file.name] || {};
-            formData.append("descriptions", details.description || "");
-            formData.append("tags", JSON.stringify(details.tags || []));
+            const finalDesc = details.description || gDesc;
+            const finalSection = details.section || gSection;
+            const finalCategory = details.category || gCategory;
+            const finalPortal = (details.portalId && details.portalId !== "none") ? details.portalId : gPortal;
+            const finalFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
+            let finalTags = [];
+            if (details.tags && details.tags.length > 0) {
+                finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
+            } 
+            else {
+                finalTags = gTagsArray;
+            }
+            formData.append("descriptions", finalDesc);
+            formData.append("tags", JSON.stringify(finalTags));
             
             let formattedDate = "";
             if (details.eventDate) {
@@ -423,27 +448,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 formattedDate = `${day}-${month}-${year}`;
             }
             formData.append("date_events", formattedDate);
-            formData.append("portal_ids", details.portalId || "");
-            formData.append("sections", details.section || "");
-            formData.append("categories", details.category || "");
-            formData.append("folder_ids", (details.folderId && details.folderId !== "none") ? details.folderId : "");               });
+            formData.append("portal_ids", finalPortal);
+            formData.append("sections", finalSection);
+            formData.append("categories", finalCategory);
+            formData.append("folder_ids", finalFolder);
+        });
 
         try {
             loadingSpinner.style.display = "block";
             sendBtn.disabled = true;
             msg.className = "message";
             msg.textContent = "Sending...";
-
             const response = await fetch(url, {
                 method: "POST",
                 body: formData
             });
-
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Server error: ${response.status}`);
             }
-
             const result = await response.json();
             if (result.status === "success") {
                 filesToUpload = [];
@@ -451,6 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderFileList();
                 msg.className = "message success";
                 msg.innerHTML = '<i class="fas fa-check-circle"></i> Upload successful!';
+                setTimeout(() => { window.location.href = '/'; }, 1500);
             } 
             else {
                 throw new Error(result.message || "Upload failed");
