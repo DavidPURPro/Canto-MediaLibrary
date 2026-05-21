@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/portals_style.css') }}">
 </head>
-<body data-is-admin="{{ 'true' if is_admin else 'false' }}">
+<body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{user_role}}">
 
   <header class="ultra-header">
     <div class="header-bubbles" id="headerBubbles"></div>
@@ -34,8 +34,14 @@
               </button>
               <div class="profile-dropdown" id="profileDropdown">
                 <div class="profile-email" id="profileEmail">{{ session.get('user_email', '') }}</div>
-                {% if is_admin %}
-                <div class="profile-admin-badge"><i class="fas fa-shield-alt"></i> Admin</div>
+                {% if is_admin or user_role == 'admin' %}
+                    <div class="profile-admin-badge">
+                        <i class="fas fa-shield-alt"></i> Admin
+                    </div>
+                {% elif user_role == 'uploader' %}
+                    <div class="profile-admin-badge" style="background-color: #f97316; color: white; border-color: #ea580c;">
+                        <i class="fas fa-cloud-upload-alt" style="color: white;"></i> Uploader
+                    </div>
                 {% endif %}
 
                 <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">

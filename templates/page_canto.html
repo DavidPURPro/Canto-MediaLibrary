@@ -27,7 +27,7 @@
 {% endif %}
 </head>
 
-<body data-is-admin="{{ 'true' if is_admin else 'false' }}"
+<body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{ user_role }}"
       {% if is_sandbox %}
       data-is-sandbox="true"
       data-portal-slug="{{ portal_slug }}"
@@ -98,10 +98,12 @@
 </div>
       <a href="/portals" class="modern-btn secondary-btn"><i class="fas fa-globe"></i> Portals</a>
       
+      {% if is_admin or user_role == 'uploader' %}
+      <a href="/upload" class="modern-btn primary-btn" title="Upload files"><i class="fas fa-cloud-upload-alt" ></i> Upload</a>
+      {% endif %}
       {% if is_admin %}
-      <a href="/upload" class="modern-btn primary-btn" title="Upload files"><i class="fas fa-cloud-upload-alt"></i> Upload</a>
       <a href="/delete" class="modern-btn danger-btn" title="Delete files"><i class="fas fa-trash-alt"></i> Delete</a>
-      <a href="/admin/users" class="modern-btn primary-btn">Access Management</a>
+      <a href="/admin/users" class="modern-btn secondary-btn">Access Management</a>
       {% endif %}
     </div>
     
@@ -116,8 +118,14 @@
       <div class="profile-dropdown" id="profileDropdown">
         <div class="profile-email" id="profileEmail">{{ active_email }}</div>
         
-        {% if is_admin %}
-        <div class="profile-admin-badge"><i class="fas fa-shield-alt"></i> Admin</div>
+        {% if is_admin or user_role == 'admin' %}
+            <div class="profile-admin-badge">
+                <i class="fas fa-shield-alt"></i> Admin
+            </div>
+        {% elif user_role == 'uploader' %}
+            <div class="profile-admin-badge" style="background-color: #f97316; color: white; border-color: #ea580c;">
+                <i class="fas fa-cloud-upload-alt" style="color: white;"></i> Uploader
+            </div>
         {% endif %}
         
         <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
@@ -286,16 +294,19 @@
       </div>
       
       <div class="modal-info">
-        <h2 class="modal-title" id="modalTitle"></h2>
-        <div class="modal-description" id="modalDescription"></div>
-        
-        <div class="modal-tags" id="modalTags"></div>
-        
+        <h2 class="modal-title editable-field" id="modalTitle" data-field="filename" title="Double-click to edit"></h2>
+
+        <div class="modal-description editable-field" id="modalDescription" data-field="description" title="Double-click to edit"></div>
+
+        <div class="editable-field" data-field="tags" title="Double-click in the empty space to edit" style="min-height: 30px; padding: 5px; border-radius: 5px;">
+            <div class="modal-tags" id="modalTags"></div>
+        </div>
+
         <div class="modal-meta">
-          <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection"></span></div>
-          <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory"></span></div>
-          <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
-          <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"></span></div>
+          <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection" class="editable-field" data-field="section" title="Double-click to edit"></span></div>
+          <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory" class="editable-field" data-field="category" title="Double-click to edit"></span></div>
+          <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate" class="editable-field" data-field="date_ajout" title="Double-click to edit"></span></div>
+          <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate" class="editable-field" data-field="date_event" title="Double-click to edit"></span></div>
         </div>
         
         <div class="folder-selector" id="folderSelector">
@@ -456,12 +467,9 @@
                 });
             }
 
-            // CORRECTIF ALGORITHME DE TRI DES DATES (SANS DATE TOUJOURS AU FOND)
             filteredData.sort((a, b) => {
                 if (sortParams === 'name_asc') return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
                 if (sortParams === 'name_desc') return b.name.toLowerCase().localeCompare(a.name.toLowerCase());
-                
-                // Re-conversion sécurisée du format "DD-MM-YYYY"
                 const parseDate = (dateStr) => {
                     if (!dateStr || dateStr === 'N/A') return null;
                     const parts = dateStr.split('-');

@@ -329,7 +329,8 @@ app.get('/', async (req, res) => {
             total_pages: totalPages,
             currentSort: sort,
             currentFilter: filter,
-            is_admin: req.session.is_admin
+            is_admin: req.session.is_admin,
+            user_role: req.session.user_role
         });
     } catch (err) {
         console.error(err);
@@ -341,25 +342,50 @@ app.get('/index', loginRequiredHtml, (req, res) => {
     res.render('page_canto.html', {
         username: req.session.username,
         user_email: req.session.user_email,
-        is_admin: req.session.is_admin
+        is_admin: req.session.is_admin,
+        user_role: req.session.user_role
     });
 });
 
-async function isUserAdmin(accessToken) {
+async function getUserRole(accessToken) {
     const adminGroupId = process.env.ADMIN_GROUP_ID;
-    if (!adminGroupId) return false;
+    const uploaderGroupId = process.env.UPLOADER_GROUP_ID; 
     
     try {
-        const client = Client.init({ authProvider: (done) => done(null, accessToken) });
-        const response = await client.api(`/me/memberOf?$filter=id eq '${adminGroupId}'`).get();
-        return response.value && response.value.length > 0;
+        const client = Client.init({ authProvider: (done) => done(null, accessToken) });        
+        const response = await client.api('/me/memberOf').select('id').get();
+        if (response.value && response.value.length > 0) {
+            const userGroupIds = response.value.map(group => group.id);            
+            if (adminGroupId && userGroupIds.includes(adminGroupId)) {
+                return 'admin';
+            }
+            if (uploaderGroupId && userGroupIds.includes(uploaderGroupId)) {
+                return 'uploader';
+            }
+        }        
+        return 'viewer';
     } catch (e) {
-        if (e.message && e.message.includes("Insufficient privileges"))
-        return false;
-      console.error("Erreur Graph API (Admin Check):", e.message);
-      return false;
+        if (e.message && e.message.includes("Insufficient privileges")) {
+            console.warn("Privilèges insuffisants pour lire les groupes Azure.");
+            return 'viewer';
+        }
+        console.error("Erreur Graph API (Role Check):", e.message);
+        return 'viewer';
     }
 }
+
+// admins et uploaders
+function uploadAccessRequired(req, res, next) {
+    const role = req.session.user_role;
+    if (role === 'admin' || role === 'uploader') {
+        return next();
+    }
+    if (req.method === 'GET' && !req.headers.accept?.includes('application/json')) {
+        return res.redirect('/');
+    }
+    return res.status(403).json({ status: "error", message: "Access Denied. Uploaders and Admins only." });
+}
+
 
 function loginRequiredHtml(req, res, next) {
     if (req.path.startsWith('/portal/')) {
@@ -445,14 +471,15 @@ app.get('/getAToken', async (req, res) => {
 
         if (!email.endsWith(`@${allowedDomain}`)) {
             req.session.destroy();
-            return res.status(403).send(`Accès refusé : seul le domaine @${allowedDomain} est autorisé.`);
+            return res.status(403).send(`Access denied: only the domain @${allowedDomain} is authorized.`);
         }
 
-        const isAdmin = await isUserAdmin(response.accessToken);
+        const role = await getUserRole(response.accessToken);
         req.session.access_token = response.accessToken;
         req.session.user_email = email;
         req.session.username = email.split('@')[0];
-        req.session.is_admin = isAdmin;
+        req.session.user_role = role;
+        req.session.is_admin = (role === 'admin');
         if (insightsClient) {
             insightsClient.trackEvent({
                 name: "login_reussi",
@@ -711,7 +738,7 @@ function buildFolderHierarchy(folders) {
     return rootFolders;
 }
 
-app.get('/upload', loginRequiredHtml, adminRequired, async (req, res) => {
+app.get('/upload', loginRequiredHtml, uploadAccessRequired, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
         const folders = buildFolderHierarchy(result.rows);
@@ -726,7 +753,7 @@ app.get('/upload', loginRequiredHtml, adminRequired, async (req, res) => {
     }
 });
 
-app.post('/upload', loginRequiredJson, adminRequired, (req, res, next) => {
+app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) => {
     uploadStream.array("files")(req, res, function (err) {
         if (err) {
             if (err.message.startsWith('Extension_Error')) {
@@ -1443,7 +1470,7 @@ app.get('/portals', loginRequiredHtml, async (req, res) => {
             });
         }
 
-        res.render('portals.html', { portals: portals_list, is_admin: req.session.is_admin });
+        res.render('portals.html', { portals: portals_list, is_admin: req.session.is_admin, user_role: req.session.user_role });
     } catch (error) {
         console.error("Erreur /portals:", error);
         res.status(500).send("Erreur serveur");
@@ -1546,6 +1573,7 @@ app.get('/portal/:portal_id', async (req, res) => {
             projectCards: projectCards, 
             looseFiles: looseFiles,
             is_admin: isAdmin,
+            user_role: req.session.user_role,
             user_email: req.session.user_email || req.session.portal_user_email,
             username: req.session.username || "Client"
         });
@@ -1652,6 +1680,7 @@ app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, r
             username: req.session.username || (req.session.portal_user_email ? req.session.portal_user_email.split('@')[0] : "Client"),
             user_email: req.session.user_email || req.session.portal_user_email,
             is_admin: isAdmin,
+            user_role: req.session.user_role,
             is_sandbox: true,
             portal_slug: slug,
             current_folder_id: targetFolderId,
@@ -2454,6 +2483,58 @@ app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
         res.json({ status: "success", folder_ids: folderIds });
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+app.post('/update_file_metadata', loginRequiredHtml, adminRequired, async (req, res) => {
+    try {
+        let { original_filename, field, value } = req.body;
+        if (!original_filename || !field) return res.status(400).json({ status: 'error', message: 'param missing' });
+        if (field === 'filename') {
+            const checkDocs = await pool.query("SELECT * FROM documents WHERE nom_fichier = $1", [value]);
+            const checkPortal = await pool.query("SELECT * FROM portal_files WHERE filename = $1", [value]);
+            
+            if (checkDocs.rows.length > 0 || checkPortal.rows.length > 0) {
+                return res.status(409).json({ status: 'error', message: 'Ce nom de fichier existe déjà.' });
+            }
+        }
+        let dbFieldDoc = '';
+        let dbFieldPortal = '';
+        if (field === 'filename') { dbFieldDoc = 'nom_fichier'; dbFieldPortal = 'filename'; }
+        else if (field === 'description') { dbFieldDoc = 'description'; dbFieldPortal = 'description'; }
+        else if (field === 'section') { dbFieldDoc = 'section'; dbFieldPortal = null;}
+        else if (field === 'category') { dbFieldDoc = 'category'; dbFieldPortal = null; }
+        else if (field === 'tags') { dbFieldDoc = 'tags'; dbFieldPortal = null; }
+        else if (field === 'date_ajout') { dbFieldDoc = 'date_ajout'; dbFieldPortal = 'upload_date'; }
+        else if (field === 'date_event') { dbFieldDoc = 'date_event'; dbFieldPortal = null; }
+        else { return res.status(400).json({ status: 'error', message: 'not editable' }); }
+        if (value.trim() === '') {
+            value = null;
+        }
+        else if (field === 'date_ajout' || field === 'date_event') {
+            const dateParts = value.split('-');
+            if (dateParts.length === 3) {
+                if (dateParts[0].length <= 2) {
+                    value = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+                }
+            }
+        }
+        if (field === 'tags') {
+            const tagsArray = value.split(',').map(t => t.trim()).filter(t => t.length > 0);
+            await pool.query(`UPDATE documents SET tags = $1 WHERE nom_fichier = $2`, [JSON.stringify(tagsArray), original_filename]);
+        } 
+        else {
+            await pool.query(`UPDATE documents SET ${dbFieldDoc} = $1 WHERE nom_fichier = $2`, [value, original_filename]);
+        }
+        if (dbFieldPortal) {
+            await pool.query(`UPDATE portal_files SET ${dbFieldPortal} = $1 WHERE filename = $2`, [value, original_filename]);
+        }
+
+        res.json({ status: 'success', message: 'update success' });
+
+    } catch (error) {
+        console.error("Error /update_file_metadata :", error);
+        res.status(500).json({ status: 'error', message: 'Error' });
     }
 });
 

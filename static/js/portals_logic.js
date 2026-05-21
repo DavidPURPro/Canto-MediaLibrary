@@ -1,29 +1,30 @@
 document.addEventListener('DOMContentLoaded', () => {
-    initProfileAvatar();
+    setProfileButtonColor();
     initHeaderBubbles();
     initStaggeredReveal();
     setupEventListeners();
     setupModals();
 });
 
-function initProfileAvatar() {
+function setProfileButtonColor() {
   const profileBtn = document.getElementById('profileBtn');
   if (profileBtn) {
+    const userRole = document.body.getAttribute('data-user-role');
     const isAdmin = document.body.getAttribute('data-is-admin') === 'true' || typeof window.isAdmin !== 'undefined' && window.isAdmin;
     profileBtn.style.border = '2px solid #ffffff';
     profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)'; 
-    if (isAdmin) {
+    if (userRole === 'admin' || isAdmin) {
       profileBtn.style.backgroundColor = '#d9534f'; 
       profileBtn.title = "Administrator";
-      
-      profileBtn.addEventListener('mouseenter', () => {
-        profileBtn.style.backgroundColor = '#c9302c'; 
-      });
-      profileBtn.addEventListener('mouseleave', () => {
-        profileBtn.style.backgroundColor = '#d9534f';
-      });
-      
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#c9302c'; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#d9534f'; });
     } 
+    else if (userRole === 'uploader') {
+      profileBtn.style.backgroundColor = '#f97316'; 
+      profileBtn.title = "Uploader";
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#ea580c'; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#f97316'; });
+    }
     else {
       const initials = profileBtn.textContent.trim();
       let hash = 0;
@@ -34,12 +35,9 @@ function initProfileAvatar() {
       const color = `hsl(${safeHue}, 85%, 55%)`;
       const hoverColor = `hsl(${safeHue}, 85%, 45%)`; 
       profileBtn.style.backgroundColor = color;
-      profileBtn.addEventListener('mouseenter', () => {
-        profileBtn.style.backgroundColor = hoverColor;
-      });
-      profileBtn.addEventListener('mouseleave', () => {
-        profileBtn.style.backgroundColor = color;
-      });
+      
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = hoverColor; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = color; });
     }
   }
 }

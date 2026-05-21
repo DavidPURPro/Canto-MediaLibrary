@@ -51,10 +51,14 @@
         </button>
         <div class="profile-dropdown" id="profileDropdown">
           <div class="profile-email" id="profileEmail">{{ user_email or 'Not logged in' }}</div>
-          {% if is_admin %}
-            <div class="profile-admin-badge" style="padding: 10px; border-bottom: 1px solid var(--gray-200); color: #d9534f; font-weight: bold; font-size: 13px;">
-              <i class="fas fa-shield-alt"></i> Admin
+          {% if is_admin or user_role == 'admin' %}
+            <div class="profile-admin-badge">
+                <i class="fas fa-shield-alt"></i> Admin
             </div>
+          {% elif user_role == 'uploader' %}
+              <div class="profile-admin-badge" style="background-color: #f97316; color: white; border-color: #ea580c;">
+                  <i class="fas fa-cloud-upload-alt" style="color: white;"></i> Uploader
+              </div>
           {% endif %}
           <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
             <i class="fas fa-info-circle"></i> <span>About</span>

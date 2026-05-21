@@ -1453,20 +1453,22 @@ document.addEventListener('DOMContentLoaded', function() {
 function setProfileButtonColor() {
   const profileBtn = document.getElementById('profileBtn');
   if (profileBtn) {
+    const userRole = document.body.getAttribute('data-user-role');
     const isAdmin = document.body.getAttribute('data-is-admin') === 'true' || typeof window.isAdmin !== 'undefined' && window.isAdmin;
     profileBtn.style.border = '2px solid #ffffff';
     profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)'; 
-    if (isAdmin) {
+    if (userRole === 'admin' || isAdmin) {
       profileBtn.style.backgroundColor = '#d9534f'; 
       profileBtn.title = "Administrator";
-      
-      profileBtn.addEventListener('mouseenter', () => {
-        profileBtn.style.backgroundColor = '#c9302c'; 
-      });
-      profileBtn.addEventListener('mouseleave', () => {
-        profileBtn.style.backgroundColor = '#d9534f';
-      });
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#c9302c'; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#d9534f'; });
     } 
+    else if (userRole === 'uploader') {
+      profileBtn.style.backgroundColor = '#f97316'; 
+      profileBtn.title = "Uploader";
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#ea580c'; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#f97316'; });
+    }
     else {
       const initials = profileBtn.textContent.trim();
       let hash = 0;
@@ -1478,12 +1480,8 @@ function setProfileButtonColor() {
       const hoverColor = `hsl(${safeHue}, 85%, 45%)`; 
       profileBtn.style.backgroundColor = color;
       
-      profileBtn.addEventListener('mouseenter', () => {
-        profileBtn.style.backgroundColor = hoverColor;
-      });
-      profileBtn.addEventListener('mouseleave', () => {
-        profileBtn.style.backgroundColor = color;
-      });
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = hoverColor; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = color; });
     }
   }
 }
@@ -2144,6 +2142,123 @@ fetch('/my_favorites')
             if (typeof executeGlobalSearch === 'function') executeGlobalSearch(currentSearchQuery, 1);
         }
     });
+
+document.addEventListener('dblclick', function(e) {
+    const userRole = document.body.getAttribute('data-user-role');
+    const isAdminMode = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin';
+    if (!isAdminMode) return;
+    const target = e.target.closest('.editable-field');
+    if (!target || !currentModalFilename) return;
+    if (e.target.classList.contains('modal-tag')) return;
+    if (target.querySelector('input') || target.querySelector('textarea')) return;
+    const field = target.getAttribute('data-field');
+    let currentValue = target.textContent.trim();    
+    if (field === 'tags') {
+        const tagSpans = target.querySelectorAll('.modal-tag');
+        const tagArray = [];
+        tagSpans.forEach(span => {
+            if (!span.textContent.includes('Exclusive') && span.textContent !== 'No tags') {
+                tagArray.push(span.textContent.trim());
+            }
+        });
+        currentValue = tagArray.join(', ');
+    }
+    
+    if (['No description available', 'No description', 'None'].includes(currentValue)) currentValue = '';
+    const isTextarea = field === 'description';
+    const inputElement = document.createElement(isTextarea ? 'textarea' : 'input');
+    
+    if (!isTextarea) inputElement.type = 'text';
+    inputElement.value = currentValue;
+    inputElement.style.cssText = `
+        width: 100%;
+        font-family: inherit;
+        font-size: inherit;
+        font-weight: inherit;
+        padding: 5px;
+        border: 2px solid #16677c;
+        border-radius: 4px;
+        background: #ffffff;
+        color: #000000;
+        outline: none;
+        resize: vertical;
+    `;
+    
+    const originalHTML = target.innerHTML;
+    target.innerHTML = '';
+    target.appendChild(inputElement);
+    inputElement.focus();
+    const saveEdit = async () => {
+        const newValue = inputElement.value.trim();        
+        if (newValue === currentValue) {
+            target.innerHTML = originalHTML;
+            return;
+        }
+
+        inputElement.disabled = true;
+        inputElement.style.opacity = '0.5';
+        const params = new URLSearchParams();
+        params.append('original_filename', currentModalFilename);
+        params.append('field', field);
+        params.append('value', newValue);
+        try {
+            const res = await fetch('/update_file_metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                if (field === 'tags') {
+                    target.innerHTML = `<span style="color:#10b981; font-weight:bold; font-size:12px;">✓ Updated tags (Reload to view)</span>`;
+                } 
+                else {
+                    target.textContent = newValue || (field === 'description' ? 'No description available' : 'None');
+                }
+                const safeFilename = currentModalFilename.replace(/"/g, '\\"');
+                const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"], .file-card[data-filename="${safeFilename}"]`);
+                
+                if (card) {
+                    if (field === 'filename') {
+                        card.setAttribute('data-filename', newValue);
+                        card.setAttribute('data-name', newValue.toLowerCase());
+                        const titleElem = card.querySelector('.image-title, .file-name');
+                        if (titleElem) titleElem.textContent = newValue;
+                        currentModalFilename = newValue; 
+                    } 
+                    else if (field === 'description') {
+                        card.setAttribute('data-description', newValue);
+                        const descElem = card.querySelector('.file-description');
+                        if (descElem) descElem.textContent = newValue;
+                    }
+                }
+                
+                target.style.backgroundColor = '#dcfce7';
+                setTimeout(() => { target.style.backgroundColor = ''; }, 1000);
+
+            } 
+            else {
+                alert("Erreur: " + data.message);
+                target.innerHTML = originalHTML;
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Erreur de connexion.");
+            target.innerHTML = originalHTML;
+        }
+    };
+
+    inputElement.addEventListener('blur', saveEdit);
+    inputElement.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !isTextarea) {
+            inputElement.blur();
+        }
+        if (e.key === 'Escape') {
+            target.innerHTML = originalHTML;
+        }
+    });
+});
 
 });
 

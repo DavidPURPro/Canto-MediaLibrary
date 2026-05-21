@@ -339,7 +339,7 @@ a.modern-btn {
 a.modern-btn:visited, a.modern-btn:link {
     color: inherit;
 }
-a.modern-btn.primary-btn { color: white !important; }
+a.modern-btn.primary-btn { color: #f97316 !important; }
 a.modern-btn.secondary-btn { color: white !important; }
 a.modern-btn.danger-btn { color: #ef4444 !important; }
 
