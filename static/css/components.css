@@ -274,7 +274,7 @@
 .modal-actions { margin-top: auto; display: flex; gap: 12px; }
 
 .btn-download-modal, #modalDownloadBtn { 
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important; color: white !important; 
+  background: linear-gradient(135deg, #16677c 0%, #0d4555 100%) !important; color: white !important; 
   border-radius: 14px; padding: 12px 24px; font-weight: 700; border: none; text-decoration: none;
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; transition: all 0.3s;
 }

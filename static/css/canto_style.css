@@ -17,7 +17,7 @@
   --transition: all 0.2s ease;
 }
 
-/* ========== BASE STYLES ========== */
+/*  BASE STYLES */
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--gray-50);
@@ -700,7 +700,7 @@ body.list-view .item-footer {
 
 .page-btn {
   background: var(--primary);
-  color: var(--white);
+  color: var(--black);
   padding: 8px 16px;
   border-radius: var(--radius);
   text-decoration: none;
@@ -733,7 +733,7 @@ body.list-view .item-footer {
   color: var(--gray-800);
 }
 
-/* ========== MESSAGES ========== */
+/* MESSAGES */
 .warning-message {
   text-align: center;
   color: #d9534f;
@@ -741,7 +741,6 @@ body.list-view .item-footer {
   font-weight: bold;
 }
 
-/* ========== TOOLTIPS AMÉLIORÉS ========== */
 .tooltip {
   position: absolute;
   bottom: 100%;

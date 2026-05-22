@@ -14,8 +14,8 @@ button, input {
 a { text-decoration: none; color: inherit; }
 
 :root {
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  --primary: #16677C;
+  --primary-hover: #0d4555;
   --glass-bg: rgba(255, 255, 255, 0.15);
   --glass-bg-hover: rgba(255, 255, 255, 0.25);
   --glass-border: rgba(255, 255, 255, 0.2);
@@ -38,18 +38,25 @@ body {
 
 
 header {
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  padding: 15px 30px;
+  background: rgba(10, 15, 25, 0.45); 
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 15px 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   position: sticky;
   top: 0;
   z-index: 100;
-  border-bottom: 1px solid var(--glass-border);
-  height: 80px; 
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 90px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  animation: headerSlideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes headerSlideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .header-left {
@@ -57,24 +64,46 @@ header {
   align-items: center;
   width: 250px;
 }
+
 .logo {
-  max-height: 45px;
+  max-height: 60px; 
   width: auto;
-  border-radius: 8px;
+  border-radius: 10px;
   background: white; 
-  padding: 5px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.logo:hover {
+  transform: scale(1.06) rotate(-2deg);
 }
 
 .header-center {
   flex: 1;
   text-align: center;
 }
+
 .header-center h1 {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0;
+  background: linear-gradient(to right, #ffffff 20%, #16687c75 40%, #ffffff 60%, #ffffff 80%);
+  background-size: 200% auto;
+  color: #fff;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textShine 5s linear infinite;
+  text-shadow: 0 2px 10px rgba(255, 255, 255, 0.1);
+}
+
+@keyframes textShine {
+  to { background-position: 200% center; }
 }
 
 .header-right {
@@ -90,20 +119,24 @@ header {
   gap: 10px;
 }
 
-.back-btn {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  padding: 8px 16px;
-  font-size: 13px;
+.back-btn, .controls .modern-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 30px;
+  padding: 10px 22px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-main);
+  color: #ffffff !important; 
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
 }
+
 .back-btn:hover {
   background: var(--glass-bg-hover);
   transform: translateY(-2px);
@@ -213,9 +246,20 @@ header {
 }
 .portal-details { display: flex; gap: 40px; flex-wrap: wrap; }
 .portal-detail { display: flex; flex-direction: column; }
-.detail-label { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-.detail-value { font-size: 1.2rem; font-weight: 700; }
+.detail-label { 
+    color: #475569; 
+    font-size: 12px; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    margin-bottom: 4px; 
+    font-weight: 700; 
+}
 
+.detail-value { 
+    font-size: 1.2rem; 
+    font-weight: 800; 
+    color: #101930; 
+}
 .portal-access { padding: 6px 15px; border-radius: 20px; font-size: 13px; font-weight: 600; border: 1px solid rgba(255,255,255,0.3); }
 
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -306,8 +350,6 @@ header {
 
 .modal-action-btn { width: 100%; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); padding: 12px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: var(--transition); text-align: center; display: block; }
 .modal-action-btn:hover { background: rgba(255,255,255,0.2); }
-#modalDownloadBtn { background: var(--primary); border: none; }
-#modalDownloadBtn:hover { background: var(--primary-hover); }
 
 .badge-confidential {
     background-color: #ef4444;
@@ -791,7 +833,7 @@ header {
 }
 
 .modal-preview {
-    background: #f8fafc !important; /* Gris très clair */
+    background: #f8fafc !important; 
     border-right: 1px solid #e2e8f0;
 }
 
@@ -840,7 +882,6 @@ header {
 
 .current-status { color: #0f172a; }
 
-/* Boutons de la modale */
 .folder-selector .secondary-btn, .portal-selector .secondary-btn, .modal-actions .secondary-btn {
     background: #ffffff !important;
     border: 1px solid #cbd5e1 !important;
@@ -854,10 +895,14 @@ header {
 }
 
 #modalDownloadBtn {
-    background: #5c6ac4 !important; 
+    background: #16677c; 
     color: white !important;
     border: none !important;
+    transition: all 0.3s ease !important;
 }
+
+#modalDownloadBtn:hover { background: #0d4555 !important; transform: translateY(-2px);}
+
 
 .close-btn {
     background: #f1f5f9 !important;
@@ -884,13 +929,101 @@ header {
 
 @keyframes gentlePulse {
     0%, 100% { transform: scale(1); opacity: 0.9; }
-    50% { transform: scale(1.08); opacity: 1; color: #22d3ee; } /* Varie vers un bleu électrique subtil */
+    50% { transform: scale(1.08); opacity: 1; color: #22d3ee; } 
 }
 
-@media (max-width: 900px) {
-  header { flex-wrap: wrap; height: auto; justify-content: center; gap: 15px; }
-  .header-left, .header-center, .header-right { width: 100%; text-align: center; justify-content: center; }
-  .portal-info { flex-direction: column; align-items: flex-start; gap: 20px; }
-  .modal-content { flex-direction: column; overflow-y: auto; }
-  .modal-preview { min-height: 300px; }
+
+@media (max-width: 992px) {
+  header { 
+    position: relative !important; 
+    flex-direction: column !important; 
+    height: auto !important; 
+    padding: 15px !important; 
+    gap: 15px !important;
+  }
+  .header-left, .header-center, .header-right { 
+    width: 100% !important; 
+    justify-content: center !important; 
+    text-align: center !important; 
+  }
+  .controls {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    width: 100%;
+  }
+
+  .portal-hero {
+    height: auto !important;
+    padding: 60px 20px !important;
+    margin-bottom: 20px !important;
+  }
+  .hero-content h1 {
+    font-size: 2rem !important; 
+  }
+  .portal-subtitle {
+    font-size: 0.95rem !important;
+  }
+
+  .portal-container { padding: 20px 15px !important; }
+  .portal-info { 
+    flex-direction: column !important; 
+    align-items: center !important; 
+    text-align: center !important;
+    gap: 20px !important;
+    padding: 20px 15px !important;
+  }
+  .portal-details { justify-content: center !important; gap: 20px !important; }
+  
+  .search-box {
+    flex-direction: column !important;
+    border-radius: 16px !important;
+    padding: 10px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+  .search-input { width: 100% !important; text-align: center !important; padding: 10px !important; }
+  .search-button { width: 100% !important; border-radius: 12px !important; }
+
+  .files-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+
+  .showcase-grid-epic { grid-template-columns: 1fr !important; gap: 25px !important; }
+  .epic-glass-card { height: 220px !important; }
+
+  .modal-content { 
+    flex-direction: column !important; 
+    overflow-y: auto !important; 
+    max-height: 90vh !important;
+  }
+  .modal-preview { 
+    min-height: 250px !important; 
+    padding: 10px !important;
+    border-right: none !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+  .modal-info { padding: 20px 15px !important; }
+
+  .bulk-action-bar {
+    width: 95% !important;
+    flex-direction: column !important;
+    gap: 15px !important;
+    padding: 15px !important;
+    bottom: 15px !important;
+    border-radius: 16px !important;
+  }
+  .bulk-info { 
+    border-right: none !important; 
+    border-bottom: 1px solid #e2e8f0 !important; 
+    padding: 0 0 10px 0 !important; 
+    width: 100% !important; 
+    text-align: center !important; 
+  }
+  .bulk-buttons { 
+    flex-wrap: wrap !important; 
+    justify-content: center !important; 
+    width: 100% !important;
+  }
+  .bulk-btn { width: 100% !important; justify-content: center !important; }
+
 }

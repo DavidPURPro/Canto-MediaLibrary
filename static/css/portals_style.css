@@ -215,3 +215,67 @@ header h1 {
 .profile-about:hover {
   background: rgba(0, 0, 0, 0.05);
 }
+
+
+/* =========================================================
+   CORRECTIF MOBILE : HEADER & GRILLE DES PORTAILS
+========================================================= */
+@media (max-width: 992px) {
+  /* 1. On corrige le header pour qu'il s'empile et ne bloque plus l'écran */
+  .ultra-header {
+    position: relative !important;
+    height: auto !important;
+    padding: 15px 0 !important;
+  }
+
+  .header-container {
+    flex-direction: column !important;
+    gap: 15px !important;
+    padding-bottom: 10px !important;
+  }
+
+  .nav-controls {
+    margin-right: 0 !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  /* 2. On réduit l'espace sous le header car il n'est plus fixe */
+  .main-hub { 
+    padding: 0 15px 40px !important; 
+    margin-top: 30px !important; 
+  }
+
+  /* 3. On force les cartes à se mettre sur une seule colonne */
+  .portals-grid { 
+    grid-template-columns: 1fr !important; 
+    gap: 20px !important; 
+  }
+
+  /* 4. LE SECRET : On force l'affichage (annule l'opacité 0 qui bloque les cartes) */
+  .portal-card-modern {
+    padding: 25px 20px !important; 
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* 5. Ajustements pour que le texte rentre bien sur petit écran */
+  .portal-title { 
+    font-size: 1.6rem !important; 
+  }
+
+  .portal-metrics-grid {
+    gap: 8px !important;
+    padding: 15px 0 !important;
+    margin: 20px 0 15px 0 !important;
+  }
+
+  .metric-item .m-value {
+    font-size: 14px !important;
+  }
+  
+  .metric-item .m-label {
+    font-size: 10px !important;
+  }
+}

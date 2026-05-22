@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
 
 </head>
-<body data-portal-id="{{ portal.id }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
+<body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{ user_role }}" data-portal-id="{{ portal.id }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
   
   <header>
     <div class="header-left">

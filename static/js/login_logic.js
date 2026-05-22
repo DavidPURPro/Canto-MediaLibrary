@@ -3,10 +3,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const particleCount = 30;
     
     for (let i = 0; i < particleCount; i++) {
-        createParticle();
+        createParticle(true);
     }
     
-    function createParticle() {
+    function createParticle(initialLoad = false) {
         const particle = document.createElement('div');
         particle.classList.add('particle');
         
@@ -28,18 +28,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const randomBlue = blueShades[Math.floor(Math.random() * blueShades.length)];
         particle.style.backgroundColor = randomBlue;
         
-        const delay = Math.random() * 15;
-        particle.style.animationDelay = `${delay}s`;
-        
         const duration = 15 + Math.random() * 15;
         particle.style.animationDuration = `${duration}s`;
+        if (initialLoad) {
+            const negativeDelay = -(Math.random() * duration);
+            particle.style.animationDelay = `${negativeDelay}s`;
+        } else {
+            particle.style.animationDelay = '0s';
+        }
         
         particlesContainer.appendChild(particle);
-        
+        const delayValue = parseFloat(particle.style.animationDelay);
+        const timeUntilEnd = (duration + delayValue) * 1000;
+
         setTimeout(() => {
             particle.remove();
-            createParticle();
-        }, (duration + delay) * 1000);
+            createParticle(false);
+        }, timeUntilEnd);
     }
     
     const loginBtn = document.getElementById('loginButton');

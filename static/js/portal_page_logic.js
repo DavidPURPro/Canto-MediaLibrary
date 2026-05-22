@@ -167,31 +167,34 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function setProfileButtonColor() {
-    if (portalEmail && profileBtn) {
-      profileBtn.style.border = '2px solid #ffffff';
-      profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)';
-      profileBtn.style.color = '#ffffff';
-
+  const profileBtn = document.getElementById('profileBtn');
+  if (profileBtn) {
+    const userRole = document.body.getAttribute('data-user-role');
+    const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+    profileBtn.style.border = '2px solid #ffffff';
+    profileBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)'; 
+    profileBtn.style.color = '#ffffff'; 
+    if (userRole === 'admin' || isAdmin) {
+      profileBtn.style.backgroundColor = '#ef4444'; 
+      profileBtn.title = "Administrator";
+    } 
+    else if (userRole === 'uploader') {
+      profileBtn.style.backgroundColor = '#f97316'; 
+      profileBtn.title = "Uploader";
+    }
+    else {
       const initials = profileBtn.textContent.trim();
       let hash = 0;
       for (let i = 0; i < initials.length; i++) {
         hash = initials.charCodeAt(i) + ((hash << 5) - hash);
       }
-      
       const safeHue = (Math.abs(hash) % 290) + 30; 
       const color = `hsl(${safeHue}, 85%, 55%)`;
-      const hoverColor = `hsl(${safeHue}, 85%, 45%)`; 
-      
       profileBtn.style.backgroundColor = color;
-      
-      profileBtn.addEventListener('mouseenter', () => {
-        profileBtn.style.backgroundColor = hoverColor;
-      });
-      profileBtn.addEventListener('mouseleave', () => {
-        profileBtn.style.backgroundColor = color;
-      });
+      profileBtn.title = "Client Portal";
     }
   }
+}
 
   function logoutFromPortal(e) {
     if (e) e.preventDefault(); 

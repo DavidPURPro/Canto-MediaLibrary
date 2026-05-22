@@ -8,14 +8,11 @@
 body {
     margin: 0;
     padding: 0;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.2) 100%), 
-                url('/static/foret.jpg') no-repeat center center fixed;
-    background-size: cover;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.2) 100%);
     min-height: 100vh;
     font-family: 'Montserrat', Arial, sans-serif;
     overflow-x: hidden;
     position: relative;
-    animation: backgroundShift 20s ease-in-out infinite;
 }
 
 @keyframes backgroundShift {
@@ -199,7 +196,8 @@ body {
 .particle {
     position: absolute;
     border-radius: 50%;
-    animation: float 15s infinite linear;
+    animation: float 15s infinite ease-in-out;
+    pointer-events: none;
     opacity: 0.7;
     filter: blur(1px);
     background: rgba(52, 152, 219, 0.6); 
@@ -237,6 +235,17 @@ body {
     opacity: 0.6;
 }
 
+.video-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover; 
+    z-index: -1;
+    opacity: 0.8; 
+}
+
 @media (max-width: 576px) {
     .login-legal-footer {
         bottom: 15px;
@@ -246,18 +255,18 @@ body {
 
 @keyframes float {
     0% {
-        transform: translateY(110vh) rotate(0deg);
+        transform: translateY(110vh) translateX(0);
         opacity: 0;
     }
-    10% {
-        opacity: 0.7;
+    20% {
+        opacity: 0.6; 
     }
-    90% {
-        opacity: 0.7;
+    80% {
+        opacity: 0.6;
     }
     100% {
-        transform: translateY(-20vh) rotate(360deg);
-        opacity: 0;
+        transform: translateY(-20vh) translateX(20px);
+        opacity: 0; 
     }
 }
 

@@ -36,6 +36,7 @@ let currentGlobalFilter = 'all';
 let currentSectionFilter = 'all';
 let currentCategoryFilter = 'all';
 let myFavorites = [];
+let globalFoldersList = [];
 
 
 // mappage des types de fichiers
@@ -90,6 +91,7 @@ function loadFolders() {
   fetch('/get_folders')
     .then(response => response.json())
     .then(data => {
+      globalFoldersList = data.folders || [];
       renderFolderStructure(data.folders);
     })
     .catch(error => console.error('Error loading folders:', error));
@@ -142,7 +144,7 @@ function renderFolder(folder, parentElement) {
             <i class="fas fa-times"></i>
         </button>
   ` : ''; 
-  const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-cliquez pour renommer" style="cursor: text;"` : '';
+  const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-click to rename" style="cursor: text;"` : '';
   
   folderName.innerHTML = `
     <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
@@ -159,6 +161,7 @@ function renderFolder(folder, parentElement) {
 
   const subfolders = document.createElement('div');
   subfolders.className = 'subfolders';
+  subfolders.style.display = 'none';
   folderElement.appendChild(folderName);
   folderElement.appendChild(subfolders);
   
@@ -188,9 +191,18 @@ function renderFolder(folder, parentElement) {
     folderElement.classList.toggle('active');
     if (folderElement.classList.contains('active')) {
         folderName.classList.add('is-selected');
+        subfolders.style.display = 'block';
         currentFolderFilter = folder.id;
-    } else {
+    } 
+    else {
         currentFolderFilter = null;
+        subfolders.style.display = 'none';
+
+        folderElement.querySelectorAll('.folder.active').forEach(child => {
+            child.classList.remove('active');
+            const childSub = child.querySelector(':scope > .subfolders');
+            if (childSub) childSub.style.display = 'none';
+        });
     }
     const siblings = folderElement.parentNode.querySelectorAll(':scope > .folder');
     siblings.forEach(sibling => {
@@ -387,13 +399,17 @@ function filterFilesByFolder(folderId) {
 }
 
 function updateFileFolder(filename, folderId) {
-  const formData = new FormData();
-  formData.append('filename', filename);
-  if (folderId) formData.append('folder_id', folderId);
+  // On utilise URLSearchParams au lieu de FormData pour que le serveur Node.js puisse le lire nativement
+  const params = new URLSearchParams();
+  params.append('filename', filename);
+  if (folderId) params.append('folder_id', folderId);
   
   fetch('/update_file_folder', {
     method: 'POST',
-    body: formData
+    headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params
   })
   .then(response => response.json())
   .then(data => {
@@ -758,6 +774,7 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
   
   const subfoldersContainer = document.createElement('div');
   subfoldersContainer.className = 'subfolders-container';
+  subfoldersContainer.style.display = 'none';
   folderElement.appendChild(folderHeader);
   folderElement.appendChild(subfoldersContainer);
   if (folder.subfolders) {
@@ -775,6 +792,17 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
       return;
     }
     folderElement.classList.toggle('active');
+    if (folderElement.classList.contains('active')) {
+        subfoldersContainer.style.display = 'block';
+    } 
+    else {
+        subfoldersContainer.style.display = 'none';
+        folderElement.querySelectorAll('.folder-node.active').forEach(child => {
+            child.classList.remove('active');
+            const childSub = child.querySelector(':scope > .subfolders-container');
+            if (childSub) childSub.style.display = 'none';
+        });
+    }
   });
   
   parentElement.appendChild(folderElement);
@@ -849,7 +877,6 @@ function executeGlobalSearch(query, page = 1) {
             <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
             <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
         </div>`;
-    
         let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}&section=${currentSectionFilter}&category=${currentCategoryFilter}`;
         if (currentFolderFilter) {
           url += `&folder_id=${currentFolderFilter}`;
@@ -858,6 +885,34 @@ function executeGlobalSearch(query, page = 1) {
         .then(response => response.json())
         .then(data => {
             gallery.innerHTML = ''; 
+            if ((!query || query.trim() === '') && currentFolderFilter) {
+                let subfoldersToShow = globalFoldersList.filter(f => f.parent_id == currentFolderFilter);
+                subfoldersToShow.sort((a, b) => {
+                    const dateA = a.creation_date ? new Date(a.creation_date) : new Date(0);
+                    const dateB = b.creation_date ? new Date(b.creation_date) : new Date(0);
+                    return dateB - dateA; 
+                });
+                subfoldersToShow.forEach(subfolder => {
+                    let dateText = 'No date';
+                    if (subfolder.creation_date) {
+                        const d = new Date(subfolder.creation_date);
+                        dateText = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}`;
+                    }
+                    const folderCardHtml = `
+                        <div class="gallery-item folder-card" data-folder-id="${subfolder.id}" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%;">
+                            <div style="width: 100%; text-align: left; padding: 10px 15px; font-size: 11px; color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">
+                                <i class="fas fa-calendar-alt" style="margin-right: 5px;"></i> ${dateText}
+                            </div>
+                            <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; padding: 20px 0;">
+                                <i class="far fa-folder" style="font-size: 65px; color: #1e293b;"></i>
+                            </div>
+                            <div class="image-title" style="background: #94a3b8; color: white; width: 100%; text-align: center; padding: 12px 0; font-weight: 600; font-size: 14px; border-radius: 0 0 11px 11px;">
+                                ${subfolder.name}
+                            </div>
+                        </div>`;
+                    gallery.insertAdjacentHTML('beforeend', folderCardHtml);
+                });
+            }
             const files = data.files;
             const total = data.total;
             const totalPages = data.total_pages;
@@ -1023,8 +1078,11 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     
     e.stopPropagation();
     
-    if (!isAdmin) {
-      alert("Only administrators can change exclusive status.");
+    const userRole = document.body.getAttribute('data-user-role');
+    const isAuthorized = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin' || userRole === 'uploader';
+    
+    if (!isAuthorized) {
+      alert("You do not have permission to change the exclusive status.");
       return;
     }
 
@@ -1263,8 +1321,11 @@ function setupExclusiveButtons() {
     
     e.stopPropagation();
     
-    if (!isAdmin) {
-      alert("Only administrators can change exclusive status.");
+    const userRole = document.body.getAttribute('data-user-role');
+    const isAuthorized = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin' || userRole === 'uploader';
+    
+    if (!isAuthorized) {
+      alert("You do not have permission to change the exclusive status.");
       return;
     }
 
@@ -1315,6 +1376,16 @@ function setupGalleryItemClicks() {
         ){
         return;
       }
+
+      if (item.classList.contains('folder-card')) {
+          const folderId = item.getAttribute('data-folder-id');
+          const sidebarFolderBtn = document.querySelector(`.folder[data-folder-id="${folderId}"] > .folder-name`);
+          if (sidebarFolderBtn) {
+              sidebarFolderBtn.click();
+          }
+          return; 
+      }
+
       showFileModal(item);
     });
   });

@@ -568,11 +568,12 @@ async function updatePortalStats(portal_id) {
 // routes API (folders et recherche)
 app.get('/get_folders', loginRequiredJson, async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
+        const result = await pool.query("SELECT id, name, parent_id, creation_date FROM folders ORDER BY name;");
         const folders = result.rows.map(f => ({
             id: f.id,
             name: f.name,
-            parent_id: f.parent_id
+            parent_id: f.parent_id,
+            creation_date: f.creation_date
         }));
         res.json({ folders });
     } catch (error) {
@@ -783,6 +784,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
         const categories = [].concat(req.body.categories || req.body.category || []);
         const uploaded_urls = [];
         const currentDate = new Date().toISOString().split('T')[0]; 
+        const is_exclusives = [].concat(req.body.is_exclusives || []);
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -790,7 +792,6 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
             const blob_url = file.url;
             const size_bytes = file.size;
             const originalName = file.originalname;
-            
             const ext = require('path').extname(originalName).toLowerCase();
             const description = descriptions[i] || "";
             
@@ -808,13 +809,15 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
                 if (parts.length === 3) date_event = `${parts[2]}-${parts[1]}-${parts[0]}`;
             }
 
+            const is_exclusive = (is_exclusives[i] === 'true');
+
             // enregistre dans la table globale (documents)
             await pool.query(`
                 INSERT INTO documents (
                     nom_fichier, lien_telechargement, description, tags, 
-                    date_ajout, date_event, folder_id, section, category
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
-            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id, section, category]);
+                    date_ajout, date_event, folder_id, section, category, is_exclusive
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id, section, category, is_exclusive]);
 
             // si associé à un portail, enregistre dans portal_files
             if (portal_id) {
@@ -1008,7 +1011,7 @@ app.post('/update_file_folder', async (req, res) => {
         const filename = req.body?.filename || req.query?.filename;
         const folder_id = req.body?.folder_id || req.query?.folder_id;
         if (!filename || !folder_id) {
-            return res.status(400).json({ status: 'error', message: 'Paramètres manquants' });
+            return res.status(400).json({ status: 'error', message: 'Parameters missing' });
         }
         const docCheck = await pool.query("SELECT * FROM documents WHERE nom_fichier = $1", [filename]);
         if (docCheck.rows.length > 0) {
@@ -1027,14 +1030,14 @@ app.post('/update_file_folder', async (req, res) => {
                 await pool.query("DELETE FROM portal_files WHERE filename = $1", [filename]);
             } 
             else {
-                return res.status(404).json({ status: 'error', message: 'Fichier introuvable dans la base.' });
+                return res.status(404).json({ status: 'error', message: 'File not found in the database.' });
             }
         }
-        res.json({ status: 'success', message: 'Fichier assigné avec succès.' });
+        res.json({ status: 'success', message: 'File assigned successfully.' });
         
     } catch (error) {
         console.error("Erreur critique /update_file_folder :", error);
-        res.status(500).json({ status: 'error', message: 'Erreur interne du serveur' });
+        res.status(500).json({ status: 'error', message: 'Internal Server Error' });
     }
 });
 
@@ -1401,29 +1404,30 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
 });
 
 // maj le statut exclusif
-app.post('/update_exclusive', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/update_exclusive', loginRequiredJson, upload.none(), async (req, res) => {
+    const role = req.session.user_role;
+    if (role !== 'admin' && role !== 'uploader') {
+        return res.status(403).json({ status: "error", message: "Access denied. Reserved for administrators and uploaders." });
+    }
     try {
         const filename = req.body.filename;
         const is_exclusive = req.body.is_exclusive === 'true';
 
         if (!filename) {
-            return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
+            return res.status(400).json({ status: "error", message: "Required file name" });
         }
-
         const result = await pool.query(
             "UPDATE documents SET is_exclusive = $1 WHERE nom_fichier = $2 RETURNING is_exclusive;",
             [is_exclusive, filename]
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ status: "error", message: "Fichier non trouvé" });
+            return res.status(404).json({ status: "error", message: "File not found" });
         }
-
         res.json({
             status: "success",
             is_exclusive: Boolean(result.rows[0].is_exclusive)
         });
-
     } catch (error) {
         console.error("Erreur update_exclusive:", error);
         res.status(500).json({ status: "error", message: error.message });

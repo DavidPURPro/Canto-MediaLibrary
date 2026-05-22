@@ -440,7 +440,7 @@
             const urlObj = new URL(url, window.location.origin);
             
             let requestedFolderId = urlObj.searchParams.get('folder_id') || document.body.getAttribute('data-folder-id');
-            let sortParams = urlObj.searchParams.get('sort') || 'date_desc'; // Par défaut : récent en premier
+            let sortParams = urlObj.searchParams.get('sort') || 'date_desc'; 
             let sectionParams = urlObj.searchParams.get('section');
             let categoryParams = urlObj.searchParams.get('category');
             let searchParams = urlObj.searchParams.get('filename');
@@ -530,6 +530,7 @@
                 while (currentElement && currentElement.id !== 'foldersContainer') {
                     if (currentElement.classList.contains('folder') || currentElement.classList.contains('subfolders')) {
                         currentElement.classList.add('active');
+                        if (currentElement.classList.contains('subfolders')) currentElement.style.display = 'block';
                     }
                     currentElement = currentElement.parentElement;
                 }

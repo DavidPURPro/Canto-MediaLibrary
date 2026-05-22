@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tags = Array.from(tagsContainer.querySelectorAll(".tag"))
                 .map(tag => tag.textContent.replace("×", "").trim());
             const folderId = document.getElementById('fileFolder').value;
+            const isExclusive = document.getElementById('fileExclusive').checked;
             
             fileDetails[file.name] = {
                 description,
@@ -104,10 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 portalId, 
                 folderId,
                 section,
-                category
+                category,
+                isExclusive
             };
 
-            updateFileListItem(currentFileIndex, description, tags, eventDate, portalId, folderId);
+            updateFileListItem(currentFileIndex, description, tags, eventDate, portalId, folderId, isExclusive);
         }
         closeModal();
     });
@@ -280,6 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (fileSection && fileDetails[file.name].section) fileSection.value = fileDetails[file.name].section;
                 if (fileCategory && fileDetails[file.name].category) fileCategory.value = fileDetails[file.name].category;
+                document.getElementById('fileExclusive').checked = fileDetails[file.name].isExclusive || false;
                 
                 (fileDetails[file.name].tags || []).forEach(tag => {
                     const tagEl = document.createElement("span");
@@ -294,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateFileListItem(index, description, tags, eventDate, portalId, folderId) {
+    function updateFileListItem(index, description, tags, eventDate, portalId, folderId, isExclusive) {
         const listItems = fileList.querySelectorAll("li");
         if (index >= 0 && index < listItems.length) {
             const fileNameContainer = listItems[index].querySelector(".file-name-container");
@@ -328,6 +331,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 folderIcon.innerHTML = '<i class="far fa-folder-open text-muted"></i>';
                 folderIcon.title = "Assigned to a folder";
                 fileNameContainer.insertBefore(folderIcon, fileNameContainer.firstChild);
+            }
+            if (isExclusive) {
+                const exclusiveIcon = document.createElement("span");
+                exclusiveIcon.className = "status-icon";
+                exclusiveIcon.innerHTML = '<i class="fas fa-star" style="color: #eab308;"></i>';
+                exclusiveIcon.title = "Exclusive file";
+                fileNameContainer.insertBefore(exclusiveIcon, fileNameContainer.firstChild);
             }
         }
     }
@@ -383,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fileList.appendChild(li);
 
             if (fileDetails[file.name]) {
-                updateFileListItem(index, fileDetails[file.name].description, fileDetails[file.name].tags, fileDetails[file.name].eventDate, fileDetails[file.name].portalId);
+                updateFileListItem(index, fileDetails[file.name].description, fileDetails[file.name].tags, fileDetails[file.name].eventDate, fileDetails[file.name].portalId, fileDetails[file.name].isExclusive);
             }
         });
 
@@ -419,9 +429,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const gCategory = document.getElementById('globalCategory')?.value || "";
         const gPortal = document.getElementById('globalPortal')?.value || "";
         const gFolder = document.getElementById('globalFolder')?.value || "";
+        const gExclusive = document.getElementById('globalExclusive')?.checked || false;
         const gTagsRaw = document.getElementById('globalTags')?.value || "";
         const gTagsArray = gTagsRaw.split(',').map(t => t.trim()).filter(t => t.length > 0);
-
         const formData = new FormData();
         const url = `/upload`;
         filesToSend.forEach((file) => {
@@ -432,6 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalCategory = details.category || gCategory;
             const finalPortal = (details.portalId && details.portalId !== "none") ? details.portalId : gPortal;
             const finalFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
+            const finalExclusive = details.isExclusive !== undefined ? details.isExclusive : gExclusive;
             let finalTags = [];
             if (details.tags && details.tags.length > 0) {
                 finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
@@ -452,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append("sections", finalSection);
             formData.append("categories", finalCategory);
             formData.append("folder_ids", finalFolder);
+            formData.append("is_exclusives", finalExclusive);
         });
 
         try {
