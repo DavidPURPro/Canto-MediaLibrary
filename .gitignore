@@ -52,3 +52,6 @@ htmlcov/
 
 ### Node.js ###
 node_modules/
+
+icons/
+static/*.mp4
