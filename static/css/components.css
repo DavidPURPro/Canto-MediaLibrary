@@ -270,7 +270,7 @@
 .folder-header:hover .select-folder-btn, .portal-header:hover .select-portal-btn { opacity: 1; transform: scale(1.1); }
 
 
-/* Boutons bas de modale (Download & Copy Link) */
+/* boutons bas de modale (Download & Copy Link) */
 .modal-actions { margin-top: auto; display: flex; gap: 12px; }
 
 .btn-download-modal, #modalDownloadBtn { 

@@ -87,12 +87,20 @@ function formatDateForDisplay(dateString) {
 }
 
 // dossiers
-function loadFolders() {
+function loadFolders(folderIdToRestore = null) {
   fetch('/get_folders')
     .then(response => response.json())
     .then(data => {
       globalFoldersList = data.folders || [];
       renderFolderStructure(data.folders);
+      const targetId = folderIdToRestore || currentFolderFilter;
+      if (targetId) {
+          setTimeout(() => {
+              if (typeof window.triggerFolderClick === 'function') {
+                  window.triggerFolderClick(targetId);
+              }
+          }, 50);
+      }
     })
     .catch(error => console.error('Error loading folders:', error));
 }
@@ -147,15 +155,22 @@ function renderFolder(folder, parentElement) {
   const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-click to rename" style="cursor: text;"` : '';
   
   folderName.innerHTML = `
-    <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
+    <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-grow: 1;">
         <span class="folder-icon">${iconHtml}</span>
         <span class="folder-title" style="font-weight: 500; color: #334155; flex-grow: 1;" ${renameAction}>${folder.name}</span>
     </div>
-    <div style="display: flex; gap: 5px; align-items: center;">
-        <button class="download-folder-btn" title="Download folder as ZIP" style="background: none; border: none; color: #10b981; cursor: pointer; padding: 2px 4px;">
-            <i class="fas fa-file-archive"></i>
+    
+    <div class="folder-actions-wrapper">
+        <button class="action-dropdown-btn" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:2px 8px;">
+            <i class="fas fa-ellipsis-v"></i>
         </button>
-        ${adminButtons}
+        
+        <div class="folder-actions">
+            <button class="download-folder-btn" title="Download folder as ZIP" style="background: none; border: none; color: #10b981; cursor: pointer; padding: 4px;">
+                <i class="fas fa-file-archive"></i>
+            </button>
+            ${adminButtons}
+        </div>
     </div>
   `;
 
@@ -208,6 +223,7 @@ function renderFolder(folder, parentElement) {
     siblings.forEach(sibling => {
         if (sibling !== folderElement) sibling.classList.remove('active');
     });
+    updateBreadcrumbs(currentFolderFilter);
     gallery.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
             <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
@@ -251,7 +267,6 @@ function createFolder(name, parentId = null) {
   const formData = new FormData();
   formData.append('name', name);
   if (parentId) formData.append('parent_id', parentId);
-  
   fetch('/create_folder', {
     method: 'POST',
     body: formData
@@ -259,8 +274,9 @@ function createFolder(name, parentId = null) {
   .then(response => response.json())
   .then(data => {
     if (data.status === 'success') {
-      loadFolders();
-    } else {
+      loadFolders(parentId);
+    } 
+    else {
       alert('Error creating folder: ' + data.message);
     }
   })
@@ -280,7 +296,8 @@ function deleteFolder(folderId) {
     if (data.status === 'success') {
       loadFolders();
       filterAndDisplay();
-    } else {
+    } 
+    else {
       alert('Error deleting folder: ' + data.message);
     }
   })
@@ -2330,6 +2347,85 @@ document.addEventListener('dblclick', function(e) {
         }
     });
 });
-
 });
+
+// fil d'ariane 
+function updateBreadcrumbs(folderId) {
+    const breadcrumbContainer = document.getElementById('breadcrumbContainer');
+    if (!breadcrumbContainer) return;
+    if (!folderId) {
+        breadcrumbContainer.style.display = 'none';
+        return;
+    }
+    let path = [];
+    let currentId = folderId;
+    while (currentId) {
+        const folder = globalFoldersList.find(f => f.id == currentId);
+        if (folder) {
+            path.unshift(folder); 
+            currentId = folder.parent_id;
+        } 
+        else {
+            break;
+        }
+    }
+
+    if (path.length > 0) {
+        breadcrumbContainer.style.display = 'flex';
+        let html = `<div class="breadcrumb-item" onclick="resetFolderSelection()"><i class="fas fa-layer-group"></i> Library</div>`;
+        
+        path.forEach((f, index) => {
+            html += `<span class="breadcrumb-separator">/</span>`;
+            if (index === path.length - 1) {
+                html += `<span class="breadcrumb-current"><i class="far fa-folder-open"></i> ${f.name}</span>`;
+            } 
+            else {
+                html += `<div class="breadcrumb-item" onclick="triggerFolderClick(${f.id})"><i class="far fa-folder"></i> ${f.name}</div>`;
+            }
+        });
+        
+        breadcrumbContainer.innerHTML = html;
+    } 
+    else {
+        breadcrumbContainer.style.display = 'none';
+    }
+}
+
+window.triggerFolderClick = function(folderId) {
+    const folderElement = document.querySelector(`.folder[data-folder-id="${folderId}"]`);
+    if (!folderElement) return;
+    document.querySelectorAll('.folder').forEach(f => f.classList.remove('active'));
+    document.querySelectorAll('.folder-name').forEach(fn => fn.classList.remove('is-selected'));
+    document.querySelectorAll('.subfolders').forEach(sub => sub.style.display = 'none');
+    let current = folderElement;
+    while (current && current.classList.contains('folder')) {
+        current.classList.add('active');
+        const sub = current.querySelector(':scope > .subfolders');
+        if (sub) sub.style.display = 'block';
+        current = current.parentElement.closest('.folder');
+    }
+    const folderName = folderElement.querySelector(':scope > .folder-name');
+    if (folderName) folderName.classList.add('is-selected');
+    currentFolderFilter = folderId;
+    updateBreadcrumbs(currentFolderFilter);
+    const gallery = document.getElementById("gallery");
+    if (gallery) {
+        gallery.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
+                <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
+                <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
+            </div>`;
+    }
+    const searchInput = document.getElementById('searchInput');
+    executeGlobalSearch(searchInput ? searchInput.value.trim() : '', 1);
+};
+
+window.resetFolderSelection = function() {
+    document.querySelectorAll('.folder').forEach(f => f.classList.remove('active'));
+    document.querySelectorAll('.folder-name').forEach(fn => fn.classList.remove('is-selected'));
+    document.querySelectorAll('.subfolders').forEach(sub => sub.style.display = 'none');
+    currentFolderFilter = null;
+    updateBreadcrumbs(null);
+    executeGlobalSearch(document.getElementById('searchInput').value.trim(), 1);
+};
 
