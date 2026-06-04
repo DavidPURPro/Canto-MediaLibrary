@@ -121,3 +121,176 @@ textarea { min-height: 100px; resize: vertical; }
 
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 .mt-3 { margin-top: 15px; }
+
+/* ── Folder Tree Picker ───────────────────────────────────────────── */
+.folder-picker-wrapper {
+  position: relative;
+}
+
+.folder-picker-trigger {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: white;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: var(--transition);
+  box-sizing: border-box;
+  text-align: left;
+}
+.folder-picker-trigger:hover,
+.folder-picker-trigger:focus {
+  border-color: var(--p-teal);
+  box-shadow: 0 0 0 3px rgba(22, 103, 124, 0.1);
+  outline: none;
+}
+.folder-picker-trigger .trigger-label {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+.folder-picker-trigger .trigger-label.selected {
+  color: var(--text-main);
+  font-weight: 600;
+}
+.folder-picker-trigger .trigger-chevron {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.folder-picker-wrapper.open .trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.folder-picker-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  z-index: 500;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.folder-picker-wrapper.open .folder-picker-dropdown {
+  display: block;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* "No folder" option */
+.fp-no-folder {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-light);
+  transition: background 0.15s;
+}
+.fp-no-folder:hover { background: #f1f5f9; }
+
+/* Tree nodes */
+.fp-tree { list-style: none; padding: 0; margin: 0; }
+
+.fp-node { position: relative; }
+
+/* Subfolder container — indented with dashed left border */
+.fp-node .fp-children {
+  margin-left: 14px;
+  border-left: 2px dashed #cbd5e1;
+  padding-left: 0;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+/* "L" connector for each child node */
+.fp-node .fp-children > .fp-node {
+  position: relative;
+  padding-left: 18px;
+  margin-top: 1px;
+}
+.fp-node .fp-children > .fp-node::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 0;
+  width: 18px;
+  height: 2px;
+  border-top: 2px dashed #cbd5e1;
+}
+
+.fp-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.87rem;
+  font-weight: 500;
+  color: var(--text-main);
+  transition: background 0.15s;
+  user-select: none;
+  height: auto;
+}
+.fp-row:hover { background: #f1f5f9; }
+.fp-row.fp-selected {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+}
+
+.fp-toggle {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  border-radius: 3px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 2px;
+}
+.fp-toggle:hover { background: #e2e8f0; }
+.fp-toggle-spacer {
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.fp-icon { color: #94a3b8; font-size: 0.85rem; flex-shrink: 0; margin-top: 3px; }
+.fp-row.fp-selected .fp-icon { color: #0369a1; }
+
+.fp-name {
+  flex: 1; 
+  white-space: normal; 
+  word-break: break-word; 
+  line-height: 1.4
+}

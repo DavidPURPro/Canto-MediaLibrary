@@ -1013,8 +1013,19 @@ function executeGlobalSearch(query, page = 1) {
             if (typeof setupCopyLinkButtons === 'function') setupCopyLinkButtons();
         })
         .catch(error => {
-            console.error('Erreur:', error);
-            gallery.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: red;">Error processing search.</div>`;
+            console.error('Error', error);
+            gallery.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 20px;">
+                    <i class="fas fa-hourglass-end fa-3x" style="color: #ef4444; margin-bottom: 20px;"></i>
+                    <h3 style="font-family: 'Plus Jakarta Sans'; color: #1e293b; margin-bottom: 10px; font-weight: 700;">Session expirée</h3>
+                    <p style="color: #64748b; margin-bottom: 25px; font-size: 14px;">Votre session est inactive depuis un moment. La page va se rafraîchir automatiquement pour vous reconnecter.</p>
+                    <button onclick="window.location.reload()" class="modern-btn primary-btn" style="margin: 0 auto; display: inline-flex;">
+                        <i class="fas fa-sync-alt fa-spin" style="margin-right: 8px;"></i> Reconnexion en cours...
+                    </button>
+                </div>`;
+            setTimeout(() => {
+                window.location.reload();
+            }, 2500);
         });
 }
 

@@ -893,21 +893,6 @@ body.list-view .item-footer {
   line-height: 1.5;
 }
 
-.modal-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 20px;
-}
-
-.modal-tag {
-  background: linear-gradient(to bottom, #e1f5fe, #b3e5fc);
-  color: #0288d1;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  box-shadow: var(--shadow-sm);
-}
 
 .modal-actions {
   margin-top: auto;
@@ -1073,7 +1058,32 @@ body.list-view .gallery-item .item-footer {
   display: block;
 }
 
-/* ========== MODALES DE CONFIRMATION ========== */
+.subfolders,
+.subfolders-container {
+  padding-left: 24px !important;
+  margin-left: 12px !important;
+  border-left: 2px dashed #cbd5e1 !important;
+  margin-top: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+.folder-header {
+  display: flex !important;
+  align-items: center !important;
+  padding: 6px 10px !important;
+  border-radius: 6px !important;
+  transition: background 0.2s ease !important;
+}
+
+.folder-icon {
+  margin-right: 10px !important;
+  color: #64748b !important;
+}
+
+.folder-header:hover {
+  background-color: #f1f5f9 !important;
+}
+
 .confirm-modal {
   position: fixed;
   top: 0;

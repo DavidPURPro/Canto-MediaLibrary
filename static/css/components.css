@@ -209,15 +209,51 @@
   line-height: 1.6; font-size: 14px;
 }
 
-/* Les Tags dans la modale */
 .modal-tags {
-  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-bottom: 24px !important;
+  max-height: 30px !important;
+  overflow: hidden !important;
+  position: relative !important;
+  transition: max-height 0.4s ease-in-out !important;
 }
+
+.modal-tags:not(:hover)::after {
+  content: "...";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+  line-height: 25px;
+  padding: 0 5px 0 40px;
+  background: linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,1) 45%);
+  color: #0369a1;
+  font-weight: 900;
+  font-size: 20px;
+  pointer-events: none;
+}
+
+.modal-tags:hover {
+  max-height: 400px !important;
+}
+
 .modal-tag {
-  background: #e0f2fe; color: #0369a1; 
-  padding: 6px 12px; border-radius: 12px;
-  font-size: 12px; font-weight: 700;
-  border: 1px solid #bae6fd;
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  padding: 6px 12px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border: 1px solid #bae6fd !important;
+  width: fit-content !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  display: inline-block !important;
+  line-height: normal !important;
+  height: 28px !important;
+  box-sizing: border-box !important;
 }
 
 /* Sélecteurs de Dossiers & Portails */
@@ -493,4 +529,38 @@ a.modern-btn.danger-btn { color: #ef4444 !important; }
 #modalFavoriteBtn.is-favorited {
     border-color: #fee2e2;
     background-color: #fff1f2;
+}
+
+#folderTree .subfolders-container {
+  padding-left: 0 !important;
+  margin-left: 14px !important;
+  border-left: 2px dashed #cbd5e1 !important;
+  margin-top: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+#folderTree .subfolders-container .folder-node {
+  position: relative !important;
+  padding-left: 20px !important;
+  margin-top: 2px !important;
+}
+
+#folderTree .subfolders-container .folder-node::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 17px !important;
+  left: 0 !important;
+  width: 20px !important;
+  height: 2px !important;
+  border-top: 2px dashed #cbd5e1 !important;
+}
+
+#folderTree .folder-header {
+  position: relative !important;
+  z-index: 2 !important;
+  background-color: transparent !important;
+}
+
+#folderTree .folder-header:hover {
+  background-color: #f1f5f9 !important;
 }

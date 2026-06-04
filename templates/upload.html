@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload images - Media Library</title>
-  <link rel="icon" href="{{ url_for('static', filename='pur_logo_upload.png') }}" type="image/x-icon">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/x-icon">
   
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -60,9 +60,17 @@
           </div>
           <div class="form-group half" style="flex: 1;">
             <label style="font-weight: 600; font-size: 13px;"><i class="far fa-folder-open"></i> Global Folder</label>
-            <select id="globalFolder" class="modern-input" style="width: 100%; padding: 8px;">
-              <option value="">(No folder)</option>
-            </select>
+            <div class="folder-picker-wrapper" id="globalFolderPicker">
+              <button type="button" class="folder-picker-trigger">
+                <span class="trigger-label">(No folder)</span>
+                <i class="fas fa-chevron-down trigger-chevron"></i>
+              </button>
+              <div class="folder-picker-dropdown">
+                <div class="fp-no-folder" data-value=""><i class="far fa-folder"></i> (No folder)</div>
+                <ul class="fp-tree" id="globalFolderTree"></ul>
+              </div>
+              <input type="hidden" id="globalFolder" value="">
+            </div>
           </div>
         </div>
 
@@ -169,9 +177,17 @@
 
               <div class="form-group half" style="flex: 1;">
                 <label for="fileFolder" style="font-weight: 600; display: block; margin-bottom: 5px;"><i class="far fa-folder-open"></i> Assign to Folder</label>
-                <select id="fileFolder" class="modern-input" style="width: 100%; box-sizing: border-box;">
-                  <option value="none">(No folder)</option>
-                  </select>
+                <div class="folder-picker-wrapper" id="fileFolderPicker">
+                  <button type="button" class="folder-picker-trigger">
+                    <span class="trigger-label">(No folder)</span>
+                    <i class="fas fa-chevron-down trigger-chevron"></i>
+                  </button>
+                  <div class="folder-picker-dropdown">
+                    <div class="fp-no-folder" data-value="none"><i class="far fa-folder"></i> (No folder)</div>
+                    <ul class="fp-tree" id="fileFolderTree"></ul>
+                  </div>
+                  <input type="hidden" id="fileFolder" value="none">
+                </div>
               </div>
             </div>
 

@@ -43,24 +43,157 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('/get_folders')
         .then(response => response.json())
         .then(data => {
-            const folderSelect = document.getElementById('fileFolder');
-            const globalFolderSelect = document.getElementById('globalFolder');
             if (data.folders) {
-                data.folders.forEach(folder => {
-                    const option = document.createElement('option');
-                    option.value = folder.id;
-                    option.textContent = folder.name;
-                    folderSelect.appendChild(option);
-                    if (globalFolderSelect) {
-                        const globalOption = document.createElement('option');
-                        globalOption.value = folder.id;
-                        globalOption.textContent = folder.name;
-                        globalFolderSelect.appendChild(globalOption);
-                    }
-                });
+                buildFolderPicker(data.folders, 'globalFolderPicker', 'globalFolder', 'globalFolderTree');
+                buildFolderPicker(data.folders, 'fileFolderPicker', 'fileFolder', 'fileFolderTree');
             }
         })
         .catch(error => console.error('Error loading folders:', error));
+
+    // ── Folder Tree Picker ──────────────────────────────────────────────
+    function buildFolderPicker(folders, wrapperId, hiddenInputId, treeId) {
+        const wrapper = document.getElementById(wrapperId);
+        const hiddenInput = document.getElementById(hiddenInputId);
+        const treeRoot = document.getElementById(treeId);
+        if (!wrapper || !hiddenInput || !treeRoot) return;
+
+        // Build lookup maps
+        const byId = {};
+        folders.forEach(f => { byId[f.id] = { ...f, children: [] }; });
+        const roots = [];
+        folders.forEach(f => {
+            if (f.parent_id && byId[f.parent_id]) {
+                byId[f.parent_id].children.push(byId[f.id]);
+            } else {
+                roots.push(byId[f.id]);
+            }
+        });
+
+        function renderNodes(nodes, container) {
+            nodes.forEach(node => {
+                const li = document.createElement('li');
+                li.className = 'fp-node';
+
+                const row = document.createElement('div');
+                row.className = 'fp-row';
+                row.dataset.id = node.id;
+                row.dataset.name = node.name;
+                if (node.children.length > 0) {
+                    const toggle = document.createElement('span');
+                    toggle.className = 'fp-toggle';
+                    toggle.innerHTML = '<i class="fas fa-plus"></i>'; 
+                    toggle.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const childrenEl = li.querySelector(':scope > .fp-children');
+                        if (childrenEl) {
+                            const isClosed = childrenEl.style.display === 'none';
+                            childrenEl.style.display = isClosed ? '' : 'none';
+                            toggle.innerHTML = isClosed ? '<i class="fas fa-minus"></i>' : '<i class="fas fa-plus"></i>';
+                        }
+                    });
+                    row.appendChild(toggle);
+                } 
+                else {
+                    const spacer = document.createElement('span');
+                    spacer.className = 'fp-toggle-spacer';
+                    row.appendChild(spacer);
+                }
+                const icon = document.createElement('i');
+                icon.className = 'far fa-folder fp-icon';
+                row.appendChild(icon);
+                const name = document.createElement('span');
+                name.className = 'fp-name';
+                name.textContent = node.name;
+                row.appendChild(name);
+                row.addEventListener('click', () => selectFolder(wrapper, hiddenInput, node.id, node.name));
+                li.appendChild(row);
+                if (node.children.length > 0) {
+                    const childrenUl = document.createElement('ul');
+                    childrenUl.className = 'fp-tree fp-children';
+                    childrenUl.style.display = 'none'; 
+                    renderNodes(node.children, childrenUl);
+                    li.appendChild(childrenUl);
+                }
+
+                container.appendChild(li);
+            });
+        }
+
+        renderNodes(roots, treeRoot);
+
+        // "No folder" click
+        wrapper.querySelector('.fp-no-folder').addEventListener('click', () => {
+            selectFolder(wrapper, hiddenInput, hiddenInput.id === 'fileFolder' ? 'none' : '', '(No folder)', true);
+        });
+
+        // Toggle dropdown
+        wrapper.querySelector('.folder-picker-trigger').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = wrapper.classList.toggle('open');
+            if (isOpen) {
+                // Close all other pickers
+                document.querySelectorAll('.folder-picker-wrapper.open').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+            }
+        });
+    }
+
+    function selectFolder(wrapper, hiddenInput, value, label, isNone = false) {
+        hiddenInput.value = value;
+        const trigger = wrapper.querySelector('.trigger-label');
+        trigger.textContent = label;
+        trigger.classList.toggle('selected', !isNone);
+
+        // Update selected highlight
+        wrapper.querySelectorAll('.fp-row').forEach(r => r.classList.remove('fp-selected'));
+        if (!isNone) {
+            const target = wrapper.querySelector(`.fp-row[data-id="${value}"]`);
+            if (target) {
+                target.classList.add('fp-selected');
+                // Update icon to open folder
+                const icon = target.querySelector('.fp-icon');
+                if (icon) { icon.className = 'far fa-folder-open fp-icon'; }
+            }
+        }
+        wrapper.classList.remove('open');
+    }
+
+    // Close pickers when clicking outside
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.folder-picker-wrapper.open').forEach(w => w.classList.remove('open'));
+    });
+
+    // Helper to reset a folder picker to "no folder"
+    function resetFolderPicker(pickerId, noFolderValue = 'none') {
+        const wrapper = document.getElementById(pickerId);
+        if (!wrapper) return;
+        const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+        if (hiddenInput) hiddenInput.value = noFolderValue;
+        const trigger = wrapper.querySelector('.trigger-label');
+        if (trigger) { trigger.textContent = '(No folder)'; trigger.classList.remove('selected'); }
+        wrapper.querySelectorAll('.fp-row').forEach(r => {
+            r.classList.remove('fp-selected');
+            const icon = r.querySelector('.fp-icon');
+            if (icon) icon.className = 'far fa-folder fp-icon';
+        });
+    }
+
+    // Helper to set a folder picker value programmatically
+    function setFolderPicker(pickerId, folderId) {
+        const wrapper = document.getElementById(pickerId);
+        if (!wrapper) return;
+        const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+        if (!hiddenInput) return;
+        if (!folderId || folderId === 'none' || folderId === '') {
+            resetFolderPicker(pickerId, hiddenInput.id === 'fileFolder' ? 'none' : '');
+            return;
+        }
+        const target = wrapper.querySelector(`.fp-row[data-id="${folderId}"]`);
+        if (target) {
+            selectFolder(wrapper, hiddenInput, folderId, target.dataset.name);
+        }
+    }
 
     dropArea.addEventListener("dragover", (e) => {
         e.preventDefault();
@@ -254,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tagsContainer.innerHTML = "";
             fileTags.value = "";
             document.getElementById('filePortal').value = "none";
-            document.getElementById('fileFolder').value = "none"; 
+            resetFolderPicker('fileFolderPicker', 'none');
             if (fileSection) fileSection.value = "";
             if (fileCategory) fileCategory.value = "";
             
@@ -277,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if(fileDetails[file.name].folderId) {
-                    document.getElementById('fileFolder').value = fileDetails[file.name].folderId;
+                    setFolderPicker('fileFolderPicker', fileDetails[file.name].folderId);
                 }
 
                 if (fileSection && fileDetails[file.name].section) fileSection.value = fileDetails[file.name].section;
@@ -502,4 +635,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
-
