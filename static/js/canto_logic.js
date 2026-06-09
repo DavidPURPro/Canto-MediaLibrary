@@ -2134,19 +2134,120 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
     const bulkFolderSelect = document.getElementById('bulkFolderSelect');
     const confirmBulkFolderBtn = document.getElementById('confirmBulkFolderBtn');
 
+    let selectedBulkFolderId = 'none';
     if (bulkFolderBtn) {
         bulkFolderBtn.addEventListener('click', () => {
             if (selectedFiles.length === 0) return;
-            bulkFolderSelect.innerHTML = '<option value="none">No folder (Root)</option>';
+            const selectElem = document.getElementById('bulkFolderSelect');
+            let treeContainer = document.getElementById('bulkFolderTreeContainer');
+
+            if (selectElem) {
+                treeContainer = document.createElement('div');
+                treeContainer.id = 'bulkFolderTreeContainer';
+                treeContainer.style.cssText = 'max-height: 250px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #f8fafc; text-align: left; user-select: none;';
+                selectElem.parentNode.replaceChild(treeContainer, selectElem);
+            }
+
+            treeContainer.innerHTML = '<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+
             fetch('/get_folders')
                 .then(res => res.json())
                 .then(data => {
-                    if (data.folders) {
-                        data.folders.forEach(folder => {
-                            const opt = document.createElement('option');
-                            opt.value = folder.id;
-                            opt.textContent = `🗁 ${folder.name}`;
-                            bulkFolderSelect.appendChild(opt);
+                    treeContainer.innerHTML = '';
+                    selectedBulkFolderId = 'none';
+                    
+                    // --- 1. DOSSIER RACINE (ROOT) ---
+                    const rootDiv = document.createElement('div');
+                    rootDiv.style.cssText = 'padding: 6px 8px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #334155;';
+                    rootDiv.innerHTML = `
+                        <div style="display: flex; align-items: center;">
+                            <span style="width:20px;"></span>
+                            <i class="fas fa-hdd" style="color: #64748b; margin-right:8px;"></i> 
+                            <strong>No folder (Root)</strong>
+                        </div>
+                        <button title="Confirm Root" style="background: #10b981 !important; border: none !important; color: white !important; cursor: pointer; padding: 5px 12px !important; border-radius: 4px !important; font-size: 12px !important; font-weight: bold !important; display: inline-flex !important; align-items: center !important; gap: 5px !important; opacity: 1 !important; visibility: visible !important;">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    `;
+                    
+                    rootDiv.querySelector('button').onclick = (e) => {
+                        e.stopPropagation();
+                        selectedBulkFolderId = 'none';
+                        const confirmBtn = document.getElementById('confirmBulkFolderBtn');
+                        if(confirmBtn) confirmBtn.click();
+                    };
+                    treeContainer.appendChild(rootDiv);
+
+                    // --- 2. SOUS-DOSSIERS ---
+                    if (data.folders && data.folders.length > 0) {
+                        const folderMap = {};
+                        data.folders.forEach(f => folderMap[f.id] = { ...f, subfolders: [] });
+
+                        Object.values(folderMap).forEach(f => {
+                            if (f.parent_id && folderMap[f.parent_id]) {
+                                folderMap[f.parent_id].subfolders.push(f);
+                            }
+                        });
+
+                        function createTreeNode(folder) {
+                            const node = document.createElement('div');
+                            node.style.marginLeft = folder.parent_id ? '20px' : '0px';
+
+                            const header = document.createElement('div');
+                            header.style.cssText = 'padding: 6px 8px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; margin-top: 2px; color: #334155;';
+                            
+                            const hasChildren = folder.subfolders && folder.subfolders.length > 0;
+                            const chevronHtml = hasChildren 
+                                ? '<i class="fas fa-chevron-right chevron-toggle" style="width:20px; text-align:center; cursor:pointer; color:#94a3b8;"></i>' 
+                                : '<span style="width:20px; display:inline-block;"></span>';
+
+                            header.innerHTML = `
+                                <div class="folder-name-toggle" style="display: flex; align-items: center; cursor: pointer; user-select: none; flex-grow: 1;">
+                                    ${chevronHtml}
+                                    <i class="far fa-folder" style="color: #1e293b; margin-right:8px;"></i> 
+                                    <span style="font-weight: 500;">${folder.name}</span>
+                                </div>
+                                <button title="Confirm selection" style="background: #10b981 !important; border: none !important; color: white !important; cursor: pointer; padding: 5px 12px !important; border-radius: 4px !important; font-size: 12px !important; font-weight: bold !important; display: inline-flex !important; align-items: center !important; gap: 5px !important; opacity: 1 !important; visibility: visible !important; flex-shrink: 0 !important;">
+                                    <i class="fas fa-check"></i> 
+                                </button>
+                            `;
+                            
+                            const childrenContainer = document.createElement('div');
+                            childrenContainer.style.display = 'none'; 
+                            if (hasChildren) {
+                                folder.subfolders.forEach(sub => childrenContainer.appendChild(createTreeNode(sub)));
+                            }
+
+                            // Clic sur le nom pour déplier/replier
+                            const toggleAction = (e) => {
+                                e.stopPropagation();
+                                if (hasChildren) {
+                                    const isHidden = childrenContainer.style.display === 'none';
+                                    childrenContainer.style.display = isHidden ? 'block' : 'none';
+                                    const icon = header.querySelector('.chevron-toggle');
+                                    if (icon) icon.className = isHidden ? 'fas fa-chevron-down chevron-toggle' : 'fas fa-chevron-right chevron-toggle';
+                                }
+                            };
+
+                            header.querySelector('.folder-name-toggle').onclick = toggleAction;
+
+                            // Clic sur le bouton VERT pour valider le déplacement
+                            header.querySelector('button').onclick = (e) => {
+                                e.stopPropagation();
+                                selectedBulkFolderId = folder.id;
+                                const confirmBtn = document.getElementById('confirmBulkFolderBtn');
+                                if(confirmBtn) confirmBtn.click();
+                            };
+
+                            node.appendChild(header);
+                            node.appendChild(childrenContainer);
+                            return node;
+                        }
+                        
+                        Object.values(folderMap).forEach(f => {
+                            if (!f.parent_id) {
+                                treeContainer.appendChild(createTreeNode(f));
+                            }
                         });
                     }
                     bulkFolderModal.classList.add('active');
@@ -2154,14 +2255,14 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                 .catch(err => console.error("Erreur de chargement des dossiers :", err));
         });
     }
-
     if (confirmBulkFolderBtn) {
         confirmBulkFolderBtn.addEventListener('click', () => {
             if (selectedFiles.length === 0) return;
-            const targetFolderId = bulkFolderSelect.value;
+            const targetFolderId = selectedBulkFolderId; 
             const filenamesArray = selectedFiles.map(f => f.filename);
             confirmBulkFolderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Moving...';
             confirmBulkFolderBtn.disabled = true;
+            
             const formData = new FormData();
             formData.append('folder_id', targetFolderId);
             formData.append('filenames', JSON.stringify(filenamesArray)); 
@@ -2176,14 +2277,12 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                     alert(`Success! ${filenamesArray.length} items moved.`);                    
                     document.getElementById('bulkCancelBtn').click();                    
                     location.reload();
-                }
-                 else {
+                } 
+                else {
                     alert("Error: " + data.message);
                 }
             })
-            .catch(err => {
-                console.error("Erreur lors du déplacement en masse :", err);
-            })
+            .catch(err => console.error("Erreur lors du déplacement en masse :", err))
             .finally(() => {
                 confirmBulkFolderBtn.innerHTML = 'Apply to selection';
                 confirmBulkFolderBtn.disabled = false;

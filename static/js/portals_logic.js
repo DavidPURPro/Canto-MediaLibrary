@@ -243,26 +243,60 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             const checklistNew = document.getElementById('newPortalFoldersChecklist');
             const checklistExisting = document.getElementById('existingPortalFoldersChecklist');
-            if (data.folders) {
-                data.folders.forEach(folder => {
-                    const createCheckboxItem = (prefixId) => {
-                        const label = document.createElement('label');
-                        label.style.display = 'flex';
-                        label.style.alignItems = 'center';
-                        label.style.gap = '8px';
-                        label.style.marginBottom = '6px';
-                        label.style.cursor = 'pointer';
-                        label.style.color = '#334155';
-                        label.style.fontWeight = '500';
-                        label.innerHTML = `
-                            <input type="checkbox" value="${folder.id}" id="${prefixId}_${folder.id}" style="width:16px; height:16px; cursor:pointer;">
-                            <span>🗁 ${folder.name}</span>
-                        `;
-                        return label;
-                    };
+            if (data.folders && data.folders.length > 0) {
+                const folderMap = {};
+                data.folders.forEach(f => folderMap[f.id] = { ...f, subfolders: [] });
+                Object.values(folderMap).forEach(f => {
+                    if (f.parent_id && folderMap[f.parent_id]) {
+                        folderMap[f.parent_id].subfolders.push(f);
+                    }
+                });
 
-                    if (checklistNew) checklistNew.appendChild(createCheckboxItem('new_f'));
-                    if (checklistExisting) checklistExisting.appendChild(createCheckboxItem('exist_f'));
+                function createTreeNode(folder, prefixId) {
+                    const node = document.createElement('div');
+                    node.style.marginLeft = folder.parent_id ? '25px' : '0px';
+                    node.style.marginTop = '4px';
+                    const header = document.createElement('div');
+                    header.style.display = 'flex';
+                    header.style.alignItems = 'center';
+                    header.style.gap = '8px';
+                    const hasChildren = folder.subfolders && folder.subfolders.length > 0;
+                    const chevronHtml = hasChildren 
+                        ? '<i class="fas fa-chevron-right chevron-toggle" style="width:15px; cursor:pointer; color:#94a3b8; text-align:center;" title="Déplier"></i>' 
+                        : '<span style="width:15px; display:inline-block;"></span>';
+                    header.innerHTML = `
+                        ${chevronHtml}
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#334155; font-weight:500; margin:0; flex-grow:1;">
+                            <input type="checkbox" value="${folder.id}" id="${prefixId}_${folder.id}" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+                            <span style="user-select:none;"><i class="far fa-folder" style="color:#1e293b; margin-right:6px;"></i>${folder.name}</span>
+                        </label>
+                    `;
+
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.style.display = 'none';
+                    if (hasChildren) {
+                        folder.subfolders.forEach(sub => childrenContainer.appendChild(createTreeNode(sub, prefixId)));
+                    }
+
+                    const chevron = header.querySelector('.chevron-toggle');
+                    if (chevron) {
+                        chevron.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const isHidden = childrenContainer.style.display === 'none';
+                            childrenContainer.style.display = isHidden ? 'block' : 'none';
+                            chevron.className = isHidden ? 'fas fa-chevron-down chevron-toggle' : 'fas fa-chevron-right chevron-toggle';
+                        });
+                    }
+                    node.appendChild(header);
+                    node.appendChild(childrenContainer);
+                    return node;
+                }
+                Object.values(folderMap).forEach(f => {
+                    if (!f.parent_id) {
+                        if (checklistNew) checklistNew.appendChild(createTreeNode(f, 'new_f'));
+                        if (checklistExisting) checklistExisting.appendChild(createTreeNode(f, 'exist_f'));
+                    }
                 });
             }
         })
