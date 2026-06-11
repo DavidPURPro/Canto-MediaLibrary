@@ -37,6 +37,7 @@ let currentSectionFilter = 'all';
 let currentCategoryFilter = 'all';
 let myFavorites = [];
 let globalFoldersList = [];
+let draggedFolderElement = null;
 
 
 // mappage des types de fichiers
@@ -107,27 +108,24 @@ function loadFolders(folderIdToRestore = null) {
 
 function renderFolderStructure(folders) {
   foldersContainer.innerHTML = '';
-  
-  const folderMap = {};
+  const folderMap = new Map();
   folders.forEach(folder => {
-    folderMap[folder.id] = {
+    folderMap.set(folder.id, {
       ...folder,
       element: null,
       subfolders: []
-    };
+    });
   });
   
-  // hiérarchie pour doss
-  Object.values(folderMap).forEach(folder => {
-    if (folder.parent_id && folderMap[folder.parent_id]) {
-      folderMap[folder.parent_id].subfolders.push(folder);
+  folders.forEach(folder => {
+    if (folder.parent_id && folderMap.has(folder.parent_id)) {
+      folderMap.get(folder.parent_id).subfolders.push(folderMap.get(folder.id));
     }
   });
   
-  // dossiers racine
-  Object.values(folderMap).forEach(folder => {
+  folders.forEach(folder => {
     if (!folder.parent_id) {
-      renderFolder(folder, foldersContainer);
+      renderFolder(folderMap.get(folder.id), foldersContainer);
     }
   });
 }
@@ -136,6 +134,75 @@ function renderFolder(folder, parentElement) {
   const folderElement = document.createElement('div');
   folderElement.className = 'folder';
   folderElement.dataset.folderId = folder.id;
+  if (isAdmin) {
+      folderElement.setAttribute('draggable', 'true');
+      folderElement.addEventListener('dragstart', function(e) {
+          draggedFolderElement = folderElement;
+          e.stopPropagation();
+          setTimeout(() => this.style.opacity = '0.4', 0); 
+      });
+
+      folderElement.addEventListener('dragend', function(e) {
+          e.stopPropagation();
+          this.style.opacity = '1';
+          document.querySelectorAll('.folder').forEach(el => {
+              el.style.borderTop = '';
+              el.style.borderBottom = '';
+          });
+          draggedFolderElement = null;
+      });
+
+      folderElement.addEventListener('dragover', function(e) {
+          e.preventDefault(); 
+          e.stopPropagation();
+          if (draggedFolderElement === this || !draggedFolderElement) return;
+          if (this.contains(draggedFolderElement)) return; 
+
+          const bounding = this.getBoundingClientRect();
+          const offset = bounding.y + (bounding.height / 2);
+          
+          if (e.clientY - offset > 0) {
+              this.style.borderBottom = '2px solid #8b5cf6';
+              this.style.borderTop = '';
+          } 
+          else {
+              this.style.borderTop = '2px solid #8b5cf6';
+              this.style.borderBottom = '';
+          }
+      });
+
+      folderElement.addEventListener('dragleave', function(e) {
+          e.stopPropagation();
+          this.style.borderTop = '';
+          this.style.borderBottom = '';
+      });
+
+      folderElement.addEventListener('drop', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.style.borderTop = '';
+          this.style.borderBottom = '';
+          if (draggedFolderElement === this || !draggedFolderElement) return;
+          if (this.contains(draggedFolderElement)) return;
+          if (draggedFolderElement.parentNode !== this.parentNode) {
+              alert("You can only reorganize folders of the same level.");
+              return;
+          }
+
+          const bounding = this.getBoundingClientRect();
+          const offset = bounding.y + (bounding.height / 2);
+          const container = this.parentNode;
+          
+          if (e.clientY - offset > 0) {
+              container.insertBefore(draggedFolderElement, this.nextSibling);
+          } 
+          else {
+              container.insertBefore(draggedFolderElement, this);
+          }
+          saveFolderOrder(container);
+      });
+  }
+
   const folderName = document.createElement('div');
   folderName.className = 'folder-name';
   folderName.style.display = 'flex';
@@ -153,18 +220,15 @@ function renderFolder(folder, parentElement) {
         </button>
   ` : ''; 
   const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-click to rename" style="cursor: text;"` : '';
-  
   folderName.innerHTML = `
     <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-grow: 1;">
         <span class="folder-icon">${iconHtml}</span>
         <span class="folder-title" style="font-weight: 500; color: #334155; flex-grow: 1;" ${renameAction}>${folder.name}</span>
-    </div>
-    
+    </div> 
     <div class="folder-actions-wrapper">
         <button class="action-dropdown-btn" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:2px 8px;">
             <i class="fas fa-ellipsis-v"></i>
         </button>
-        
         <div class="folder-actions">
             <button class="download-folder-btn" title="Download folder as ZIP" style="background: none; border: none; color: #10b981; cursor: pointer; padding: 4px;">
                 <i class="fas fa-file-archive"></i>
@@ -234,6 +298,34 @@ function renderFolder(folder, parentElement) {
   
   parentElement.appendChild(folderElement);
   folder.element = folderElement;
+}
+
+// envoyer le nouvel ordre au serveur
+function saveFolderOrder(container) {
+    const folders = container.querySelectorAll(':scope > .folder');
+    const orderData = [];
+
+    folders.forEach((f, index) => {
+        orderData.push({
+            id: parseInt(f.dataset.folderId),
+            order: index
+        });
+    });
+
+    fetch('/update_folder_order', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folder_order: orderData })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status !== 'success') {
+            console.error("Erreur serveur :", data.message);
+        }
+    })
+    .catch(err => console.error("Erreur réseau :", err));
 }
 
 function showFolderInput(parentElement, parentId = null) {

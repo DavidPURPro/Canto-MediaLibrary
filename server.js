@@ -565,10 +565,10 @@ async function updatePortalStats(portal_id) {
     }
 }
 
-// routes API (folders et recherche)
+// routes API
 app.get('/get_folders', loginRequiredJson, async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, name, parent_id, creation_date FROM folders ORDER BY name;");
+        const result = await pool.query("SELECT id, name, parent_id, creation_date FROM folders ORDER BY folder_order ASC, name ASC;");
         const folders = result.rows.map(f => ({
             id: f.id,
             name: f.name,
@@ -579,6 +579,32 @@ app.get('/get_folders', loginRequiredJson, async (req, res) => {
     } catch (error) {
         console.error("Erreur get_folders:", error);
         res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+app.post('/update_folder_order', loginRequiredJson, adminRequired, express.json(), async (req, res) => {
+    try {
+        const { folder_order } = req.body; 
+        if (!folder_order || !Array.isArray(folder_order)) {
+            return res.status(400).json({ status: "error", message: "Invalid data" });
+        }
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (let item of folder_order) {
+                await client.query("UPDATE folders SET folder_order = $1 WHERE id = $2;", [item.order, item.id]);
+            }
+            await client.query('COMMIT');
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+        res.json({ status: "success" });
+    } catch (error) {
+        console.error("Erreur update_folder_order:", error);
+        res.status(500).json({ status: "error", message: "Erreur serveur" });
     }
 });
 
