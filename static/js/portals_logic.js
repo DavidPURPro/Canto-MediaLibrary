@@ -270,6 +270,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="checkbox" value="${folder.id}" id="${prefixId}_${folder.id}" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
                             <span style="user-select:none;"><i class="far fa-folder" style="color:#1e293b; margin-right:6px;"></i>${folder.name}</span>
                         </label>
+                        <select class="folder-size" id="${prefixId}_size_${folder.id}" title="Display size"
+                            style="flex-shrink:0; font-size:11px; padding:1px 2px; width:60px; border:1px solid #cbd5e1; border-radius:6px; color:#475569; background:#fff;">
+                            <option value="standard">1×1</option>
+                            <option value="large">2×1</option>
+                            <option value="tall">1×2</option>
+                            <option value="hero">Full</option>
+                        </select>
                     `;
 
                     const childrenContainer = document.createElement('div');
@@ -310,11 +317,14 @@ document.getElementById('portalForm')?.addEventListener('submit', function(e) {
     submitBtn.disabled = true;
     // recup les dossiers cochés dans la création
     const checkedBoxes = document.querySelectorAll('#newPortalFoldersChecklist input[type="checkbox"]:checked');
-    const folderIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    const folders = Array.from(checkedBoxes).map(cb => ({
+    id: parseInt(cb.value),
+    size: document.getElementById(`new_f_size_${cb.value}`)?.value || 'standard'
+    }));
     const portalData = {
         name: document.getElementById('portalName').value.trim(),
         access: document.getElementById('portalAccess').value || 'Public',
-        linked_folder_ids: JSON.stringify(folderIds) // Envoyer le tableau transformé en chaîne
+        folders: JSON.stringify(folders)
     };
 
     fetch('/add_portal', {
@@ -338,15 +348,18 @@ document.getElementById('portalForm')?.addEventListener('submit', function(e) {
 let portalToLink_id = null;
 window.prepareLinkFolder = function(portalId, portalName) {
     portalToLink_id = portalId;
-    document.getElementById('linkPortalNameText').textContent = portalName;    
-    document.querySelectorAll('#existingPortalFoldersChecklist input[type="checkbox"]').forEach(cb => cb.checked = false);    
+    document.getElementById('linkPortalNameText').textContent = portalName;
+    document.querySelectorAll('#existingPortalFoldersChecklist input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('#existingPortalFoldersChecklist .folder-size').forEach(s => s.value = 'standard');
     fetch(`/portal_folders/${portalId}`)
         .then(res => res.json())
         .then(data => {
-            if (data.status === 'success' && data.folder_ids) {
-                data.folder_ids.forEach(folderId => {
-                    const cb = document.getElementById(`exist_f_${folderId}`);
+            if (data.status === 'success' && data.folders) {
+                data.folders.forEach(({ folder_id, display_size }) => {
+                    const cb = document.getElementById(`exist_f_${folder_id}`);
                     if (cb) cb.checked = true;
+                    const sel = document.getElementById(`exist_f_size_${folder_id}`);
+                    if (sel) sel.value = display_size || 'standard';
                 });
             }
             document.getElementById('linkFolderModal').classList.add('active');
@@ -357,10 +370,13 @@ window.prepareLinkFolder = function(portalId, portalName) {
 document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () => {
     if (!portalToLink_id) return;    
     const checkedBoxes = document.querySelectorAll('#existingPortalFoldersChecklist input[type="checkbox"]:checked');
-    const folderIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    const folders = Array.from(checkedBoxes).map(cb => ({
+        id: parseInt(cb.value),
+        size: document.getElementById(`exist_f_size_${cb.value}`)?.value || 'standard'
+    }));    
     const formData = new FormData();
     formData.append('portal_id', portalToLink_id);
-    formData.append('folder_ids', JSON.stringify(folderIds)); // Tableau converti en String JSON
+    formData.append('folder_ids', JSON.stringify(folders)); 
     const btn = document.getElementById('confirmLinkFolderBtn');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
     

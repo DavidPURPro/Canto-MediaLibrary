@@ -98,7 +98,7 @@ const fileFilter = (req, file, cb) => {
     const forbidden_extensions = [".heic", ".thm"];
     
     if (forbidden_extensions.includes(ext)) {
-        return cb(new Error(`Extension '${ext}' non autorisée`));
+        return cb(new Error(`Extension_Error:${ext}`));
     }
     cb(null, true);
 };
@@ -533,33 +533,37 @@ function generateSlug(name, id) {
 async function updatePortalStats(portal_id) {
     try {
         const countResult = await pool.query(`
+            WITH RECURSIVE folder_tree AS (
+                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
+                UNION
+                SELECT f.id FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            )
             SELECT COUNT(DISTINCT filename) as count FROM (
                 SELECT filename FROM portal_files WHERE portal_id = $1
                 UNION
-                SELECT nom_fichier FROM documents WHERE folder_id IN (
-                    SELECT folder_id FROM portal_folders WHERE portal_id = $1
-                )
+                SELECT nom_fichier FROM documents WHERE folder_id IN (SELECT id FROM folder_tree)
             ) as combined_files;
         `, [portal_id]);
-
-        const sizeResult = await pool.query(`
-            SELECT SUM(size_bytes) as total_bytes FROM portal_files WHERE filename IN (
-                SELECT filename FROM portal_files WHERE portal_id = $1
+        const foldersResult = await pool.query(`
+            WITH RECURSIVE folder_tree AS (
+                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
                 UNION
-                SELECT nom_fichier FROM documents WHERE folder_id IN (
-                    SELECT folder_id FROM portal_folders WHERE portal_id = $1
-                )
-            );
+                SELECT f.id FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            )
+            SELECT COUNT(DISTINCT id) as count FROM folder_tree;
         `, [portal_id]);
         const file_count = parseInt(countResult.rows[0].count || 0, 10);
-        const total_bytes = parseInt(sizeResult.rows[0].total_bytes || 0, 10);
-        const total_size = formatBytes(total_bytes);
+        const folder_count = parseInt(foldersResult.rows[0].count || 0, 10);
+        const folder_display = `${folder_count} folder${folder_count > 1 ? 's' : ''}`;
         await pool.query(`
             UPDATE portals 
             SET files = $1, size = $2, last_sync = CURRENT_DATE 
             WHERE id = $3;
-        `, [file_count, total_size, portal_id]);
-        return { file_count, total_size };
+        `, [file_count, folder_display, portal_id]);
+        
+        return { file_count, folder_display };
     } catch (e) {
         console.error("Erreur updatePortalStats:", e);
     }
@@ -1315,66 +1319,7 @@ app.post('/assign_file_folder', loginRequiredJson, adminRequired, upload.none(),
     }
 });
 
-// réassigner fichier a un portail
-app.post('/assign_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
-    const { filename, portal_id } = req.body;
-
-    try {
-        const docResult = await pool.query("SELECT id FROM documents WHERE nom_fichier = $1", [filename]);
-        
-        if (docResult.rows.length === 0) {
-            return res.status(404).json({ status: "error", message: "Fichier non trouvé" });
-        }
-        const documentId = docResult.rows[0].id;
-        await pool.query("DELETE FROM document_portals WHERE document_id = $1", [documentId]);
-        await pool.query(
-            "INSERT INTO document_portals (document_id, portal_id) VALUES ($1, $2)",
-            [documentId, portal_id]
-        );
-        insightsClient.trackEvent({
-            name: "assign_file_portal",
-            properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
-            }
-        });
-        res.json({ status: "success", message: "Portail mis à jour" });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ status: "error" });
-    }
-});
-
-app.get('/get_document_info/:id', loginRequiredJson, async (req, res) => {
-    const docId = req.params.id;
-    try {
-        const query = `
-            SELECT 
-                d.*, 
-                f.name as folder_name,
-                (SELECT STRING_AGG(p.name, ', ') 
-                 FROM portals p 
-                 JOIN document_portals dp ON p.id = dp.portal_id 
-                 WHERE dp.document_id = d.id) as portals_list
-            FROM documents d
-            LEFT JOIN folders f ON d.folder_id = f.id
-            WHERE d.id = $1
-        `;
-        const result = await pool.query(query, [docId]);
-        
-        if (result.rows.length > 0) {
-            res.json(result.rows[0]);
-        } 
-        else {
-            res.status(404).json({ error: "Document non trouvé" });
-        }
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // routes suppr et maj fichiers
-// afficher la page
 app.get('/delete', loginRequiredHtml, adminRequired, (req, res) => {
     res.render('delete.html');
 });
@@ -1468,32 +1413,39 @@ app.get('/portals', loginRequiredHtml, async (req, res) => {
         const portals_list = [];        
         for (let row of result.rows) {
             const countResult = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
                 SELECT COUNT(DISTINCT filename) as count FROM (
                     SELECT filename FROM portal_files WHERE portal_id = $1
                     UNION
-                    SELECT nom_fichier FROM documents WHERE folder_id IN (
-                        SELECT folder_id FROM portal_folders WHERE portal_id = $1
-                    )
+                    SELECT nom_fichier FROM documents WHERE folder_id IN (SELECT id FROM folder_tree)
                 ) as combined_files;
             `, [row.id]);
-            const sizeResult = await pool.query(`
-                SELECT SUM(size_bytes) as sum FROM portal_files WHERE filename IN (
-                    SELECT filename FROM portal_files WHERE portal_id = $1
+
+            const foldersResult = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
                     UNION
-                    SELECT nom_fichier FROM documents WHERE folder_id IN (
-                        SELECT folder_id FROM portal_folders WHERE portal_id = $1
-                    )
-                );
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT COUNT(DISTINCT id) as count FROM folder_tree;
             `, [row.id]);
+            
             const file_count = parseInt(countResult.rows[0].count || 0, 10);
-            const total_bytes = parseInt(sizeResult.rows[0].sum || 0, 10);
+            const folder_count = parseInt(foldersResult.rows[0].count || 0, 10);
+            
             portals_list.push({
                 id: row.id,
                 name: row.name,
                 url: row.url,
                 access: row.access,
                 files: file_count,
-                size: formatBytes(total_bytes),
+                size: `${folder_count} folder${folder_count > 1 ? 's' : ''}`, 
                 creation_date: row.creation_date ? new Date(row.creation_date).toLocaleDateString('fr-FR').replace(/\//g, '-') : "",
                 last_sync: row.last_sync ? new Date(row.last_sync).toLocaleDateString('fr-FR').replace(/\//g, '-') : "",
                 linked_folder_id: row.linked_folder_id
@@ -1547,29 +1499,47 @@ app.get('/portal/:portal_id', async (req, res) => {
         const isAuthorizedPortalUser = !!req.session.portal_user_email && (req.session.portal_access == real_portal_id); 
         if (!isGlobalAuth && !isAuthorizedPortalUser) return res.redirect(`/portal/${slug}/login`);
         const linkedFoldersRes = await pool.query(`
-            SELECT f.id, f.name, f.creation_date FROM folders f
+            SELECT f.id, f.name, f.creation_date, pf.col_span, pf.row_span, pf.position, pf.custom_title
+            FROM folders f
             JOIN portal_folders pf ON f.id = pf.folder_id
-            WHERE pf.portal_id = $1 ORDER BY f.name;
+            WHERE pf.portal_id = $1 
+            ORDER BY pf.position ASC NULLS LAST, f.name ASC;
         `, [real_portal_id]);
         
         const projectCards = [];
         for (let folder of linkedFoldersRes.rows) {
             const coverRes = await pool.query(`
-                SELECT lien_telechargement FROM documents 
-                WHERE folder_id = $1 
-                AND (nom_fichier ILIKE '%.png' OR nom_fichier ILIKE '%.jpg' OR nom_fichier ILIKE '%.jpeg' OR nom_fichier ILIKE '%.webp' OR nom_fichier ILIKE '%.gif')
-                LIMIT 1;
-            `, [folder.id]);
-            const heroUrl = coverRes.rows.length > 0 ? coverRes.rows[0].lien_telechargement : null;            
-            let year = folder.creation_date ? new Date(folder.creation_date).getFullYear() : '2024';
-            projectCards.push({
-                folder_id: folder.id,
-                folder_name: folder.name,
-                hero_image_url: heroUrl,
-                year: year
-            });
-        }
+            WITH RECURSIVE folder_tree AS (
+                SELECT id FROM folders WHERE id = $1
+                UNION
+                SELECT f.id FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            )
+            SELECT d.lien_telechargement,
+                   CASE WHEN d.nom_fichier ILIKE '%.pdf' THEN 2 ELSE 1 END as priority
+            FROM documents d
+            JOIN folder_tree ft ON d.folder_id = ft.id
+            WHERE d.nom_fichier ILIKE ANY(ARRAY['%.png', '%.jpg', '%.jpeg', '%.webp', '%.gif', '%.pdf'])
+            ORDER BY priority ASC, d.date_ajout DESC
+            LIMIT 1;
+        `, [folder.id]);
 
+        const heroUrl = coverRes.rows.length > 0 ? coverRes.rows[0].lien_telechargement : null;
+        const isPdfCover = heroUrl ? heroUrl.toLowerCase().includes('.pdf') : false; 
+        let year = folder.creation_date ? new Date(folder.creation_date).getFullYear() : '2024';
+        projectCards.push({
+            folder_id: folder.id,
+            folder_name: folder.name,
+            hero_image_url: heroUrl || '/static/foret.jpg',
+            is_pdf_cover: isPdfCover, 
+            year: year,
+            col_span: folder.col_span || 1,
+            row_span: folder.row_span || 1,
+            custom_title: folder.custom_title
+
+        });
+    }
+        
         const formatDate = (dateString) => {
             if (!dateString) return 'N/A';
             const d = new Date(dateString);
@@ -1588,6 +1558,33 @@ app.get('/portal/:portal_id', async (req, res) => {
             ORDER BY pf.upload_date DESC NULLS LAST;
         `, [real_portal_id]);
 
+        const totalFilesRes = await pool.query(`
+            WITH RECURSIVE folder_tree AS (
+                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
+                UNION
+                SELECT f.id FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            )
+            SELECT COUNT(DISTINCT filename) as count FROM (
+                SELECT filename FROM portal_files WHERE portal_id = $1
+                UNION
+                SELECT nom_fichier FROM documents WHERE folder_id IN (SELECT id FROM folder_tree)
+            ) as combined_files;
+        `, [real_portal_id]);
+
+        const totalFoldersRes = await pool.query(`
+            WITH RECURSIVE folder_tree AS (
+                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
+                UNION
+                SELECT f.id FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            )
+            SELECT COUNT(DISTINCT id) as count FROM folder_tree;
+        `, [real_portal_id]);
+
+        const total_files_count = parseInt(totalFilesRes.rows[0].count || 0, 10);
+        const total_folders_count = parseInt(totalFoldersRes.rows[0].count || 0, 10);
+
         const looseFiles = looseFilesRes.rows.map(row => ({
             filename: row.filename,
             file_url: row.file_url,
@@ -1595,7 +1592,8 @@ app.get('/portal/:portal_id', async (req, res) => {
             file_type: row.file_type || (row.filename && row.filename.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'Image' : 'File'),
             size: row.size || '0 B', 
             upload_date: formatDate(row.upload_date || row.created_at),
-            folder_name: row.folder_name || null
+            folder_name: row.folder_name || null,
+
         }));
 
         res.render('portal_page.html', { 
@@ -1605,12 +1603,34 @@ app.get('/portal/:portal_id', async (req, res) => {
             is_admin: isAdmin,
             user_role: req.session.user_role,
             user_email: req.session.user_email || req.session.portal_user_email,
-            username: req.session.username || "Client"
+            username: req.session.username || "Client",
+            total_files_count: total_files_count,
+            total_folders_count: total_folders_count
         });
         
     } catch (error) {
         console.error("Erreur Vitrine Portail :", error); 
         res.status(500).send("Erreur serveur");
+    }
+});
+
+// modif taille des folders dans portails 
+app.post('/portal/:portal_id/layout', adminRequired, upload.none(), async (req, res) => {
+    try {
+        const p = await pool.query("SELECT id FROM portals WHERE id::text = $1 OR slug = $1;", [req.params.portal_id]);
+        if (p.rows.length === 0) return res.status(404).json({ status: "error", message: "Portal not found" });
+        const portalId = p.rows[0].id;
+        const items = JSON.parse(req.body.layout || "[]");
+        for (const it of items) {
+            await pool.query(
+                `UPDATE portal_folders SET col_span = $1, row_span = $2, position = $3, custom_title = $4
+                 WHERE portal_id = $5 AND folder_id = $6`,
+                [it.col_span, it.row_span, it.position, it.custom_title, portalId, it.folder_id]
+            );
+        }
+        res.json({ status: "success" });
+    } catch (e) {
+        res.status(500).json({ status: "error", message: e.message });
     }
 });
 
@@ -1727,7 +1747,7 @@ app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, r
 // routes gestion portails
 app.post('/add_portal', loginRequiredJson, async (req, res) => {
     try {
-        const { name, access = 'Public', linked_folder_ids } = req.body;
+        const { name, access = 'Public', folders, linked_folder_ids } = req.body;        
         if (!name) return res.status(400).json({ status: "error", message: "Name is required" });
         const existRes = await pool.query("SELECT id FROM portals WHERE name = $1;", [name]);
         if (existRes.rows.length > 0) return res.status(400).json({ status: "error", message: "Portal with this name already exists" });
@@ -1738,9 +1758,14 @@ app.post('/add_portal', loginRequiredJson, async (req, res) => {
         `, [name, access]);
         
         const portal_id = insertRes.rows[0].id;        
-        const chosenFolders = JSON.parse(linked_folder_ids || "[]");
-        for (let folder_id of chosenFolders) {
-            await pool.query("INSERT INTO portal_folders (portal_id, folder_id) VALUES ($1, $2);", [portal_id, folder_id]);
+        const raw = JSON.parse(folders || linked_folder_ids || "[]");
+        const chosenFolders = raw.map(item =>
+            (item && typeof item === 'object')
+                ? { id: parseInt(item.id), size: item.size || 'standard' }
+                : { id: parseInt(item), size: 'standard' }
+        );
+        for (const f of chosenFolders) {
+            await pool.query("INSERT INTO portal_folders (portal_id, folder_id, display_size) VALUES ($1, $2, $3);", [portal_id, f.id, f.size]);
         }
         const slug = generateSlug(name, portal_id);        
         const host = req.get('host');
@@ -2303,65 +2328,6 @@ app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), 
     }
 });
 
-// ==========================================
-// ROUTE DE MAINTENANCE : Réparer les fichiers Azure (Forcer l'affichage)
-// ==========================================
-// REGELER AFFICHAGE COPIE LIEN
-/*app.get('/admin/fix_azure_headers', loginRequiredHtml, adminRequired, async (req, res) => {
-    try {
-        // On récupère tous les fichiers de la base
-        const result = await pool.query("SELECT nom_fichier FROM documents");
-        let updatedCount = 0;
-        let missingCount = 0;
-
-        for (let row of result.rows) {
-            const filename = row.nom_fichier;
-            const ext = require('path').extname(filename).toLowerCase();
-
-            // On déduit le bon type MIME selon l'extension
-            let mimeType = 'application/octet-stream';
-            if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
-            else if (ext === '.png') mimeType = 'image/png';
-            else if (ext === '.gif') mimeType = 'image/gif';
-            else if (ext === '.webp') mimeType = 'image/webp';
-            else if (ext === '.pdf') mimeType = 'application/pdf';
-            else if (ext === '.mp4') mimeType = 'video/mp4';
-
-            const blockBlobClient = containerClient.getBlockBlobClient(filename);
-
-            try {
-                // On essaie de forcer Azure à mettre à jour les en-têtes
-                await blockBlobClient.setHTTPHeaders({
-                    blobContentType: mimeType,
-                    blobContentDisposition: 'inline'
-                });
-                updatedCount++;
-            } catch (azureErr) {
-                // Si le fichier n'existe pas sur Azure, on l'ignore et on passe au suivant
-                if (azureErr.statusCode === 404) {
-                    console.warn(`⚠️ Fichier introuvable sur Azure (ignoré) : ${filename}`);
-                    missingCount++;
-                } else {
-                    console.error(`❌ Erreur inattendue pour ${filename}:`, azureErr.message);
-                }
-            }
-        }
-
-        res.send(`
-            <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-                <h1 style="color: #166534;">✅ Opération terminée !</h1>
-                <p><strong>${updatedCount} fichiers</strong> ont été mis à jour avec succès sur Azure.</p>
-                <p style="color: #ea580c;"><strong>${missingCount} fichiers fantômes</strong> ont été ignorés (présents en BDD mais absents d'Azure).</p>
-                <p>Les fichiers réparés s'afficheront désormais directement dans le navigateur !</p>
-                <a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #0078d4; color: white; text-decoration: none; border-radius: 6px;">Retour à la galerie</a>
-            </div>
-        `);
-    } catch (error) {
-        console.error("Erreur fix_azure_headers:", error);
-        res.status(500).send("Erreur critique lors de la mise à jour des fichiers. Regarde la console.");
-    }
-});
-*/
 
 // ROUTE PROXY POUR LE TÉLÉCHARGEMENT ZIP 
 const https = require('https'); 
@@ -2490,13 +2456,19 @@ app.get('/my_favorites', loginRequiredJson, async (req, res) => {
 // relier portail à un dossier
 app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
-        const { portal_id, folder_ids } = req.body;
-        const chosenFolders = JSON.parse(folder_ids || "[]");
+        const { portal_id, folders, folder_ids } = req.body;
+        const raw = JSON.parse(folders || folder_ids || "[]");
+        const chosen = raw.map(item =>
+            (item && typeof item === 'object')
+                ? { id: parseInt(item.id), size: item.size || 'standard' }
+                : { id: parseInt(item), size: 'standard' }
+        );
         await pool.query("DELETE FROM portal_folders WHERE portal_id = $1;", [portal_id]);
-        if (chosenFolders.length > 0) {
-            for (let folder_id of chosenFolders) {
-                await pool.query("INSERT INTO portal_folders (portal_id, folder_id) VALUES ($1, $2);", [portal_id, folder_id]);
-            }
+        for (const f of chosen) {
+            await pool.query(
+                "INSERT INTO portal_folders (portal_id, folder_id, display_size) VALUES ($1, $2, $3);",
+                [portal_id, f.id, f.size || 'standard']
+            );
         }
         await updatePortalStats(portal_id);
         res.json({ status: "success", message: "Portal folders updated successfully" });
@@ -2508,9 +2480,8 @@ app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none
 
 app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
     try {
-        const result = await pool.query("SELECT folder_id FROM portal_folders WHERE portal_id = $1;", [req.params.portal_id]);
-        const folderIds = result.rows.map(r => r.folder_id);
-        res.json({ status: "success", folder_ids: folderIds });
+        const result = await pool.query("SELECT folder_id, display_size FROM portal_folders WHERE portal_id = $1;", [req.params.portal_id]);
+        res.json({ status: "success", folders: result.rows });
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
     }

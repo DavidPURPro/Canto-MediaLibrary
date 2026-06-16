@@ -984,7 +984,7 @@ function executeGlobalSearch(query, page = 1) {
     gallery.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
             <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
-            <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
+            <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Loading...</p>
         </div>`;
         let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}&section=${currentSectionFilter}&category=${currentCategoryFilter}`;
         if (currentFolderFilter) {
@@ -2240,7 +2240,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                 selectElem.parentNode.replaceChild(treeContainer, selectElem);
             }
 
-            treeContainer.innerHTML = '<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>';
+            treeContainer.innerHTML = '<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
 
             fetch('/get_folders')
                 .then(res => res.json())
@@ -2615,7 +2615,7 @@ window.triggerFolderClick = function(folderId) {
         gallery.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
                 <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
-                <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Chargement...</p>
+                <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Loading...</p>
             </div>`;
     }
     const searchInput = document.getElementById('searchInput');

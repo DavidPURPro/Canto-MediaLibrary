@@ -7,15 +7,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ portal.name }} - Media Library</title>
-  
+
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/portal_page_style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
 
 </head>
 <body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{ user_role }}" data-portal-id="{{ portal.id }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
-  
+
   <header>
     <div class="header-left">
       <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
@@ -28,7 +28,7 @@
         {% endif %}
       </h1>
     </div>
-    
+
     <div class="header-right">
       <div class="controls">
         <a href="/portals" class="back-btn">← Portals</a>
@@ -38,8 +38,12 @@
         {% if portal.access == 'Public' or is_admin %}
           <button class="back-btn" id="copyPortalLinkBtn" title="Copy portal link"> Copy Link</button>
         {% endif %}
+        {% if is_admin %}
+          <button class="back-btn" id="editLayoutBtn" title="Customize folder layout"><i class="fas fa-table-cells"></i> Edit layout</button>
+          <button class="back-btn" id="saveLayoutBtn" style="display: none;" title="Save layout"><i class="fas fa-save"></i> Save</button>
+        {% endif %}
       </div>
-        
+
       <div class="profile-container">
         <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
           {% if user_email %}
@@ -74,7 +78,7 @@
   </header>
 
   <div class="portal-container">
-    
+
     <div class="portal-header-section">
       <div style="display: flex; justify-content: center; margin-bottom: 40px; margin-top: 20px;">
         <div class="epic-title-glass-capsule" style="padding: 15px 40px;">
@@ -82,9 +86,9 @@
           <h1 class="epic-folder-group-title" style="font-size: 2.5rem !important;">Welcome, {{ portal.name }}!</h1>
         </div>
       </div>
-      
+
       <div class="search-container" style="display: flex; gap: 20px; align-items: center; justify-content: center; width: 100%; max-width: 900px; margin: 0 auto;">
-        
+
         <div class="showcase-search-glass" style="display: flex; align-items: center; background: #ffffff; border-radius: 50px; padding: 6px 6px 6px 25px; flex: 1; box-shadow: 0 15px 35px rgba(0,0,0,0.25);">
           <i class="fas fa-search" style="color: #94a3b8; font-size: 1.1rem; margin-right: 12px;"></i>
           <input type="text" class="showcase-search-input" placeholder="Search folders & files..." id="searchInput" style="flex: 1; border: none; background: transparent; font-size: 1.05rem; color: #1e293b; outline: none;">
@@ -105,20 +109,16 @@
     </div>
 
     <div class="portal-content">
-      
+
       <div class="portal-info">
         <div class="portal-details">
           <div class="portal-detail">
-            <span class="detail-label">Total Unique Folders</span>
-            <span class="detail-value" id="showcaseFoldersCount">{{ projectCards|length }}</span>
+            <span class="detail-label">Total Folders</span>
+            <span class="detail-value" id="showcaseFoldersCount">{{ total_folders_count }}</span>
           </div>
           <div class="portal-detail">
             <span class="detail-label">Total Files</span>
-            <span class="detail-value" id="portalFilesCount">{{ looseFiles|length }}</span>
-          </div>
-          <div class="portal-detail">
-            <span class="detail-label">Total Size</span>
-            <span class="detail-value" id="portalTotalSize">{{ portal.display_size }}</span>
+            <span class="detail-value" id="portalFilesCount">{{ total_files_count }}</span>
           </div>
           <div class="portal-detail">
             <span class="detail-label">Created</span>
@@ -128,31 +128,44 @@
         <div class="portal-access access-{{ portal.access|lower }}">{{ portal.access }}</div>
       </div>
 
-      <div class="showcase-grid-epic" id="foldersContainerGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 60px 40px; margin-top: 50px;">
+      <div class="showcase-grid-epic bento-grid" id="foldersContainerGrid">
         {% for card in projectCards %}
-        
-        <div class="epic-folder-block" data-name="{{ card.folder_name }}" data-year="{{ card.year }}">
-          <div class="epic-title-glass-capsule">
+        {% if card.custom_title %}
+          <div style="grid-column: 1 / -1; width: 100%; text-align: center; align-self: end; margin-bottom: -20px; position: relative; z-index: 10; pointer-events: none;">
+            <h2 style="font-size: 2.2rem; font-weight: 700; color: black; pointer-events: auto;">{{ card.custom_title }}</h2>
+        </div>
+        {% endif %}
+        <div class="epic-folder-block"
+             data-folder-id="{{ card.folder_id }}"
+             data-name="{{ card.folder_name }}"
+             data-year="{{ card.year }}"
+             data-custom-title="{{ card.custom_title or '' }}"
+             style="display: flex; flex-direction: column; grid-column: span {{ card.col_span or 1 }}; grid-row: span {{ card.row_span or 1 }}; height: {{ (card.row_span or 1) * 280 + ((card.row_span or 1) - 1) * 40 }}px;">
+             <div class="epic-title-glass-capsule">
             <i class="far fa-folder-open epic-title-icon"></i>
             <h2 class="epic-folder-group-title">{{ card.folder_name }}</h2>
           </div>
-          
-          <article class="epic-glass-card" onclick="window.location.href='/portal/{{ portal.slug }}/folder/{{ card.folder_id }}'" style="position: relative; width: 100%; height: 280px; cursor: pointer; overflow: hidden; background: rgba(25, 25, 35, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); border-radius: var(--radius-lg); transition: var(--transition);">
+
+          <article class="epic-glass-card" onclick="window.location.href='/portal/{{ portal.slug }}/folder/{{ card.folder_id }}'" style="position: relative; width: 100%; flex: 1; min-height: 220px; cursor: pointer; overflow: hidden; background: rgba(25, 25, 35, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); border-radius: var(--radius-lg); transition: var(--transition); user-select: none; -webkit-user-select: none; -moz-user-select: none;">
             <div class="epic-card-year" style="position: absolute; top: 15px; left: 15px; font-size: 1.05rem; font-weight: 500; color: var(--text-main); z-index: 10; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">
               {{ card.year }}
             </div>
-            
-            <div class="epic-card-media" style="width: 100%; height: 100%;">
-              {% if card.hero_image_url %}
-                <img src="{{ card.hero_image_url }}" alt="{{ card.folder_name }}" loading="lazy" class="epic-card-img" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
+
+            <div class="epic-card-media" style="width: 100%; height: 100%; overflow: hidden; background-color: #1a1a24; display: flex; align-items: center; justify-content: center;">
+              {% if card.is_pdf_cover %}
+                <iframe src="{{ card.hero_image_url }}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH" 
+                        class="epic-card-img" 
+                        loading="lazy"
+                        scrolling="no"
+                        tabindex="-1"
+                        style="width: 100%; height: 100%; border: none; pointer-events: none; -webkit-user-drag: none; transform: scale(1.05); transform-origin: center;">
+                </iframe>
               {% else %}
-                <div class="epic-card-empty" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 4rem; color: rgba(255,255,255,0.15); background: rgba(0,0,0,0.2);">
-                  <i class="far fa-folder-open"></i>
-                </div>
+                <img src="{{ card.hero_image_url }}" alt="{{ card.folder_name }}" loading="lazy" class="epic-card-img" style="width: 100%; height: 100%; object-fit: cover; object-position: center 25%; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); -webkit-user-drag: none; pointer-events: none;">
               {% endif %}
               <div class="epic-media-overlay" style="position: absolute; inset: 0; background: rgba(0, 0, 0, 0.1); transition: background 0.3s ease;"></div>
             </div>
-            
+
             <div class="epic-card-hover-blur" style="position: absolute; inset: 0; background: rgba(20, 25, 35, 0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; color: #ffffff; font-weight: 600; font-size: 1.15rem;">
               <span>Explore the collection <i class="fas fa-arrow-right" style="margin-left: 8px;"></i></span>
             </div>
@@ -169,7 +182,7 @@
 
       {% if looseFiles and looseFiles|length > 0 %}
       <div class="loose-files-section" style="margin-top: 80px; padding-top: 50px; border-top: 1px solid rgba(255,255,255,0.1);">
-        
+
         <div style="display: flex; justify-content: flex-start; margin-bottom: 30px;">
           <div class="epic-title-glass-capsule" style="padding: 10px 25px;">
             <i class="fas fa-file-alt epic-title-icon"></i>
@@ -179,9 +192,9 @@
 
         <div class="files-grid" id="looseFilesGrid">
           {% for file in looseFiles %}
-          <div class="file-card" 
-               data-filename="{{ file.filename }}" 
-               data-file-url="{{ file.file_url }}" 
+          <div class="file-card"
+               data-filename="{{ file.filename }}"
+               data-file-url="{{ file.file_url }}"
                data-filetype="{{ file.file_type }}"
                data-description="{{ file.description }}"
                data-date-added="{{ file.upload_date }}"
@@ -191,9 +204,9 @@
                data-date-event="Not specified"
               data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
                style="cursor: pointer;">
-            
+
             <div class="select-checkbox"><i class="fas fa-check"></i></div>
-            
+
             <div class="file-preview">
               {% if file.file_type == 'Image' %}
                 <img src="{{ file.file_url }}" alt="{{ file.filename }}" loading="lazy">
@@ -211,7 +224,7 @@
             <div class="file-info">
               <div class="file-name" title="{{ file.filename }}">{{ file.filename }}</div>
               <div class="file-description">{{ file.description }}</div>
-              
+
               <div class="file-details">
                 <span class="file-type">{{ file.size }}</span>
                 {% if file.upload_date %}
@@ -243,27 +256,27 @@
   <div class="modal-overlay" id="fileModal">
     <div class="modal-content">
       <button class="close-btn" id="closeModal"><i class="fas fa-times"></i></button>
-      
+
       <div class="modal-preview" id="modalPreview">
       </div>
-      
+
       <div class="modal-info">
         <h2 class="modal-title" id="modalTitle"></h2>
         <div class="modal-description" id="modalDescription"></div>
-        
+
         <div class="modal-tags" id="modalTags"></div>
-        
+
         <div class="modal-meta">
           <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection"></span></div>
           <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory"></span></div>
           <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
           <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"></span></div>
         </div>
-        
+
         <div class="folder-selector" id="folderSelector">
           <h4><i class="far fa-folder-open"></i> Folder Assignment</h4>
           <div class="current-status"><strong>Current:</strong> <span id="currentFolderName">None</span></div>
-          
+
           {% if is_admin %}
           <div class="action-group">
             <button class="modern-btn secondary-btn" id="addToFolderBtn">Change Folder</button>
@@ -276,7 +289,7 @@
         <div class="portal-selector" id="portalSelector">
           <h4><i class="fas fa-globe"></i> Portal Assignment</h4>
           <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
-          
+
           {% if is_admin %}
           <div class="action-group">
             <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
@@ -326,21 +339,22 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
   <script src="{{ url_for('static', filename='js/portal_page_logic.js') }}"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      
+
       const searchInput = document.getElementById('searchInput');
       const searchButton = document.getElementById('searchButton');
       const folders = document.querySelectorAll('.epic-folder-block');
       const searchEmptyState = document.getElementById('searchEmptyState');
-      
+
      function filterFolders() {
         if (!searchInput) return;
         const query = searchInput.value.toLowerCase().trim();
         const searchWords = query.split(/\s+/).filter(w => w.length > 0);
-        
+
         let visibleFoldersCount = 0;
         folders.forEach(folder => {
           const folderName = (folder.getAttribute('data-name') || '').toLowerCase();
@@ -361,7 +375,7 @@
             }
         }, 50);
       }
-      
+
       if (searchInput) searchInput.addEventListener('input', filterFolders);
       if (searchButton) searchButton.addEventListener('click', filterFolders);
       const sortButtons = document.querySelectorAll('#sortDropdownContent button[data-sort]');
@@ -371,7 +385,7 @@
           btn.addEventListener('click', () => {
             const sortType = btn.getAttribute('data-sort');
             const blocks = Array.from(foldersGrid.querySelectorAll('.epic-folder-block'));
-            
+
             blocks.sort((a, b) => {
               const nameA = (a.getAttribute('data-name') || '').toLowerCase();
               const nameB = (b.getAttribute('data-name') || '').toLowerCase();
@@ -380,11 +394,11 @@
 
               if (sortType === 'name_asc') return nameA.localeCompare(nameB);
               if (sortType === 'name_desc') return nameB.localeCompare(nameA);
-              if (sortType === 'date_desc') return yearB - yearA; 
+              if (sortType === 'date_desc') return yearB - yearA;
               if (sortType === 'date_asc') return yearA - yearB;
               return 0;
             });
-            
+
             blocks.forEach(block => foldersGrid.appendChild(block));
           });
         });

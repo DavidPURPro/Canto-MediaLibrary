@@ -249,20 +249,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if(filesCount) filesCount.textContent = `${visibleCount} items`;
     
-    let totalSizeFormatted;
-    if (totalBytes >= 1024 * 1024 * 1024) {
-      totalSizeFormatted = `${(totalBytes / (1024 * 1024 * 1024)).toFixed(2)}GB`;
-    } else if (totalBytes >= 1024 * 1024) {
-      totalSizeFormatted = `${(totalBytes / (1024 * 1024)).toFixed(2)}MB`;
-    } else if (totalBytes >= 1024) {
-      totalSizeFormatted = `${(totalBytes / 1024).toFixed(2)}KB`;
-    } else {
-      totalSizeFormatted = `${totalBytes}B`;
-    }
-    
-    if(portalFilesCount) portalFilesCount.textContent = visibleCount;
-    if(portalTotalSize) portalTotalSize.textContent = totalSizeFormatted;
-
     // Gestion des en-têtes de tri par date (si activé)
     document.querySelectorAll('.files-grid').forEach(grid => {
         let hasVisibleCards = false;
@@ -849,3 +835,184 @@ window.addEventListener('pageshow', function(event) {
     window.location.reload(); 
   }
 });
+
+(function () {
+  const grid = document.getElementById('foldersContainerGrid');
+  const isAdmin = document.body.dataset.isAdmin === 'true';
+  const editBtn = document.getElementById('editLayoutBtn');
+  const saveBtn = document.getElementById('saveLayoutBtn');
+  if (!grid || !isAdmin || !editBtn) return;   
+  const COLS = 4;        
+  const MAX_ROW = 3;     
+  let editMode = false;
+  let sortable = null;
+ 
+  function cellMetrics() {
+    const s = getComputedStyle(grid);
+    const gap = parseFloat(s.columnGap) || 0;
+    const rowGap = parseFloat(s.rowGap) || gap;
+    const cellW = (grid.clientWidth - gap * (COLS - 1)) / COLS;
+    const rowH = parseFloat(s.gridAutoRows) || 280;
+    return { unitX: cellW + gap, unitY: rowH + rowGap };
+  }
+ 
+  function spanOf(block, axis) {
+    const jsProp = axis === 'col' ? block.style.gridColumn : block.style.gridRow;
+    if (jsProp) {
+      const m = /span\s+(\d+)/.exec(jsProp);
+      if (m) return parseInt(m[1], 10);
+    }
+    const styleAttr = block.getAttribute('style') || '';
+    const regex = axis === 'col' ? /grid-column:[^;]*span\s+(\d+)/ : /grid-row:[^;]*span\s+(\d+)/;
+    const match = regex.exec(styleAttr);
+    if (match && match[1]) return parseInt(match[1], 10);
+    return 1;
+  }
+ 
+  function makeResizable(block, handle, axis) {
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { unitX, unitY } = cellMetrics();
+      const start = axis === 'col' ? e.pageX : e.pageY;
+      const startSpan = spanOf(block, axis);
+      const unit = axis === 'col' ? unitX : unitY;
+      const max = axis === 'col' ? COLS : 5; 
+      const move = (ev) => {
+        const delta = (axis === 'col' ? ev.pageX : ev.pageY) - start;
+        let span = Math.round(startSpan + delta / unit);
+        span = Math.max(1, Math.min(max, span));
+        if (axis === 'col') {
+            block.style.gridColumn = 'span ' + span;
+        } 
+        else {
+            block.style.gridRow = 'span ' + span;
+            block.style.height = (span * 280 + (span - 1) * 40) + 'px';
+        }
+      };
+      const up = () => {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+      };
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+    });
+  }
+ 
+  function addHandles(block) {
+    if (block.querySelector('.resize-r')) return;
+    [['resize-r', 'col'], ['resize-b', 'row']].forEach(([cls, axis]) => {
+      const h = document.createElement('div');
+      h.className = 'resize-handle ' + cls;
+      block.appendChild(h);
+      makeResizable(block, h, axis);
+    });
+  }
+ 
+  function removeHandles() {
+    grid.querySelectorAll('.resize-handle').forEach(h => h.remove());
+  }
+ 
+  grid.addEventListener('click', (e) => {
+    if (editMode) { 
+      if (e.target.closest('.edit-title-btn')) return;
+      e.stopPropagation(); 
+      e.preventDefault(); 
+    }
+  }, true);
+ 
+  function toggleEdit() {
+    editMode = !editMode;
+    grid.classList.toggle('editing', editMode);
+    saveBtn.style.display = editMode ? 'inline-flex' : 'none';
+    editBtn.innerHTML = editMode
+      ? '<i class="fas fa-times"></i> Cancel'
+      : '<i class="fas fa-table-cells"></i> Edit layout';
+ 
+    if (editMode) {
+      grid.querySelectorAll('.epic-folder-block').forEach(addHandles);
+      grid.querySelectorAll('.epic-folder-block').forEach(addTitleButton); 
+      if (window.Sortable) {
+        sortable = window.Sortable.create(grid, {
+          animation: 350, 
+          easing: "cubic-bezier(0.25, 1, 0.5, 1)", 
+          draggable: '.epic-folder-block',
+          handle: '.epic-glass-card',
+          filter: '.resize-handle, .edit-title-btn', 
+          preventOnFilter: false,
+          forceFallback: true,      
+          fallbackTolerance: 3,     
+          swap: true,
+          swapClass: 'sortable-swap-highlight',
+          ghostClass: 'sortable-ghost',
+          dragClass: 'sortable-drag'
+        });
+      }
+    } 
+    else {
+      removeHandles();
+      grid.querySelectorAll('.epic-folder-block').forEach(removeTitleButton); 
+      if (sortable) { sortable.destroy(); sortable = null; }
+    }
+}
+
+function addTitleButton(block) {
+    if (block.querySelector('.edit-title-btn')) return;
+    const titleBtn = document.createElement('button');
+    titleBtn.innerHTML = '<i class="fas fa-heading"></i>';
+    titleBtn.className = 'edit-title-btn'; 
+    titleBtn.style.cssText = "position: absolute; top: -15px; left: 50%; transform: translateX(-50%); z-index: 50; background: #16677c; color: white; border: none; border-radius: 50%; width: 36px; height: 36px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: 0.2s;";
+    if (block.getAttribute('data-custom-title') && block.getAttribute('data-custom-title').trim() !== "") {
+        titleBtn.style.background = "#10b981"; 
+    }
+    titleBtn.onclick = (e) => {
+        e.stopPropagation(); 
+        const currentTitle = block.getAttribute('data-custom-title') || "";
+        const newTitle = prompt("Title of the section above this folder (leave blank to delete):", currentTitle);
+        if (newTitle !== null) {
+            block.setAttribute('data-custom-title', newTitle.trim());
+            titleBtn.style.background = newTitle.trim() !== "" ? "#10b981" : "#16677c";
+        }
+    };
+    block.appendChild(titleBtn);
+}
+
+function removeTitleButton(block) {
+    const btn = block.querySelector('.edit-title-btn');
+    if (btn) btn.remove();
+}
+ 
+  async function saveLayout() {
+    const items = Array.from(grid.querySelectorAll('.epic-folder-block')).map((b, i) => ({
+      folder_id: parseInt(b.dataset.folderId, 10),
+      col_span: spanOf(b, 'col'),
+      row_span: spanOf(b, 'row'),
+      position: i,
+      custom_title: b.getAttribute('data-custom-title') || null 
+    }));
+ 
+    const slug = document.body.dataset.portalSlug;
+    const fd = new FormData();
+    fd.append('layout', JSON.stringify(items));
+ 
+    const original = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    try {
+      const res = await fetch('/portal/' + slug + '/layout', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.status === 'success') {
+        window.location.reload();          // recharge = Jinja réapplique col_span/row_span depuis la BDD
+      } else {
+        alert('Erreur: ' + (data.message || 'sauvegarde impossible'));
+        saveBtn.innerHTML = original;
+      }
+    } catch (err) {
+      console.error('saveLayout error:', err);
+      alert('Erreur réseau lors de la sauvegarde.');
+      saveBtn.innerHTML = original;
+    }
+  }
+ 
+  editBtn.addEventListener('click', toggleEdit);
+  saveBtn.addEventListener('click', saveLayout);
+})();

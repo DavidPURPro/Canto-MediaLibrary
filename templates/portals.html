@@ -68,10 +68,19 @@
                 
                 {% if is_admin %}
                 <div style="display: flex; gap: 8px;">
-                    <button class="icon-action-btn" onclick="event.stopPropagation(); prepareLinkFolder('{{ portal.id }}', '{{ portal.name }}', '{{ portal.linked_folder_id or `` }}')" title="Link to Folder" style="color: #8b5cf6;">
+                    <button class="icon-action-btn" 
+                            data-id="{{ portal.id }}" 
+                            data-name="{{ portal.name }}" 
+                            onclick="event.stopPropagation(); prepareLinkFolder(this.dataset.id, this.dataset.name)" 
+                            title="Link to Folder" 
+                            style="color: #8b5cf6;">
                         <i class="fas fa-folder-open"></i>
                     </button>
-                    <button class="icon-action-btn delete" onclick="event.stopPropagation(); prepareDelete('{{ portal.id }}', '{{ portal.name }}')" title="Delete Portal">
+                    <button class="icon-action-btn delete" 
+                            data-id="{{ portal.id }}" 
+                            data-name="{{ portal.name }}" 
+                            onclick="event.stopPropagation(); prepareDelete(this.dataset.id, this.dataset.name)" 
+                            title="Delete Portal">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -173,6 +182,16 @@
             <div class="form-group" style="margin-top: 15px;">
             <label><i class="fas fa-folder"></i> Select Folders to display</label>
             <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;">
+              <label class="folder-row">
+                  <input type="checkbox" value="FOLDER_ID">
+                  <span>FOLDER_NAME</span>
+                  <select class="folder-size" data-folder="FOLDER_ID">
+                    <option value="standard">Standard (1×1)</option>
+                    <option value="large">Large (2×1)</option>
+                    <option value="tall">Tall (1×2)</option>
+                    <option value="hero">Hero (full)</option>
+                  </select>
+                </label>
                 </div>
         </div>
                 <option value="">No folder linked</option>
