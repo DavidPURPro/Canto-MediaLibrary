@@ -76,7 +76,11 @@ header h1 {
   animation: slideDown 0.2s ease-out;
   padding-top: 7px; 
   margin-top: -4px;
+  max-height: 50vh; 
+  overflow-y: auto; 
+  overflow-x: hidden;
 } 
+
 
 .sort-dropdown-content button, 
 .filter-dropdown-content button { 

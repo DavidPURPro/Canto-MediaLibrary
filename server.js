@@ -134,13 +134,14 @@ const rateLimit = require('express-rate-limit');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-//app.set('trust proxy', 1); // a mettre en prod avec secure : true
+app.set('trust proxy', 1); // a mettre en prod avec secure : true
 app.use(session({
     secret: process.env.SECRET_KEY || 'super_secret_key_de_secours',
     resave: false,
     saveUninitialized: false,
     name: 'portal_session',
-    cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 30 * 60 * 1000 }
+    rolling: true,
+    cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
 // bouclier anti-brute force pour les connexions
@@ -546,14 +547,11 @@ async function updatePortalStats(portal_id) {
             ) as combined_files;
         `, [portal_id]);
         const foldersResult = await pool.query(`
-            WITH RECURSIVE folder_tree AS (
-                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
-                UNION
-                SELECT f.id FROM folders f
-                INNER JOIN folder_tree ft ON f.parent_id = ft.id
-            )
-            SELECT COUNT(DISTINCT id) as count FROM folder_tree;
+            SELECT COUNT(DISTINCT folder_id) as count 
+            FROM portal_folders 
+            WHERE portal_id = $1;
         `, [portal_id]);
+        
         const file_count = parseInt(countResult.rows[0].count || 0, 10);
         const folder_count = parseInt(foldersResult.rows[0].count || 0, 10);
         const folder_display = `${folder_count} folder${folder_count > 1 ? 's' : ''}`;
@@ -1427,13 +1425,9 @@ app.get('/portals', loginRequiredHtml, async (req, res) => {
             `, [row.id]);
 
             const foldersResult = await pool.query(`
-                WITH RECURSIVE folder_tree AS (
-                    SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
-                    UNION
-                    SELECT f.id FROM folders f
-                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
-                )
-                SELECT COUNT(DISTINCT id) as count FROM folder_tree;
+                SELECT COUNT(DISTINCT folder_id) as count 
+                FROM portal_folders 
+                WHERE portal_id = $1;
             `, [row.id]);
             
             const file_count = parseInt(countResult.rows[0].count || 0, 10);
@@ -1573,13 +1567,9 @@ app.get('/portal/:portal_id', async (req, res) => {
         `, [real_portal_id]);
 
         const totalFoldersRes = await pool.query(`
-            WITH RECURSIVE folder_tree AS (
-                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
-                UNION
-                SELECT f.id FROM folders f
-                INNER JOIN folder_tree ft ON f.parent_id = ft.id
-            )
-            SELECT COUNT(DISTINCT id) as count FROM folder_tree;
+            SELECT COUNT(DISTINCT folder_id) as count 
+            FROM portal_folders 
+            WHERE portal_id = $1;
         `, [real_portal_id]);
 
         const total_files_count = parseInt(totalFilesRes.rows[0].count || 0, 10);

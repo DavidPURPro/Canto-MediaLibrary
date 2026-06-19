@@ -682,7 +682,9 @@ function showFileModal(item) {
       modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
   }
   if (modalTitle) modalTitle.textContent = filename;
-  if (modalDownloadBtn) modalDownloadBtn.href = `/download?url=${encodeURIComponent(link)}&filename=${filename}`;
+  if (modalDownloadBtn) modalDownloadBtn.href = `/proxy_download?url=${encodeURIComponent(link)}&filename=${encodeURIComponent(filename)}`;
+  if (modalDownloadBtn) modalDownloadBtn.setAttribute('download', filename);
+  if (modalCopyBtn) modalCopyBtn.setAttribute('data-link', link);
   
   fetch(`/file_details?filename=${encodeURIComponent(filename)}`)
     .then(response => response.json())
@@ -1192,6 +1194,26 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
   setupCopyLinkButtons();
   setupGalleryItemClicks();
 
+  if (modalCopyBtn) {
+    modalCopyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fileUrl = modalCopyBtn.getAttribute('data-link');
+      if (!fileUrl) return;
+      navigator.clipboard.writeText(fileUrl)
+        .then(() => {
+          const originalHTML = modalCopyBtn.innerHTML;
+          modalCopyBtn.innerHTML = '✓ Copied!';
+          setTimeout(() => {
+            modalCopyBtn.innerHTML = originalHTML;
+          }, 2000);
+        })
+        .catch(err => {
+          console.error('Failed to copy: ', err);
+          alert('Failed to copy file link. Please try again.');
+        });
+    });
+  }
+
   document.addEventListener('click', async (e) => {
     const button = e.target.closest('.exclusive-btn');
     if (!button) return;
@@ -1250,7 +1272,14 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     if (currentDownloadLink) {
       const a = document.createElement('a');
       a.href = currentDownloadLink;
-      a.download = currentDownloadLink.split('filename=')[1] || 'download';
+      let dlName = 'download';
+      try {
+        const urlObj = new URL(currentDownloadLink, window.location.origin);
+        dlName = urlObj.searchParams.get('filename') || 'download';
+      } catch (err) {
+        dlName = currentDownloadLink.split('filename=')[1] || 'download';
+      }
+      a.download = dlName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1325,7 +1354,16 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
         // download normal pour les fichiers non exclusifs
         const a = document.createElement('a');
         a.href = downloadBtn.href;
-        a.download = downloadBtn.download || 'download';
+        let dlName = downloadBtn.getAttribute('download');
+        if (!dlName) {
+          try {
+            const urlObj = new URL(downloadBtn.href, window.location.origin);
+            dlName = urlObj.searchParams.get('filename') || 'download';
+          } catch (err) {
+            dlName = 'download';
+          }
+        }
+        a.download = dlName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -2575,7 +2613,6 @@ function updateBreadcrumbs(folderId) {
     if (path.length > 0) {
         breadcrumbContainer.style.display = 'flex';
         let html = `<div class="breadcrumb-item" onclick="resetFolderSelection()"><i class="fas fa-layer-group"></i> Library</div>`;
-        
         path.forEach((f, index) => {
             html += `<span class="breadcrumb-separator">/</span>`;
             if (index === path.length - 1) {
@@ -2630,4 +2667,3 @@ window.resetFolderSelection = function() {
     updateBreadcrumbs(null);
     executeGlobalSearch(document.getElementById('searchInput').value.trim(), 1);
 };
-
