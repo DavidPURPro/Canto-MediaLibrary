@@ -18,6 +18,8 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/header.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
+  <style>    
+  </style>
   {% if is_sandbox %}
   <div style="background: #1e293b; padding: 10px 20px; display: flex; align-items: center;">
       <a href="/portal/{{ portal_slug }}" style="color: white; text-decoration: none; font-weight: 600;">
@@ -102,7 +104,6 @@
       <a href="/upload" class="modern-btn primary-btn" title="Upload files"><i class="fas fa-cloud-upload-alt" ></i> Upload</a>
       {% endif %}
       {% if is_admin %}
-      <a href="/delete" class="modern-btn danger-btn" title="Delete files"><i class="fas fa-trash-alt"></i> Delete</a>
       <a href="/admin/users" class="modern-btn secondary-btn">Access Management</a>
       {% endif %}
     </div>
@@ -176,6 +177,11 @@
         <div class="gallery-item" data-tags="{{ file.tags | join(', ') | lower }}" data-name="{{ file.nom|lower }}" data-link="{{ file.lien }}" data-filename="{{ file.nom }}" data-description="{{ file.description }}" data-exclusive="{{ 'true' if file.is_exclusive is true else 'false' }}" {% if file.date_ajout %}data-date="{{ file.date_ajout.strftime('%d-%m-%Y') }}" {% endif %} data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
          data-portal-name="{{ file.portal_name if file.portal_name else 'None' }}" >
          <div class="select-checkbox"><i class="fas fa-check"></i></div>
+          {% if is_admin %}
+          <button class="delete-file-btn" data-filename="{{ file.nom }}" title="Delete file">
+            <i class="fas fa-trash"></i>
+          </button>
+          {% endif %}
           {% set ext = file.nom.split('.')[-1]|lower %}
 
           {% if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp'] %}
@@ -383,6 +389,10 @@
 
             <button id="bulkFolderBtn" class="modern-btn secondary-btn bulk-btn" style="background: #8b5cf6; color: rgb(12, 12, 12);">
               <i class="fas fa-folder-plus"></i> Move To Folder
+            </button>
+
+            <button id="bulkDeleteBtn" class="modern-btn danger-btn bulk-btn">
+              <i class="fas fa-trash"></i> Delete
             </button>
             {% endif %}
             

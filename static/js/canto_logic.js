@@ -1086,6 +1086,7 @@ function executeGlobalSearch(query, page = 1) {
                          data-exclusive="${isExclusive ? 'true' : 'false'}" 
                          data-date="${file.date_ajout || ''}">
                          <div class="select-checkbox"><i class="fas fa-check"></i></div>
+                        ${isAdmin ? `<button class="delete-file-btn" data-filename="${file.name}" title="Delete file"><i class="fas fa-trash"></i></button>` : ''}
                         ${mediaHtml}
                         <div class="image-title" title="${file.name}">${file.name}</div>
                         <div class="item-footer">
@@ -2458,6 +2459,94 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                 bulkRemoveFolderBtn.innerHTML = originalHtml;
                 bulkRemoveFolderBtn.disabled = false;
             });
+        });
+    }
+
+    // ── Suppression individuelle (icône trash sur chaque carte) ──────────────
+    async function deleteFile(filename) {
+        const fd = new FormData();
+        fd.append('filename', filename);
+        fd.append('confirmation', 'on');
+        const btn = document.querySelector(`.delete-file-btn[data-filename="${CSS.escape(filename)}"]`);
+        if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; btn.disabled = true; }
+        try {
+            const res = await fetch('/delete', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.status === 'success') {
+                const card = document.querySelector(`.gallery-item[data-filename="${CSS.escape(filename)}"]`);
+                if (card) {
+                    card.style.transition = 'opacity 0.3s, transform 0.3s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.9)';
+                    setTimeout(() => card.remove(), 300);
+                }
+                // retirer de selectedFiles si sélectionné
+                selectedFiles = selectedFiles.filter(f => f.filename !== filename);
+                updateBulkActionBar();
+            } else {
+                alert('Error: ' + (data.message || 'Delete failed'));
+                if (btn) { btn.innerHTML = '<i class="fas fa-trash"></i>'; btn.disabled = false; }
+            }
+        } catch (err) {
+            console.error('Delete error:', err);
+            alert('An error occurred while deleting.');
+            if (btn) { btn.innerHTML = '<i class="fas fa-trash"></i>'; btn.disabled = false; }
+        }
+    }
+
+    // délégation sur la gallery pour gérer les cartes Jinja ET les cartes injectées en JS
+    document.getElementById('gallery').addEventListener('click', function(e) {
+        const trashBtn = e.target.closest('.delete-file-btn');
+        if (!trashBtn) return;
+        e.stopPropagation();
+        const filename = trashBtn.getAttribute('data-filename');
+        if (!filename) return;
+        if (!confirm(`Permanently delete "${filename}"?\nThis action cannot be undone.`)) return;
+        deleteFile(filename);
+    });
+
+    // ── Suppression en masse ─────────────────────────────────────────────────
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    if (bulkDeleteBtn) {
+        bulkDeleteBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            if (!confirm(`Permanently delete ${selectedFiles.length} file(s)?\nThis action cannot be undone.`)) return;
+
+            const originalHtml = bulkDeleteBtn.innerHTML;
+            bulkDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+            bulkDeleteBtn.disabled = true;
+
+            const fd = new FormData();
+            fd.append('filenames', JSON.stringify(selectedFiles.map(f => f.filename)));
+
+            try {
+                const res = await fetch('/bulk_delete', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    // retirer les cartes du DOM avec animation
+                    selectedFiles.forEach(({ filename }) => {
+                        const card = document.querySelector(`.gallery-item[data-filename="${CSS.escape(filename)}"]`);
+                        if (card) {
+                            card.style.transition = 'opacity 0.3s, transform 0.3s';
+                            card.style.opacity = '0';
+                            card.style.transform = 'scale(0.9)';
+                            setTimeout(() => card.remove(), 300);
+                        }
+                    });
+                    const count = selectedFiles.length;
+                    selectedFiles = [];
+                    updateBulkActionBar();
+                    setTimeout(() => alert(`${count} file(s) successfully deleted.`), 350);
+                } else {
+                    alert('Error: ' + (data.message || 'Bulk delete failed'));
+                }
+            } catch (err) {
+                console.error('Bulk delete error:', err);
+                alert('An error occurred during bulk delete.');
+            } finally {
+                bulkDeleteBtn.innerHTML = originalHtml;
+                bulkDeleteBtn.disabled = false;
+            }
         });
     }
 

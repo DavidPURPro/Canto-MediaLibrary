@@ -1317,11 +1317,6 @@ app.post('/assign_file_folder', loginRequiredJson, adminRequired, upload.none(),
     }
 });
 
-// routes suppr et maj fichiers
-app.get('/delete', loginRequiredHtml, adminRequired, (req, res) => {
-    res.render('delete.html');
-});
-
 // suppr définitivement un fichier (Azure + bdd)
 app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -1372,7 +1367,59 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
     }
 });
 
-// maj le statut exclusif
+// suppression en masse de fichiers
+app.post('/bulk_delete', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+    try {
+        const filenames = JSON.parse(req.body.filenames || '[]');
+        if (!Array.isArray(filenames) || filenames.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'No files specified' });
+        }
+
+        const errors = [];
+        for (const filename of filenames) {
+            try {
+                // suppr Azure
+                const blockBlobClient = containerClient.getBlockBlobClient(filename);
+                await blockBlobClient.deleteIfExists();
+
+                // identifier portails concernés
+                const portalsResult = await pool.query("SELECT portal_id FROM portal_files WHERE filename = $1;", [filename]);
+                const affectedPortals = portalsResult.rows.map(r => r.portal_id);
+                if (affectedPortals.length > 0) {
+                    await pool.query("DELETE FROM portal_files WHERE filename = $1;", [filename]);
+                }
+
+                // suppr BDD principale + favoris
+                await pool.query("DELETE FROM documents WHERE nom_fichier = $1;", [filename]);
+                await pool.query("DELETE FROM user_favorites WHERE filename = $1;", [filename]);
+
+                for (const portal_id of affectedPortals) {
+                    await updatePortalStats(portal_id);
+                }
+
+                insightsClient.trackEvent({
+                    name: 'Fichier_Supprime',
+                    properties: {
+                        fichier: filename,
+                        utilisateur: req.session.user_email || req.session.portal_user_email || 'Visiteur'
+                    }
+                });
+            } catch (err) {
+                console.error(`Bulk delete error for ${filename}:`, err);
+                errors.push(filename);
+            }
+        }
+
+        if (errors.length > 0) {
+            return res.json({ status: 'partial', message: `${filenames.length - errors.length} deleted, ${errors.length} failed.`, failed: errors });
+        }
+        res.json({ status: 'success', message: `${filenames.length} file(s) deleted successfully.` });
+
+    } catch (error) {
+        console.error('Bulk delete error:', error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
 app.post('/update_exclusive', loginRequiredJson, upload.none(), async (req, res) => {
     const role = req.session.user_role;
     if (role !== 'admin' && role !== 'uploader') {
@@ -1493,7 +1540,7 @@ app.get('/portal/:portal_id', async (req, res) => {
         const isAuthorizedPortalUser = !!req.session.portal_user_email && (req.session.portal_access == real_portal_id); 
         if (!isGlobalAuth && !isAuthorizedPortalUser) return res.redirect(`/portal/${slug}/login`);
         const linkedFoldersRes = await pool.query(`
-            SELECT f.id, f.name, f.creation_date, pf.col_span, pf.row_span, pf.position, pf.custom_title
+            SELECT f.id, f.name, f.creation_date, pf.col_span, pf.row_span, pf.position, pf.custom_title, pf.custom_title_color
             FROM folders f
             JOIN portal_folders pf ON f.id = pf.folder_id
             WHERE pf.portal_id = $1 
@@ -1529,7 +1576,8 @@ app.get('/portal/:portal_id', async (req, res) => {
             year: year,
             col_span: folder.col_span || 1,
             row_span: folder.row_span || 1,
-            custom_title: folder.custom_title
+            custom_title: folder.custom_title,
+            custom_title_color: folder.custom_title_color || '#000000'
 
         });
     }
@@ -1613,9 +1661,9 @@ app.post('/portal/:portal_id/layout', adminRequired, upload.none(), async (req, 
         const items = JSON.parse(req.body.layout || "[]");
         for (const it of items) {
             await pool.query(
-                `UPDATE portal_folders SET col_span = $1, row_span = $2, position = $3, custom_title = $4
-                 WHERE portal_id = $5 AND folder_id = $6`,
-                [it.col_span, it.row_span, it.position, it.custom_title, portalId, it.folder_id]
+                `UPDATE portal_folders SET col_span = $1, row_span = $2, position = $3, custom_title = $4, custom_title_color = $5
+                 WHERE portal_id = $6 AND folder_id = $7`,
+                [it.col_span, it.row_span, it.position, it.custom_title, it.custom_title_color, portalId, it.folder_id]
             );
         }
         res.json({ status: "success" });
@@ -2453,13 +2501,30 @@ app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none
                 ? { id: parseInt(item.id), size: item.size || 'standard' }
                 : { id: parseInt(item), size: 'standard' }
         );
+        const existingRes = await pool.query("SELECT * FROM portal_folders WHERE portal_id = $1;", [portal_id]);
+        const existingLayouts = new Map();
+        existingRes.rows.forEach(row => {
+            existingLayouts.set(row.folder_id, row);
+        });
         await pool.query("DELETE FROM portal_folders WHERE portal_id = $1;", [portal_id]);
         for (const f of chosen) {
-            await pool.query(
-                "INSERT INTO portal_folders (portal_id, folder_id, display_size) VALUES ($1, $2, $3);",
-                [portal_id, f.id, f.size || 'standard']
-            );
+            const oldData = existingLayouts.get(f.id);
+            
+            if (oldData) {
+                await pool.query(
+                    `INSERT INTO portal_folders (portal_id, folder_id, display_size, col_span, row_span, position, custom_title, custom_title_color) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`,
+                    [portal_id, f.id, f.size || 'standard', oldData.col_span, oldData.row_span, oldData.position, oldData.custom_title, oldData.custom_title_color]
+                );
+            } 
+            else {
+                await pool.query(
+                    "INSERT INTO portal_folders (portal_id, folder_id, display_size) VALUES ($1, $2, $3);",
+                    [portal_id, f.id, f.size || 'standard']
+                );
+            }
         }
+
         await updatePortalStats(portal_id);
         res.json({ status: "success", message: "Portal folders updated successfully" });
     } catch (error) {

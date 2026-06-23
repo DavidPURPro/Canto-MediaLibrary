@@ -965,14 +965,40 @@ function addTitleButton(block) {
     if (block.getAttribute('data-custom-title') && block.getAttribute('data-custom-title').trim() !== "") {
         titleBtn.style.background = "#10b981"; 
     }
+    
     titleBtn.onclick = (e) => {
         e.stopPropagation(); 
         const currentTitle = block.getAttribute('data-custom-title') || "";
-        const newTitle = prompt("Title of the section above this folder (leave blank to delete):", currentTitle);
-        if (newTitle !== null) {
-            block.setAttribute('data-custom-title', newTitle.trim());
-            titleBtn.style.background = newTitle.trim() !== "" ? "#10b981" : "#16677c";
-        }
+        const currentColor = block.getAttribute('data-custom-title-color') || "#000000";
+        const popupOverlay = document.createElement('div');
+        popupOverlay.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);";
+        const popupBox = document.createElement('div');
+        popupBox.style.cssText = "background: white; padding: 25px; border-radius: 12px; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-family: inherit;";
+        popupBox.innerHTML = `
+            <h3 style="margin: 0 0 15px 0; color: #333;">Edit Section Title</h3>
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px;">Title text (leave blank to delete):</label>
+            <input type="text" id="popupTitleInput" value="${currentTitle}" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;">
+            
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px;">Title Color:</label>
+            <input type="color" id="popupColorInput" value="${currentColor}" style="width: 100%; height: 40px; border: none; border-radius: 6px; cursor: pointer; margin-bottom: 25px; padding: 0;">
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="popupCancel" style="padding: 8px 16px; border: none; background: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: bold;">Cancel</button>
+                <button id="popupSave" style="padding: 8px 16px; border: none; background: #16677c; color: white; border-radius: 6px; cursor: pointer; font-weight: bold;">Save</button>
+            </div>
+        `;
+        
+        popupOverlay.appendChild(popupBox);
+        document.body.appendChild(popupOverlay);
+        document.getElementById('popupCancel').onclick = () => popupOverlay.remove();
+        document.getElementById('popupSave').onclick = () => {
+            const newTitle = document.getElementById('popupTitleInput').value.trim();
+            const newColor = document.getElementById('popupColorInput').value;
+            block.setAttribute('data-custom-title', newTitle);
+            block.setAttribute('data-custom-title-color', newColor);
+            titleBtn.style.background = newTitle !== "" ? "#10b981" : "#16677c";
+            popupOverlay.remove();
+        };
     };
     block.appendChild(titleBtn);
 }
@@ -988,7 +1014,8 @@ function removeTitleButton(block) {
       col_span: spanOf(b, 'col'),
       row_span: spanOf(b, 'row'),
       position: i,
-      custom_title: b.getAttribute('data-custom-title') || null 
+      custom_title: b.getAttribute('data-custom-title') || null ,
+      custom_title_color: b.getAttribute('data-custom-title-color') || '#000000' 
     }));
  
     const slug = document.body.dataset.portalSlug;

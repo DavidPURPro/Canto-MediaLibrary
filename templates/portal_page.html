@@ -132,14 +132,16 @@
         {% for card in projectCards %}
         {% if card.custom_title %}
           <div style="grid-column: 1 / -1; width: 100%; text-align: center; align-self: end; margin-bottom: -20px; position: relative; z-index: 10; pointer-events: none;">
-            <h2 style="font-size: 2.2rem; font-weight: 700; color: black; pointer-events: auto;">{{ card.custom_title }}</h2>
+            <h2 style="font-size: 2.2rem; font-weight: 700; color: {{ card.custom_title_color }}; pointer-events: auto;">{{ card.custom_title }}</h2>
         </div>
         {% endif %}
+        
         <div class="epic-folder-block"
              data-folder-id="{{ card.folder_id }}"
              data-name="{{ card.folder_name }}"
              data-year="{{ card.year }}"
              data-custom-title="{{ card.custom_title or '' }}"
+             data-custom-title-color="{{ card.custom_title_color or '#000000' }}"
              style="display: flex; flex-direction: column; grid-column: span {{ card.col_span or 1 }}; grid-row: span {{ card.row_span or 1 }}; height: {{ (card.row_span or 1) * 280 + ((card.row_span or 1) - 1) * 40 }}px;">
              <div class="epic-title-glass-capsule">
             <i class="far fa-folder-open epic-title-icon"></i>
