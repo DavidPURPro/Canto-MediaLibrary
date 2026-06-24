@@ -217,11 +217,7 @@ header h1 {
 }
 
 
-/* =========================================================
-   CORRECTIF MOBILE : HEADER & GRILLE DES PORTAILS
-========================================================= */
 @media (max-width: 992px) {
-  /* 1. On corrige le header pour qu'il s'empile et ne bloque plus l'écran */
   .ultra-header {
     position: relative !important;
     height: auto !important;
@@ -241,26 +237,22 @@ header h1 {
     width: 100% !important;
   }
 
-  /* 2. On réduit l'espace sous le header car il n'est plus fixe */
   .main-hub { 
     padding: 0 15px 40px !important; 
     margin-top: 30px !important; 
   }
 
-  /* 3. On force les cartes à se mettre sur une seule colonne */
   .portals-grid { 
     grid-template-columns: 1fr !important; 
     gap: 20px !important; 
   }
 
-  /* 4. LE SECRET : On force l'affichage (annule l'opacité 0 qui bloque les cartes) */
   .portal-card-modern {
     padding: 25px 20px !important; 
     opacity: 1 !important;
     transform: none !important;
   }
 
-  /* 5. Ajustements pour que le texte rentre bien sur petit écran */
   .portal-title { 
     font-size: 1.6rem !important; 
   }
@@ -278,4 +270,142 @@ header h1 {
   .metric-item .m-label {
     font-size: 10px !important;
   }
+}
+
+/* ===== HEADER PORTALS ===== */
+
+.header-container {
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.main-logo, 
+.logo {
+    justify-self: start !important;
+    margin: 0 !important;
+}
+
+.shimmer-title, 
+h1 {
+    justify-self: center !important;
+    position: static !important;
+    transform: none !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+}
+
+.nav-controls {
+    justify-self: end !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 0 !important;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .header-container {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .shimmer-title {
+        position: static;
+        transform: none;
+    }
+
+    .nav-controls {
+        margin-left: 0;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+}
+
+
+
+
+/* ===== FIX : neutralise les overrides de header.css sur .ultra-header ===== */
+
+/* Réinitialise le <header> tag pour portals (header.css le transforme en grid) */
+header.ultra-header {
+    display: flex !important;
+    flex-direction: row !important;
+    grid-template-columns: unset !important;
+    grid-template-areas: unset !important;
+    align-items: center !important;
+    height: 90px !important;
+    position: fixed !important;
+    top: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+/* Remet le container en 3 colonnes : logo | titre centré | nav à droite */
+header.ultra-header .header-container {
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr !important;
+    grid-template-areas: "logo title nav" !important;
+    align-items: center !important;
+    width: 95% !important;
+    max-width: 1400px !important;
+    margin: 0 auto !important;
+    gap: 0 !important;
+}
+
+header.ultra-header .main-logo {
+    grid-area: logo !important;
+    justify-self: start !important;
+    margin: 0 !important;
+}
+
+header.ultra-header h1,
+header.ultra-header .shimmer-title {
+    grid-area: title !important;
+    justify-self: center !important;
+    text-align: center !important;
+    position: static !important;
+    transform: none !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+}
+
+header.ultra-header .nav-controls {
+    grid-area: nav !important;
+    justify-self: end !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 0 !important;
+    flex-wrap: nowrap !important;
+}
+
+/* Neutralise aussi les sous-éléments de header.css qui ne s'appliquent pas ici */
+header.ultra-header .header-left,
+header.ultra-header .header-center,
+header.ultra-header .header-right {
+    display: contents !important;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    header.ultra-header {
+        height: auto !important;
+        padding: 12px 16px !important;
+    }
+
+    header.ultra-header .header-container {
+        grid-template-columns: auto 1fr auto !important;
+        grid-template-areas: "logo title nav" !important;
+        gap: 8px !important;
+    }
+
+    header.ultra-header .nav-controls {
+        flex-wrap: wrap !important;
+        justify-content: flex-end !important;
+    }
 }

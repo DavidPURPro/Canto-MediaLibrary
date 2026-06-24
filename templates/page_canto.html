@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Media Library - PUR</title>
+  <title>Media Library — PUR</title>
   
   <meta name="robots" content="noarchive, nofollow">
   <meta http-equiv="Cache-Control" content="no-store">
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/x-icon">
   
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-  
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,700;0,800;1,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
@@ -18,15 +17,24 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/header.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
-  <style>    
   </style>
   {% if is_sandbox %}
-  <div style="background: #1e293b; padding: 10px 20px; display: flex; align-items: center;">
-      <a href="/portal/{{ portal_slug }}" style="color: white; text-decoration: none; font-weight: 600;">
-          <i class="fas fa-arrow-left"></i> Return to the portal's showcase
-      </a>
-  </div>
-{% endif %}
+  <style>
+    .sandbox-banner {
+      background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+      padding: 10px 24px;
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sandbox-banner a {
+      color: rgba(255,255,255,0.9); text-decoration: none;
+      font-weight: 700; font-size: 13.5px;
+      display: flex; align-items: center; gap: 8px;
+      transition: color 0.2s;
+    }
+    .sandbox-banner a:hover { color: white; }
+  </style>
+  {% endif %}
 </head>
 
 <body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{ user_role }}"
@@ -36,12 +44,18 @@
       data-folder-id="{{ current_folder_id }}"
       {% endif %}>
 
+  {% if is_sandbox %}
+  <div class="sandbox-banner">
+    <a href="/portal/{{ portal_slug }}"><i class="fas fa-arrow-left"></i> Return to portal showcase</a>
+  </div>
+  {% endif %}
+
   <header>
     <div class="header-bubbles" id="headerBubbles"></div>
     <a href="/index">
     <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="logo" />
     </a>
-    <h1 class="shimmer-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Media Library</h1>    
+    <h1 class="shimmer-title">Media Library</h1>
     <div class="controls">
       <a href="https://purprojet.sharepoint.com/sites/AdminToolKit/SitePages/PUR-Admin-ToolKit.aspx" class="modern-btn secondary-btn" target="_blank" rel="noopener noreferrer" title="Back to Admin Toolkit">
           <i class="fas fa-toolbox"></i> Admin Toolkit
@@ -561,7 +575,7 @@
             if(folderNode) folderNode.click();
         });
     }
-</script>
+  </script>
 </body>
 </html>
 </body>

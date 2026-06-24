@@ -1,413 +1,317 @@
+/* ==========================================================================
+   SIDEBAR
+   ========================================================================== */
 .sidebar {
-    width: 230px; 
-    background: var(--gray-50); 
-    border-right: 1px solid var(--gray-300);
-    flex-shrink: 0; 
-    padding: 20px; 
-    overflow-y: auto; 
-    transition: transform 0.3s ease;
-    position: fixed; 
-    height: calc(100vh - 120px); 
-    z-index: 100;
-    transform: translateX(-100%); 
-    box-shadow: var(--shadow-md); 
-    top: 120px;
+  width: 260px;
+  background: #ffffff;
+  border-right: 1px solid var(--gray-200);
+  flex-shrink: 0;
+  padding: 20px 14px 80px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: transform 0.3s var(--ease-out);
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  height: calc(100vh - var(--header-h));
+  z-index: 100;
+  transform: translateX(-100%);
+  box-shadow: 2px 0 20px rgba(13, 69, 85, 0.06);
 }
 
-.sidebar.active {
-    transform: translateX(0); 
-    position: fixed;
-}
+.sidebar.active { transform: translateX(0); }
 
-.sidebar.active ~ .main-content {
-    margin-left: 230px; 
-    width: calc(100% - 230px);
-}
-
+/* ── Toggle tab ── */
 .sidebar-toggle {
-    position: fixed; 
-    left: 0; 
-    top: 150px; 
-    background: var(--primary); 
-    color: var(--white);
-    border: none; 
-    width: 30px; 
-    height: 30px; 
-    border-radius: 0 4px 4px 0; 
-    cursor: pointer;
-    font-size: 16px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    z-index: 101; 
-    transition: var(--transition); 
-    box-shadow: var(--shadow-sm);
+  position: fixed;
+  left: 0;
+  top: calc(var(--header-h) + 24px);
+  background: var(--primary);
+  color: white;
+  border: none;
+  width: 28px;
+  height: 56px;
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 101;
+  transition: var(--transition);
+  box-shadow: 2px 0 12px rgba(13,69,85,0.2);
 }
-
-.sidebar.active ~ .sidebar-toggle {
-    left: 250px; 
-    top: 140px;
-}
-
 .sidebar-toggle:hover {
-    background: var(--primary-dark); 
-    transform: translateX(2px);
+  background: var(--primary-dark);
+  width: 32px;
+}
+.sidebar.active ~ .sidebar-toggle {
+  left: 260px;
 }
 
+/* ── Add folder button ── */
 .add-main-folder-btn {
-    background: var(--primary); 
-    color: var(--white); 
-    border: none; 
-    border-radius: 25px; 
-    left : 20px; 
-    top : 10px;
-    padding: 10px 10px; 
-    margin: 10px 0; 
-    cursor: pointer; 
-    display: flex; 
-    align-items: center; 
-    gap: 8px;
-    width: 90%; 
-    justify-content: center; 
-    transition: var(--transition); 
-    box-shadow: var(--shadow-sm); 
-    font-weight: 600; 
-    position: relative; 
-    overflow: hidden;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 11px 14px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  transition: var(--transition);
+  box-shadow: 0 3px 10px rgba(22,103,124,0.3);
+  position: relative;
+  overflow: hidden;
 }
+.add-main-folder-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+.add-main-folder-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(22,103,124,0.35); }
+.add-main-folder-btn:hover::after { left: 150%; }
 
-.add-main-folder-btn::before {
-    content: ''; 
-    position: absolute; 
-    top: 0; 
-    left: -100%; 
-    width: 100%; 
-    height: 100%; 
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); 
-    transition: left 0.5s;
-}
+/* ── Folder container ── */
+.folders-container { margin-top: 4px; padding-bottom: 100px; }
+.folders-container > .folder { margin-bottom: 3px; }
 
-.add-main-folder-btn:hover {
-    background: var(--primary-dark); 
-    transform: translateY(-2px); 
-    box-shadow: var(--shadow-md);
-}
-
-.add-main-folder-btn:hover::before {
-    left: 100%;
-}
-
-.add-folder-btn, 
-.delete-folder-btn {
-    background: rgba(255, 255, 255, 0.9); 
-    border: none; 
-    color: var(--primary); 
-    cursor: pointer;
-    font-size: 14px; 
-    padding: 0; 
-    transition: var(--transition);
-    border-radius: 50%; 
-    width: 24px; 
-    height: 24px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    box-shadow: var(--shadow-sm); 
-    backdrop-filter: blur(4px); 
-    position: relative; 
-    overflow: hidden; 
-    font-weight: bold;
-}
-
-.add-folder-btn::before, 
-.delete-folder-btn::before {
-    content: ''; 
-    position: absolute; 
-    top: 0; 
-    left: -100%; 
-    width: 100%; 
-    height: 100%; 
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent); 
-    transition: left 0.3s;
-}
-
-.add-folder-btn:hover, 
-.delete-folder-btn:hover {
-    transform: scale(1.1); 
-    box-shadow: var(--shadow-md);
-}
-
-.add-folder-btn:hover::before, 
-.delete-folder-btn:hover::before {
-    left: 100%;
-}
-
-.delete-folder-btn {
-    color: #d9534f;
-}
-
-.delete-folder-btn:hover {
-    color: #c9302c; 
-    background: rgba(220, 53, 69, 0.1);
-}
-
-.add-folder-btn.disabled, 
-.delete-folder-btn.disabled, 
-.add-main-folder-btn.disabled {
-    opacity: 0.5; 
-    cursor: not-allowed; 
-    pointer-events: none; 
-    background-color: var(--gray-300); 
-    color: var(--gray-800); 
-    transform: none !important; 
-    box-shadow: none !important;
-}
-
-.add-folder-btn.disabled::before, 
-.delete-folder-btn.disabled::before, 
-.add-main-folder-btn.disabled::before {
-    display: none;
-}
-
-.folders-container {
-    margin-top: 10px; 
-    padding: 5px;
-}
-
-.folders-container > .folder {
-    margin-bottom: 5px;
-}
-
-.folder {
-    padding: 8px 0; 
-    cursor: pointer; 
-    position: relative;
-}
+/* ── Folder node ── */
+.folder { padding: 2px 0; cursor: pointer; position: relative; }
 
 .folder-icon {
-    width: 20px; 
-    text-align: center; 
-    transition: transform 0.2s;
+  width: 20px;
+  text-align: center;
+  transition: transform 0.2s var(--ease-out);
+  color: #f59e0b;
 }
-
-.folder.active > .folder-name > .folder-icon {
-    transform: rotate(90deg);
-}
-
-.folder.selected > .folder-name .folder-icon i {
-    color: var(--primary) !important;
-    opacity: 1 !important;
-}
+.folder.active > .folder-name > .folder-icon,
+.folder.expanded > .folder-name > .folder-icon { transform: rotate(90deg); }
 
 .folder-name {
-    display: flex !important;
-    align-items: center !important;
-    flex-wrap: nowrap !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-    padding-right: 5px !important;
-    border-radius: 4px; 
-    transition: var(--transition);
-    position: relative !important;
-    z-index: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  padding: 7px 6px;
+  border-radius: var(--radius);
+  transition: background 0.15s ease, transform 0.15s ease;
+  cursor: pointer;
+  position: relative;
 }
-
 .folder-name:hover {
-    background-color: var(--gray-200); 
-    transform: translateX(3px);
-    z-index: 99999 !important;
+  background: #f0fafb;
+  transform: translateX(3px);
 }
-
 .folder-name.is-selected {
-    background-color: #f0f9ff; 
-    border-radius: 8px; 
-    box-shadow: 0 0 0 4px rgba(22, 103, 124, 0.15); 
-    padding: 6px 10px; 
-    margin: -1px -5px;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: linear-gradient(90deg, #e6f7fa 0%, #f0fafb 100%);
+  box-shadow: 0 0 0 2px rgba(22,103,124,0.2), inset 3px 0 0 var(--primary);
+  border-radius: var(--radius);
+  padding: 7px 6px 7px 9px;
 }
+.folder-name.is-selected .folder-title { color: var(--primary) !important; font-weight: 700 !important; }
+.folder-name.is-selected .folder-icon i { color: var(--primary) !important; }
 
-.folder-name.is-selected .folder-title {
-    color: #16677c !important; 
-    font-weight: 700 !important;
-}
-
-.folder-name.is-selected .folder-icon i {
-    color: #16677c !important; 
-    opacity: 1 !important;
-}
-
-.folder-name span:not(.folder-icon),
 .folder-title {
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    width: 100% !important;
-    font-size: 13px !important;
-    text-align: left !important;
-    padding-right: 2px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500;
+  color: var(--gray-800);
 }
 
+/* ── Sub-folders ── */
+.subfolders {
+  padding-left: 16px;
+  display: none;
+  margin-top: 2px;
+  border-left: 2px dashed var(--gray-200);
+  margin-left: 10px;
+}
+.folder.active > .subfolders,
+.folder.expanded > .subfolders {
+  display: block;
+  animation: slideDown 0.2s var(--ease-out) forwards;
+}
+@keyframes slideDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Add/delete folder action buttons ── */
 .folder-actions-wrapper {
-    position: relative !important;
-    display: flex !important;
-    align-items: center !important;
-    flex-shrink: 0 !important;
-    margin-left: 5px !important;
-    z-index: 10 !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  margin-left: 4px !important;
+  z-index: 10 !important;
 }
-
-.folder-actions-wrapper:hover {
-    z-index: 100000 !important;
-}
+.folder-actions-wrapper:hover { z-index: 100000 !important; }
 
 .action-dropdown-btn {
-    background: transparent !important;
-    border: none !important;
-    color: #94a3b8 !important;
-    cursor: pointer !important;
-    padding: 4px 8px !important;
-    font-size: 12px !important;
-    transition: color 0.2s ease !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--gray-400) !important;
+  cursor: pointer !important;
+  padding: 4px 6px !important;
+  font-size: 11px !important;
+  transition: color 0.2s !important;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
 }
-
-.action-dropdown-btn:hover {
-    color: #16677c !important;
-}
+.action-dropdown-btn:hover { color: var(--primary) !important; background: var(--gray-100) !important; }
 
 .folder-actions {
-    position: absolute !important;
-    right: 0 !important;
-    top: 100% !important;
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 8px !important;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
-    padding: 6px 8px !important;
-    margin-top: 5px !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 8px !important;
-    opacity: 0 !important;
-    visibility: hidden !important;
-    transform: translateY(-5px) !important;
-    transition: opacity 0.2s ease 0.3s, transform 0.2s ease 0.3s, visibility 0s linear 0.5s !important;
-    z-index: 1000 !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: 100% !important;
+  background: #fff !important;
+  border: 1px solid var(--gray-200) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: 8px 10px !important;
+  margin-top: 6px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translateY(-5px) !important;
+  transition: opacity 0.2s ease 0.25s, transform 0.2s ease 0.25s, visibility 0s linear 0.45s !important;
+  z-index: 1000 !important;
 }
-
 .folder-actions::before {
-    content: '' !important;
-    position: absolute !important;
-    top: -10px !important;
-    left: 0 !important;
-    right: 0 !important;
-    height: 10px !important;
-    background: transparent !important;
-    z-index: -1 !important;
+  content: '' !important;
+  position: absolute !important;
+  top: -10px; left: 0; right: 0; height: 10px;
+  background: transparent !important;
 }
-
 .folder-actions-wrapper:hover .folder-actions,
 .folder-actions:hover {
-    opacity: 1 !important;
-    visibility: visible !important;
-    transform: translateY(0) !important;
-    transition: opacity 0.2s ease 0s, transform 0.2s ease 0s, visibility 0s linear 0s !important;
+  opacity: 1 !important; visibility: visible !important; transform: translateY(0) !important;
+  transition: opacity 0.2s ease 0s, transform 0.2s ease 0s, visibility 0s linear 0s !important;
 }
-
 .folder-actions button {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    transition: transform 0.2s ease !important;
-    cursor: pointer !important;
-    width: 26px !important;
-    height: 26px !important;
-    font-size: 12px !important;
-    margin: 0 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  cursor: pointer !important; width: 28px !important; height: 28px !important;
+  font-size: 12px !important; border-radius: 8px !important; transition: var(--transition) !important;
 }
+.folder-actions button:hover { transform: scale(1.12) !important; }
 
-.folder-actions button:hover {
-    transform: scale(1.15) !important;
+.add-folder-btn, .delete-folder-btn {
+  background: var(--gray-100) !important;
+  border: none !important;
+  color: var(--primary) !important;
+  cursor: pointer;
+  border-radius: 8px !important;
+  width: 28px !important; height: 28px !important;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; transition: var(--transition);
 }
+.add-folder-btn:hover { background: #e6f7fa !important; color: var(--primary-dark) !important; }
+.delete-folder-btn { color: #ef4444 !important; }
+.delete-folder-btn:hover { background: #fef2f2 !important; }
 
-.subfolders {
-    padding-left: 20px; 
-    display: none; 
-    margin-top: 5px;
-}
-
-.folder.active .subfolders {
-    display: block;
-}
-
-.folder.expanded > .subfolders,
-.folder.active > .subfolders {
-    display: block; 
-    animation: slideDown 0.2s ease-out forwards;
-}
-
-.folder.expanded > .folder-name .folder-icon,
-.folder.active > .folder-name .folder-icon {
-    transform: rotate(90deg);
+.add-folder-btn.disabled, .delete-folder-btn.disabled, .add-main-folder-btn.disabled {
+  opacity: 0.4; cursor: not-allowed; pointer-events: none;
 }
 
 .folder-input {
-    width: calc(100% - 10px); 
-    padding: 5px; 
-    margin: 5px 0; 
-    border: 1px solid var(--gray-300); 
-    border-radius: 4px; 
-    font-size: 14px; 
-    transition: var(--transition);
+  width: calc(100% - 8px);
+  padding: 7px 10px;
+  margin: 5px 0;
+  border: 1px solid var(--primary-light);
+  border-radius: var(--radius);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  transition: var(--transition);
+  outline: none;
+}
+.folder-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+/* ── Mobile ── */
+@media (max-width: 992px) {
+  .sidebar {
+    top: 0 !important;
+    height: 100vh !important;
+    z-index: 9998 !important;
+    padding-top: 30px !important;
+    left: -300px !important;
+    transform: none !important;
+    transition: left 0.3s var(--ease-out) !important;
+  }
+  .sidebar.active { left: 0 !important; transform: none !important; }
+  .sidebar-toggle {
+    bottom: 25px !important;
+    top: auto !important;
+    left: 16px !important;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    box-shadow: var(--shadow-lg) !important;
+    font-size: 18px !important;
+  }
+  .sidebar.active ~ .sidebar-toggle { left: 270px !important; }
+  .sidebar.active ~ .main-content { margin-left: 0 !important; width: 100% !important; }
 }
 
-.folder-input:focus {
-    outline: none; 
-    border-color: var(--primary); 
-    box-shadow: 0 0 0 2px rgba(22, 103, 124, 0.1);
+.folder {
+    position: relative;
+}
+.folder:hover, 
+.folder:focus-within, 
+.folder.active {
+    z-index: 100 !important;
+}
+.folder-dropdown, 
+.folder-options-menu { 
+    z-index: 105 !important; 
 }
 
-@keyframes pulse-gentle {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.15); }
-    100% { transform: scale(1); }
-}
-
-.add-folder-btn:active, 
-.delete-folder-btn:active {
-    animation: pulse-gentle 0.3s ease;
-}
-
-.folders-container {
-    padding-bottom: 100px !important;
-}
-
-@media (max-width: 768px) {
-    .sidebar { 
-        width: 280px; 
-        box-shadow: 4px 0 15px rgba(0,0,0,0.1); 
-        z-index: 1000;
+@keyframes slideDownFade {
+    from { 
+        opacity: 0; 
+        transform: translateY(-8px); 
     }
-    .sidebar-toggle { 
-        left: auto; 
-        right: -40px; 
-        border-radius: 4px 0 0 4px; 
-        top: 180px; 
-    }
-    .sidebar.active ~ .sidebar-toggle { 
-        left: auto; 
-        right: 10px; 
-    }
-    .add-folder-btn, 
-    .delete-folder-btn { 
+    to { 
         opacity: 1; 
-        transform: scale(1); 
-        background: var(--gray-100);
+        transform: translateY(0); 
+    }
+}
+
+.subfolders {
+    animation: slideDownFade 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+.folder-name, 
+.folder-header {
+    transition: background-color 0.2s, transform 0.1s ease-out;
+}
+.folder-name:active, 
+.folder-header:active {
+    transform: scale(0.98); 
+}
+
+@media (min-width: 993px) {
+    .sidebar {
+        top: 145px !important;
+        height: calc(100vh - 145px) !important;
+    }
+    
+    .sidebar-toggle {
+        top: 155px !important;
     }
 }

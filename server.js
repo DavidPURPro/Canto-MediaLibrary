@@ -796,7 +796,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
                     message: `The file '${fname}' already exists in the database. Please rename it before uploading.` 
                 });
             }
-            return res.status(500).json({ status: "error", message: "Erreur lors du transfert des fichiers." });
+            return res.status(500).json({ status: "error", message: "Error during file transfer." });
         }
         next();
     });
@@ -881,7 +881,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
 
     } catch (error) {
         console.error("Erreur lors de l'enregistrement en BDD:", error);
-        res.status(500).json({ status: "error", message: "Erreur lors de l'enregistrement en BDD." });
+        res.status(500).json({ status: "error", message: "Error during database recording." });
     }
 });
 
@@ -950,7 +950,7 @@ app.post('/create_folder', loginRequiredJson, adminRequired, upload.none(), asyn
         const parent_id = (req.body.parent_id && req.body.parent_id !== "none") ? req.body.parent_id : null;
 
         if (!name) {
-            return res.status(400).json({ status: "error", message: "Nom du dossier requis" });
+            return res.status(400).json({ status: "error", message: "Required folder name" });
         }
 
         const result = await pool.query(
@@ -1007,12 +1007,12 @@ app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), asyn
     try {
         const { folder_id, new_name } = req.body;
         if (!folder_id || !new_name || new_name.trim() === "") {
-            return res.status(400).json({ status: "error", message: "ID et nouveau nom valides requis" });
+            return res.status(400).json({ status: "error", message: "Valid ID and new name required" });
         }
         const cleanName = new_name.trim();
         const selectRes = await pool.query("SELECT name FROM folders WHERE id = $1;", [folder_id]);
         if (selectRes.rows.length === 0) {
-            return res.status(404).json({ status: "error", message: "dossier introuvable" });
+            return res.status(404).json({ status: "error", message: "folder not found" });
         }
         const ancienNom = selectRes.rows[0].name;
         await pool.query("UPDATE folders SET name = $1 WHERE id = $2;", [cleanName, folder_id]);
@@ -1030,7 +1030,7 @@ app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), asyn
         res.json({ status: "success", new_name: cleanName });
     } catch (error) {
         console.error("Erreur rename_folder:", error);
-        res.status(500).json({ status: "error", message: "Erreur lors du renommage en BDD" });
+        res.status(500).json({ status: "error", message: "Error renaming in the database" });
     }
 });
 
@@ -1084,14 +1084,14 @@ app.post('/r_file_folder', async (req, res) => {
             `, [portal_id, docData.nom_fichier, docData.lien_telechargement, docData.description, docData.type_doc]);
             await pool.query("DELETE FROM documents WHERE nom_fichier = $1", [filename]);
 
-            res.json({ status: 'success', message: 'Fichier retiré du dossier et remis à la racine.' });
+            res.json({ status: 'success', message: 'File removed from the folder and placed back in the root directory.' });
         } 
         else {
-            res.status(404).json({ status: 'error', message: 'Fichier introuvable.' });
+            res.status(404).json({ status: 'error', message: 'File not found.' });
         }
     } catch (error) {
         console.error("Erreur critique /r_file_folder :", error);
-        res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+        res.status(500).json({ status: 'error', message: 'Error server' });
     }
 });
 
@@ -1102,7 +1102,7 @@ app.post('/bulk_update_file_folder', loginRequiredJson, adminRequired, upload.no
         const filesArray = JSON.parse(filenames || "[]");
         const targetFolder = (folder_id && folder_id !== "none" && folder_id !== "") ? parseInt(folder_id, 10) : null;
         if (filesArray.length === 0) {
-            return res.status(400).json({ status: "error", message: "Aucun fichier sélectionné" });
+            return res.status(400).json({ status: "error", message: "No files selected" });
         }
         await pool.query(
             "UPDATE documents SET folder_id = $1 WHERE nom_fichier = ANY($2);",
@@ -1110,7 +1110,7 @@ app.post('/bulk_update_file_folder', loginRequiredJson, adminRequired, upload.no
         );
         res.json({ 
             status: "success", 
-            message: `${filesArray.length} fichiers ont été déplacés avec succès.` 
+            message: `${filesArray.length} files have been moved successfully.` 
         });
     } catch (error) {
         console.error("Erreur bulk_update_file_folder:", error);
@@ -1213,7 +1213,7 @@ app.post('/remove_file_from_folder', loginRequiredJson, adminRequired, upload.no
         const filename = req.body.filename;
         
         if (!filename) {
-            return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
+            return res.status(400).json({ status: "error", message: "Required file name" });
         }
 
         await pool.query(
@@ -1242,7 +1242,7 @@ app.post('/sync_file_folder', loginRequiredJson, upload.none(), async (req, res)
         const filename = req.body.filename;
         
         if (!filename) {
-            return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
+            return res.status(400).json({ status: "error", message: "Required file name" });
         }
         const result = await pool.query(
             "SELECT folder_id FROM documents WHERE nom_fichier = $1;",
@@ -1273,10 +1273,10 @@ app.post('/remove_file_folder', loginRequiredJson, adminRequired, upload.none(),
         const result = await pool.query(query, [filename]);
 
         if (result.rowCount > 0) {
-            res.json({ status: "success", message: "Fichier retiré du dossier" });
+            res.json({ status: "success", message: "File removed from folder" });
         } 
         else {
-            res.status(404).json({ status: "error", message: "Fichier non trouvé en base" });
+            res.status(404).json({ status: "error", message: "File not found in database" });
         }
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
@@ -1305,15 +1305,15 @@ app.post('/assign_file_folder', loginRequiredJson, adminRequired, upload.none(),
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
             }
         });
-            res.json({ status: "success", message: "Fichier réassigné avec succès",
+            res.json({ status: "success", message: "File successfully reassigned",
     folder_id: folder_id});
         } 
         else {
-            res.status(404).json({ status: "error", message: "Fichier non trouvé" });
+            res.status(404).json({ status: "error", message: "File not found" });
         }
     } catch (error) {
         console.error("Erreur SQL lors de l'assignation:", error);
-        res.status(500).json({ status: "error", message: "Erreur interne du serveur" });
+        res.status(500).json({ status: "error", message: "Internal Server Error" });
     }
 });
 
@@ -1323,10 +1323,10 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
         const filename = req.body.filename;
         const confirmation = req.body.confirmation === "on";
         if (!confirmation) {
-            return res.status(400).json({ status: "error", message: "Confirmation requise" });
+            return res.status(400).json({ status: "error", message: "Confirmation required" });
         }
         if (!filename) {
-            return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
+            return res.status(400).json({ status: "error", message: "Required file name" });
         }
         // suppr dans azure
         const blockBlobClient = containerClient.getBlockBlobClient(filename);
@@ -1884,7 +1884,7 @@ app.get('/get_portals', loginRequiredJson, async (req, res) => {
 app.post('/update_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const { filename, portal_id } = req.body;
-        if (!filename) return res.status(400).json({ status: "error", message: "Nom de fichier requis" });
+        if (!filename) return res.status(400).json({ status: "error", message: "Required file name" });
 
         const exist = await pool.query("SELECT id FROM portal_files WHERE filename = $1 AND portal_id = $2;", [filename, portal_id]);
         if (exist.rows.length > 0) return res.json({ status: "success", message: "File already in portal" });
@@ -2445,7 +2445,7 @@ app.post('/toggle_favorite', loginRequiredJson, upload.none(), async (req, res) 
         const filename = req.body.filename;
         const user_email = req.session.user_email || req.session.portal_user_email;
         if (!filename || !user_email) {
-            return res.status(400).json({ status: "error", message: "Paramètres manquants" });
+            return res.status(400).json({ status: "error", message: "Missing settings" });
         }
         const checkRes = await pool.query(
             "SELECT id FROM user_favorites WHERE user_email = $1 AND filename = $2;",
@@ -2551,7 +2551,7 @@ app.post('/update_file_metadata', loginRequiredHtml, adminRequired, async (req, 
             const checkPortal = await pool.query("SELECT * FROM portal_files WHERE filename = $1", [value]);
             
             if (checkDocs.rows.length > 0 || checkPortal.rows.length > 0) {
-                return res.status(409).json({ status: 'error', message: 'Ce nom de fichier existe déjà.' });
+                return res.status(409).json({ status: 'error', message: 'This filename already exists.' });
             }
         }
         let dbFieldDoc = '';

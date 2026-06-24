@@ -676,7 +676,6 @@ body.list-view .item-footer {
   border-top: none;
 }
 
-/* ========== PAGINATION AMÉLIORÉE ========== */
 .pagination {
   display: flex;
   justify-content: center !important;
@@ -733,7 +732,6 @@ body.list-view .item-footer {
   color: var(--gray-800);
 }
 
-/* MESSAGES */
 .warning-message {
   text-align: center;
   color: #d9534f;
@@ -788,7 +786,6 @@ body.list-view .item-footer {
   overflow: visible !important;
 }
 
-/* ========== MEDIA AMÉLIORÉE ========== */
 .gallery-item iframe,
 .gallery-item video {
   width: 100%;
@@ -798,7 +795,6 @@ body.list-view .item-footer {
   border-radius: 8px 8px 0 0;
 }
 
-/* ========== MODALES AMÉLIORÉES ========== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -1548,3 +1544,4 @@ body.list-view .gallery-item .item-footer {
     opacity: 1;
   }
 }
+

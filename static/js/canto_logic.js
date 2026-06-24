@@ -1250,7 +1250,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
         if (tooltip) {
           tooltip.textContent = data.is_exclusive ? 'Exclusive' : 'Not Exclusive';
         }
-        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span>${data.is_exclusive ? '★' : '☆'}`;
+        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${data.is_exclusive ? 'fas fa-star' : 'far fa-star'}"></i>`;
         
         const galleryItem = button.closest('.gallery-item');
         if (galleryItem) {
@@ -1509,8 +1509,7 @@ function setupExclusiveButtons() {
         if (tooltip) {
           tooltip.textContent = data.is_exclusive ? 'Exclusive' : 'Not Exclusive';
         }
-        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span>${data.is_exclusive ? '★' : '☆'}`;
-        
+        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${data.is_exclusive ? 'fas fa-star' : 'far fa-star'}"></i>`;        
         const galleryItem = button.closest('.gallery-item');
         if (galleryItem) {
           galleryItem.setAttribute('data-exclusive', data.is_exclusive.toString());
