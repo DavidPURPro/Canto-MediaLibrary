@@ -54,7 +54,7 @@
 }
 
 .modal-title {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Plus Jakarta Sans', Georgia, serif;
   font-size: 1.5rem;
   font-weight: 800;
   color: var(--gray-800);
@@ -83,20 +83,53 @@
 }
 .modal-meta i { color: var(--primary); width: 18px; }
 
-.modal-tags {
-  display: flex; flex-wrap: wrap; gap: 7px;
-  max-height: 30px; overflow: hidden;
-  position: relative;
-  transition: max-height 0.4s ease;
+/* --- Gestion propre des tags dans la modale --- */
+.modal-tags-container {
+    background: transparent !important;
+    border-radius: 12px !important;
+    padding: 4px 0 !important;
+    transition: all 0.3s ease !important;
+    position: relative !important;
 }
-.modal-tags:hover { max-height: 400px; }
+
+.modal-tags-container:hover {
+    background: #ffffff !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.05) !important;
+    padding: 10px 14px !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.modal-tags {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    max-height: 32px !important;
+    overflow: hidden !important;
+    position: relative !important;
+    transition: max-height 0.4s ease !important;
+}
+
+.modal-tags-container:hover .modal-tags {
+    max-height: 500px !important;
+    overflow: visible !important;
+}
+
+/* Gestion du point de suspension si trop de tags */
 .modal-tags:not(:hover)::after {
-  content: "...";
-  position: absolute; right: 0; bottom: 0;
-  padding: 0 4px 0 40px;
-  background: linear-gradient(to right, rgba(255,255,255,0), white 50%);
-  color: var(--primary); font-weight: 900; font-size: 18px;
-  pointer-events: none;
+    content: "..." !important;
+    position: absolute !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    padding: 0 4px 0 30px !important;
+    background: linear-gradient(to right, rgba(255,255,255,0), #f8fafc 50%) !important;
+    color: var(--primary) !important;
+    font-weight: 900 !important;
+    font-size: 18px !important;
+    pointer-events: none !important;
+}
+
+.modal-tags-container:hover .modal-tags:not(:hover)::after {
+    display: none !important;
 }
 
 .modal-tag {
@@ -142,23 +175,28 @@
   font-weight: 800;
 }
 
-/* Modal action buttons */
 .modal-action-btn,
-#addToFolderBtn, #addToPortalBtn, #removeFromFolderBtn, #removeFromPortalBtn {
+#addToFolderBtn, #addToPortalBtn, #removeFromFolderBtn, #removeFromPortalBtn, #modalCopyBtn {
   padding: 9px 16px;
   border-radius: var(--radius-lg);
-  border: none;
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 700; font-size: 13px;
   cursor: pointer;
   transition: var(--transition);
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
-#addToFolderBtn, #addToPortalBtn {
-  background: white; color: var(--gray-500);
-  border: 1px solid var(--gray-200);
+
+/* Correction de la visibilité des boutons secondaires dans la modale */
+#addToFolderBtn, #addToPortalBtn, #modalCopyBtn {
+  background: #f8fafc !important; 
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
 }
-#addToFolderBtn:hover, #addToPortalBtn:hover { background: var(--gray-100); color: var(--primary); }
+#addToFolderBtn:hover, #addToPortalBtn:hover, #modalCopyBtn:hover { 
+  background: #e2e8f0 !important; 
+  color: #0f172a !important; 
+}
+
 #removeFromFolderBtn, #removeFromPortalBtn {
   background: #fef2f2; color: var(--danger);
   border: 1px solid #fecaca;
@@ -177,6 +215,7 @@
   background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
   color: white !important;
   box-shadow: 0 3px 12px rgba(22,103,124,0.3);
+  border: none !important;
 }
 #modalDownloadBtn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(22,103,124,0.4) !important; }
 
@@ -381,14 +420,6 @@
     background-color: var(--primary-dark) !important;
 }
 
-/* ── Mobile modal ── */
-@media (max-width: 768px) {
-  .modal-content { flex-direction: column; overflow-y: auto; max-height: 92vh; }
-  .modal-preview { border-right: none; border-bottom: 1px solid var(--gray-200); min-height: 45vw; padding: 12px; }
-  .modal-info { padding: 20px 16px; }
-  .search-container { padding: 16px 14px 0; }
-}
-
 .sort-dropdown-content, 
 .filter-dropdown-content,
 .dropdown-content,
@@ -468,3 +499,73 @@
     color: #f59e0b !important; 
     filter: drop-shadow(0 2px 6px rgba(245, 158, 11, 0.5)) !important; 
 }
+
+.folder:hover,
+.folder-name:hover,
+.folder-actions-wrapper:hover {
+    z-index: 99999 !important;
+    position: relative !important;
+}
+
+.folder-actions-wrapper {
+    position: relative !important;
+    display: flex;
+    align-items: center;
+}
+
+.folder-actions {
+    display: none !important;
+    position: absolute !important;
+    right: 100% !important; 
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: #ffffff !important;
+    padding: 6px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35) !important;
+    border: 1px solid #cbd5e1 !important;
+    z-index: 999999 !important;
+    white-space: nowrap !important;
+}
+
+.folder-actions::before {
+    content: '' !important;
+    position: absolute !important;
+    top: -25px !important;
+    bottom: -25px !important;
+    right: -25px !important; 
+    left: -10px !important; 
+    background: transparent !important;
+    z-index: -1 !important;
+}
+
+.folder-actions-wrapper:hover .folder-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.folder-actions button {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 0 !important;
+    width: 32px !important;
+    height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    color: #475569 !important;
+}
+
+.folder-actions button:hover {
+    background: #e2e8f0 !important;
+    transform: scale(1.1) !important;
+    color: #0f172a !important;
+}
+
+.folder-actions .share-folder-btn:hover { color: #2878fa !important; border-color: #bfdbfe !important; }
+.folder-actions .download-folder-btn:hover { color: #0ede98 !important; border-color: #a7f3d0 !important; }
+.folder-actions .add-folder-btn:hover { color: #0eafd7 !important; border-color: #97d8e4 !important; }
+.folder-actions .delete-folder-btn:hover { color: #ed2a2a !important; border-color: #fecaca !important; background: #fef2f2 !important; }

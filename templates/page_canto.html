@@ -17,6 +17,89 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/header.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
+
+  <style>
+    /* ── AI Search toggle ── */
+    .ai-search-toggle {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      margin-left: 6px;
+      border-radius: var(--radius-full);
+      border: 1.5px solid var(--gray-200);
+      background: var(--gray-50);
+      color: var(--gray-500);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+    .ai-search-toggle i {
+      font-size: 13px;
+      transition: transform 0.3s var(--ease-out), color 0.2s;
+    }
+    .ai-search-toggle:hover {
+      border-color: var(--primary-light);
+      color: var(--primary);
+    }
+    .ai-search-toggle.active {
+      background: linear-gradient(135deg, #ede9fe 0%, #e6f7fa 100%);
+      border-color: var(--purple, #8b5cf6);
+      color: #6d28d9;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+    }
+    .ai-search-toggle.active i {
+      color: #8b5cf6;
+      transform: rotate(-12deg) scale(1.1);
+      animation: aiSparklePulse 1.8s ease-in-out infinite;
+    }
+    @keyframes aiSparklePulse {
+      0%, 100% { filter: drop-shadow(0 0 0 rgba(139,92,246,0)); }
+      50%      { filter: drop-shadow(0 0 6px rgba(139,92,246,0.6)); }
+    }
+    .ai-search-toggle.loading i {
+      animation: aiSpin 0.8s linear infinite;
+    }
+    @keyframes aiSpin { to { transform: rotate(360deg); } }
+
+    .ai-search-hint {
+      margin-top: 10px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #faf5ff 0%, #f0fafb 100%);
+      border: 1px solid #e9d5ff;
+      border-radius: var(--radius-lg);
+      font-size: 12.5px;
+      color: #6d28d9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      animation: dropFade 0.2s var(--ease-out);
+    }
+    .ai-search-hint strong { font-weight: 800; }
+    .ai-search-hint .ai-term-chip {
+      background: white;
+      border: 1px solid #e9d5ff;
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      font-weight: 700;
+      color: #7c3aed;
+    }
+
+    /* Folder result cards returned by AI search */
+    .folder-result-card { border: 1.5px dashed var(--primary-light) !important; }
+    .folder-result-card .ai-match-badge {
+      position: absolute; top: 8px; right: 8px;
+      background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+      color: white; font-size: 10px; font-weight: 800;
+      padding: 3px 8px; border-radius: var(--radius-full);
+      display: flex; align-items: center; gap: 4px;
+      z-index: 5;
+    }
   </style>
   {% if is_sandbox %}
   <style>
@@ -107,7 +190,7 @@
       <button data-filter="audio"><i class="fas fa-music"></i> Audios</button>
       <button data-filter="documents"><i class="fas fa-file-alt"></i> Documents</button>
       <button data-filter="presentations"><i class="fas fa-file-powerpoint"></i> Presentations</button>
-      <button data-filter="exclusive"><i class="fas fa-star"></i> Exclusive Files</button>
+      <button data-filter="exclusive"><i class="fas fa-crown"></i> Exclusive Files</button>
       <button data-filter="others"><i class="fas fa-file"></i> Others</button>
     </div>
   </div>
@@ -174,10 +257,15 @@
   <div class="search-wrapper">
     <i class="fas fa-search search-icon"></i>
     <input type="text" id="searchInput" placeholder="Find a file by name, description, tags..." />
+    <button type="button" id="aiSearchToggle" class="ai-search-toggle" title="Natural language search powered by AI, for a broader, smarter search experience.">
+      <i class="fas fa-wand-magic-sparkles"></i>
+      <span>AI Search</span>
+    </button>
     <div id="fileCount" class="search-badge" data-total="{{ total_files }}">
       Showing {{ files|length }} of {{ total_files }}
     </div>
   </div>
+  <div id="aiSearchHint" class="ai-search-hint" style="display:none;"></div>
 </div>
 
       {% if show_all %}
@@ -202,7 +290,7 @@
             <div class="img-placeholder"></div>
             <img src="{{ file.lien }}" alt="{{ file.nom }}" loading="lazy" />
 
-          {% elif ext in ['heic', 'thm', 'psd', 'docx', 'pptx', 'emf'] %}
+          {% elif ext in ['heic', 'thm', 'psd', 'docx', 'pptx', 'emf', 'ai', 'kml', 'zip', 'rar', 'eps'] %}
             <img src="/static/icons/{{ ext }}.png" alt="{{ file.nom }}" style="max-height: 200px; object-fit: contain;" loading="lazy" />
 
           {% elif ext in ['docx', 'pptx'] %}
@@ -229,9 +317,9 @@
             </div>
 
           {% else %}
-            <div class="file-preview" loading="lazy">
-              <img src="/static/No_preview.png" alt="No preview available" style="max-width:80px; max-height:80px; margin-bottom: 10px; background: transparent;" loading="lazy" />
-              <div style="font-weight: 700; color: var(--gray-500);">{{ ext|upper }}</div>
+            <div class="file-preview" style="width: 100%; height: 100px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: #f8fafc; border-radius: 11px 11px 0 0;">
+              <img src="/static/No_preview.png" alt="No preview available" style="width: 100%; height: 95%; object-fit: cover; object-position: center; position: absolute; top: 0; left: 0;" loading="lazy" />
+              <div style="font-weight: 800; color: #1e293b; font-size: 18px; position: absolute; bottom: 12px; background: rgba(255,255,255,0.9); padding: 4px 16px; border-radius: 8px; z-index: 2; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">{{ ext|upper }}</div>
             </div>
           {% endif %}
 
@@ -246,7 +334,7 @@
             </a>
             <button class="exclusive-btn {% if file.is_exclusive %}exclusive{% endif %}" data-filename="{{ file.nom }}" data-exclusive="{{ 'true' if file.is_exclusive else 'false' }}">
               <span class="tooltip">{% if file.is_exclusive %}Exclusive{% else %}Not Exclusive{% endif %}</span>
-              <i class="{% if file.is_exclusive %}fas fa-star{% else %}far fa-star{% endif %}"></i>
+              <i class="fas fa-crown"></i>
             </button>
           </div>
         </div>
@@ -319,7 +407,7 @@
 
         <div class="modal-description editable-field" id="modalDescription" data-field="description" title="Double-click to edit"></div>
 
-        <div class="editable-field" data-field="tags" title="Double-click in the empty space to edit" style="min-height: 30px; padding: 5px; border-radius: 5px;">
+        <div class="modal-tags-container editable-field" data-field="tags" title="Double-click in the empty space to edit">
             <div class="modal-tags" id="modalTags"></div>
         </div>
 
@@ -393,7 +481,9 @@
             <span id="bulkCount">0</span>
         </div>
         <div class="bulk-buttons">
-            <button id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
+            <button id="bulkShareBtn" class="modern-btn secondary-btn bulk-btn" style="background: linear-gradient(135deg,#ffffff,#9bd3e3); border:none;">
+              <i class="fas fa-share-nodes"></i> Share
+            </button>
             <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
             
             {% if is_admin %}
@@ -401,7 +491,7 @@
               <i class="fas fa-folder-minus"></i> Remove from Folder
             </button>
 
-            <button id="bulkFolderBtn" class="modern-btn secondary-btn bulk-btn" style="background: #8b5cf6; color: rgb(12, 12, 12);">
+            <button id="bulkFolderBtn" class="modern-btn secondary-btn bulk-btn">
               <i class="fas fa-folder-plus"></i> Move To Folder
             </button>
 
@@ -443,6 +533,57 @@
             <button class="confirm-btn cancel" onclick="document.getElementById('bulkFolderModal').classList.remove('active')">Cancel</button>
             <button class="confirm-btn proceed" id="confirmBulkFolderBtn" style="background: #8b5cf6; color: white; opacity: 1;">Apply to selection</button>
         </div>
+    </div>
+  </div>
+
+  <!-- Modale de lien de partage -->
+  <div class="confirm-modal" id="shareModal">
+    <div class="confirm-content" style="max-width:500px; padding:36px; text-align:left;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+        <div style="width:44px;height:44px;background:linear-gradient(135deg,#16677c,#0d4555);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;flex-shrink:0;">
+          <i class="fas fa-share-nodes"></i>
+        </div>
+        <div>
+          <h3 style="margin:0;color:#1e2533;font-size:18px;font-weight:800;">Share files</h3>
+          <p style="margin:0;color:#94a3b8;font-size:13px;" id="shareFileCount"></p>
+        </div>
+      </div>
+
+      <!-- État : génération en cours -->
+      <div id="shareLoading" style="display:none; text-align:center; padding:32px 0;">
+        <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#16677c;"></i>
+        <p style="color:#64748b;margin-top:12px;font-size:14px;">Generating link…</p>
+      </div>
+
+      <!-- État : lien généré -->
+      <div id="shareResult" style="display:none; margin-top:20px;">
+        <div style="background:#f0fafb;border:1.5px solid #97d8e4;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px;">
+          <input id="shareUrlInput" type="text" readonly
+            style="flex:1;background:transparent;border:none;outline:none;font-size:13.5px;font-weight:600;color:#0d4555;font-family:'Plus Jakarta Sans',sans-serif;">
+          <button id="shareCopyBtn" title="Copy link"
+            style="background:linear-gradient(135deg,#16677c,#0d4555);color:white;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s;flex-shrink:0;">
+            <i class="fas fa-copy"></i>
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:10px;color:#94a3b8;font-size:12.5px;">
+          <i class="fas fa-clock"></i>
+          <span>Link expires in 30 days · Anyone with the link can view and download</span>
+        </div>
+        <!-- Aperçu des fichiers -->
+        <div id="shareFilePreview" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;max-height:110px;overflow:hidden;"></div>
+      </div>
+
+      <!-- État : erreur -->
+      <div id="shareError" style="display:none; margin-top:20px; padding:14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:13.5px;font-weight:600;">
+        <i class="fas fa-exclamation-circle"></i> <span id="shareErrorMsg"></span>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:24px;">
+        <button class="confirm-btn cancel" onclick="document.getElementById('shareModal').classList.remove('active')">Close</button>
+        <button id="shareOpenBtn" style="display:none;" class="confirm-btn proceed" onclick="window.open(document.getElementById('shareUrlInput').value,'_blank')" style="background:#16677c;">
+          <i class="fas fa-external-link-alt"></i> Open link
+        </button>
+      </div>
     </div>
   </div>
 

@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload images - Media Library</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/x-icon">
-  
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  
   <link rel="stylesheet" href="{{ url_for('static', filename='css/upload_style.css') }}">
 </head>
 <body>
@@ -18,7 +15,6 @@
   <header class="ultra-header">
     <div class="header-container">
       <img src="{{ url_for('static', filename='01_New_PUR_LOGO_Color.png') }}" alt="Logo PUR" class="main-logo">
-      </a>
       <h1 class="header-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Media Library Upload</h1>
       <nav class="nav-controls">
         <a href="{{ url_for('index') }}" class="btn-nav-glass"><i class="fas fa-arrow-left"></i> Back to Gallery</a>
@@ -76,32 +72,65 @@
 
         <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
           <div class="form-group half" style="flex: 1;">
-            <label style="font-weight: 600; font-size: 13px;">Section</label>
+            <label style="font-weight: 600; font-size: 13px;">Section <span style="color: #ef4444;">*</span></label>
             <select id="globalSection" class="modern-input" style="width: 100%; padding: 8px;">
               <option value="">Select Section...</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Events">Events</option>
+              <option value="Agroforestry">Agroforestry</option>
+              <option value="Biodiversity">Biodiversity</option>
+              <option value="Carbon & Climate">Carbon & Climate</option>
+              <option value="Community & Livelihoods">Community & Livelihoods</option>
               <option value="Corporate">Corporate</option>
+              <option value="Events">Events</option>
+              <option value="General">General</option>
+              <option value="Mangrove & Coastal">Mangrove & Coastal</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Monitoring & Reporting">Monitoring & Reporting</option>
               <option value="Products">Products</option>
               <option value="Projects">Projects</option>
+              <option value="Reforestation">Reforestation</option>
+              <option value="Regenerative Agriculture">Regenerative Agriculture</option>
+              <option value="Supply Chain & Sourcing">Supply Chain & Sourcing</option>
+              <option value="Water & Watershed">Water & Watershed</option>
             </select>
           </div>
           <div class="form-group half" style="flex: 1;">
-            <label style="font-weight: 600; font-size: 13px;">Category</label>
+            <label style="font-weight: 600; font-size: 13px;">Category <span style="color: #ef4444;">*</span></label>
             <select id="globalCategory" class="modern-input" style="width: 100%; padding: 8px;">
               <option value="">Select Category...</option>
-              <option value="Social Media">Social Media</option>
-              <option value="Web Banners">Web Banners</option>
+              <option value="Cereals & Grains">Cereals & Grains</option>
+              <option value="Cocoa">Cocoa</option>
+              <option value="Coconut">Coconut</option>
+              <option value="Coffee">Coffee</option>
+              <option value="Cotton">Cotton</option>
+              <option value="Data Rooms">Data Rooms</option>
+              <option value="Fruits & Nuts">Fruits & Nuts</option>
+              <option value="General">General</option>
+              <option value="Guidelines">Guidelines</option>
+              <option value="Livestock & Dairy">Livestock & Dairy</option>
               <option value="Official Photos">Official Photos</option>
-              <option value="Reports">Reports</option>
+              <option value="Palm Oil">Palm Oil</option>
               <option value="Presentations">Presentations</option>
+              <option value="Reports">Reports</option>
+              <option value="Rubber">Rubber</option>
+              <option value="Social Media">Social Media</option>
+              <option value="Spices">Spices</option>
+              <option value="Tea">Tea</option>
+              <option value="Tutorials">Tutorials</option>
+              <option value="Vanilla">Vanilla</option>
+              <option value="Web Banners">Web Banners</option>
             </select>
           </div>
         </div>
 
-        <div class="form-group" style="margin-bottom: 15px;">
-          <label style="font-weight: 600; font-size: 13px;">Global Tags (comma separated)</label>
-          <input type="text" id="globalTags" class="modern-input" style="width: 100%; box-sizing: border-box; padding: 8px;" placeholder="France, Nature, Portrait...">
+        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+          <div class="form-group half" style="flex: 1;">
+            <label style="font-weight: 600; font-size: 13px;">Global Event Date <span style="color: #ef4444;">*</span></label>
+            <input type="date" id="globalEventDate" class="modern-input" style="width: 100%; box-sizing: border-box; padding: 8px;">
+          </div>
+          <div class="form-group half" style="flex: 1;">
+            <label style="font-weight: 600; font-size: 13px;">Global Tags (comma separated)</label>
+            <input type="text" id="globalTags" class="modern-input" style="width: 100%; box-sizing: border-box; padding: 8px;" placeholder="France, Nature, Portrait...">
+          </div>
         </div>
         
         <div class="form-group">
@@ -112,18 +141,16 @@
         <div class="form-group" style="margin-bottom: 15px;">
             <label style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="globalExclusive" style="width: 16px; height: 16px;">
-                <i class="fas fa-star" style="color: #eab308;"></i> Mark all as Exclusive
+                <i class="fas fa-crown" style="color: #eab308;"></i> Mark all as Exclusive
             </label>
         </div>
       </div>
 
       <div class="upload-status-section">
         <ul id="fileList" class="file-list"></ul>
-        
         <div id="loadingSpinner" class="loading-spinner"></div>
         <div id="msg" class="message"></div>
         <div id="warning" class="message warning-msg"></div>
-        
         <button id="sendBtn" class="btn-send" disabled>
           <i class="fas fa-paper-plane"></i> Send Files
         </button>
@@ -148,7 +175,7 @@
             <div class="form-group" style="margin-bottom: 15px; margin-top: 10px;">
               <label style="font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="fileExclusive" style="width: 16px; height: 16px;">
-                <i class="fas fa-star" style="color: #eab308;"></i> Exclusive File
+                <i class="fas fa-crown" style="color: #eab308;"></i> Exclusive File
               </label>
             </div>
           </div>
@@ -160,7 +187,7 @@
             </div>
             
             <div class="form-group" style="margin-bottom: 15px;">
-              <label for="fileEventDate" style="font-weight: 600; display: block; margin-bottom: 5px;">Event Date</label>
+              <label for="fileEventDate" style="font-weight: 600; display: block; margin-bottom: 5px;">Event Date <span style="color: #ef4444;">*</span></label>
               <input type="date" id="fileEventDate" class="modern-input" style="width: 100%; box-sizing: border-box;">
             </div>
 
@@ -192,35 +219,62 @@
             </div>
 
             <div class="form-group" style="margin-bottom: 15px;">
-            <label for="section" style="font-weight: 600; display: block; margin-bottom: 5px;">Section</label>
+            <label for="section" style="font-weight: 600; display: block; margin-bottom: 5px;">Section <span style="color: #ef4444;">*</span></label>
             <select name="section" id="section" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                <option value="">Select Section</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Events">Events</option>
+                <option value="">Select Section...</option>
+                <option value="Agroforestry">Agroforestry</option>
+                <option value="Biodiversity">Biodiversity</option>
+                <option value="Carbon & Climate">Carbon & Climate</option>
+                <option value="Community & Livelihoods">Community & Livelihoods</option>
                 <option value="Corporate">Corporate</option>
+                <option value="Events">Events</option>
+                <option value="General">General</option>
+                <option value="Mangrove & Coastal">Mangrove & Coastal</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Monitoring & Reporting">Monitoring & Reporting</option>
                 <option value="Products">Products</option>
                 <option value="Projects">Projects</option>
+                <option value="Reforestation">Reforestation</option>
+                <option value="Regenerative Agriculture">Regenerative Agriculture</option>
+                <option value="Supply Chain & Sourcing">Supply Chain & Sourcing</option>
+                <option value="Water & Watershed">Water & Watershed</option>
             </select>
         </div>
 
         <div class="form-group" style="margin-bottom: 20px;">
-            <label for="category" style="font-weight: 600; display: block; margin-bottom: 5px;">Category</label>
+            <label for="category" style="font-weight: 600; display: block; margin-bottom: 5px;">Category <span style="color: #ef4444;">*</span></label>
             <select name="category" id="category" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                <option value="">Select Category</option>
-                <option value="Social Media">Social Media</option>
-                <option value="Web Banners">Web Banners</option>
+                <option value="">Select Category...</option>
+                <option value="Cereals & Grains">Cereals & Grains</option>
+                <option value="Cocoa">Cocoa</option>
+                <option value="Coconut">Coconut</option>
+                <option value="Coffee">Coffee</option>
+                <option value="Cotton">Cotton</option>
+                <option value="Data Rooms">Data Rooms</option>
+                <option value="Fruits & Nuts">Fruits & Nuts</option>
+                <option value="General">General</option>
+                <option value="Guidelines">Guidelines</option>
+                <option value="Livestock & Dairy">Livestock & Dairy</option>
                 <option value="Official Photos">Official Photos</option>
-                <option value="Reports">Reports</option>
+                <option value="Palm Oil">Palm Oil</option>
                 <option value="Presentations">Presentations</option>
+                <option value="Reports">Reports</option>
+                <option value="Rubber">Rubber</option>
+                <option value="Social Media">Social Media</option>
+                <option value="Spices">Spices</option>
+                <option value="Tea">Tea</option>
+                <option value="Tutorials">Tutorials</option>
+                <option value="Vanilla">Vanilla</option>
+                <option value="Web Banners">Web Banners</option>
             </select>
         </div>
 
             <div class="form-group tags-section">
-              <label>Select Tags</label>
+              <label>Select Tags <span style="color: #ef4444; font-size: 11px;">(At least 1 per block)</span></label>
               <div class="tag-selects-grid">
 
                 <div class="select-wrapper">
-      <span class="tag-category">Region</span>
+      <span class="tag-category">Region <span style="color: #ef4444;">*</span></span>
       <select class="modern-select" id="regionTags" onchange="addTagFromSelect(this)">
         <option value="">Select...</option>
         <optgroup label="Europe & North America">
@@ -253,7 +307,7 @@
     </div>
     
     <div class="select-wrapper">
-      <span class="tag-category">Project Type</span>
+      <span class="tag-category">Project Type <span style="color: #ef4444;">*</span></span>
       <select class="modern-select" id="projectTypeTags" onchange="addTagFromSelect(this)">
         <option value="">Select...</option>
         <option value="Agroforestry">Agroforestry</option>
@@ -267,7 +321,7 @@
     </div>
 
     <div class="select-wrapper">
-      <span class="tag-category">Activity</span>
+      <span class="tag-category">Activity <span style="color: #ef4444;">*</span></span>
       <select class="modern-select" id="activityTags" onchange="addTagFromSelect(this)">
         <option value="">Select...</option>
         <option value="Tree Planting">Tree Planting</option>
@@ -282,7 +336,7 @@
     </div>
 
     <div class="select-wrapper">
-      <span class="tag-category">Commodity</span>
+      <span class="tag-category">Commodity <span style="color: #ef4444;">*</span></span>
       <select class="modern-select" id="commodityTags" onchange="addTagFromSelect(this)">
         <option value="">Select...</option>
         <option value="Coffee">Coffee</option>

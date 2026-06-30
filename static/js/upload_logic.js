@@ -50,14 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => console.error('Error loading folders:', error));
 
-    // ── Folder Tree Picker ──────────────────────────────────────────────
     function buildFolderPicker(folders, wrapperId, hiddenInputId, treeId) {
         const wrapper = document.getElementById(wrapperId);
         const hiddenInput = document.getElementById(hiddenInputId);
         const treeRoot = document.getElementById(treeId);
         if (!wrapper || !hiddenInput || !treeRoot) return;
 
-        // Build lookup maps
         const byId = {};
         folders.forEach(f => { byId[f.id] = { ...f, children: [] }; });
         const roots = [];
@@ -121,17 +119,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderNodes(roots, treeRoot);
 
-        // "No folder" click
         wrapper.querySelector('.fp-no-folder').addEventListener('click', () => {
             selectFolder(wrapper, hiddenInput, hiddenInput.id === 'fileFolder' ? 'none' : '', '(No folder)', true);
         });
 
-        // Toggle dropdown
         wrapper.querySelector('.folder-picker-trigger').addEventListener('click', (e) => {
             e.stopPropagation();
             const isOpen = wrapper.classList.toggle('open');
             if (isOpen) {
-                // Close all other pickers
                 document.querySelectorAll('.folder-picker-wrapper.open').forEach(w => {
                     if (w !== wrapper) w.classList.remove('open');
                 });
@@ -145,13 +140,11 @@ document.addEventListener('DOMContentLoaded', () => {
         trigger.textContent = label;
         trigger.classList.toggle('selected', !isNone);
 
-        // Update selected highlight
         wrapper.querySelectorAll('.fp-row').forEach(r => r.classList.remove('fp-selected'));
         if (!isNone) {
             const target = wrapper.querySelector(`.fp-row[data-id="${value}"]`);
             if (target) {
                 target.classList.add('fp-selected');
-                // Update icon to open folder
                 const icon = target.querySelector('.fp-icon');
                 if (icon) { icon.className = 'far fa-folder-open fp-icon'; }
             }
@@ -159,12 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.classList.remove('open');
     }
 
-    // Close pickers when clicking outside
     document.addEventListener('click', () => {
         document.querySelectorAll('.folder-picker-wrapper.open').forEach(w => w.classList.remove('open'));
     });
 
-    // Helper to reset a folder picker to "no folder"
     function resetFolderPicker(pickerId, noFolderValue = 'none') {
         const wrapper = document.getElementById(pickerId);
         if (!wrapper) return;
@@ -179,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Helper to set a folder picker value programmatically
     function setFolderPicker(pickerId, folderId) {
         const wrapper = document.getElementById(pickerId);
         if (!wrapper) return;
@@ -468,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isExclusive) {
                 const exclusiveIcon = document.createElement("span");
                 exclusiveIcon.className = "status-icon";
-                exclusiveIcon.innerHTML = '<i class="fas fa-star" style="color: #eab308;"></i>';
+                exclusiveIcon.innerHTML = '<i class="fas fa-crown" style="color: #eab308;"></i>';
                 exclusiveIcon.title = "Exclusive file";
                 fileNameContainer.insertBefore(exclusiveIcon, fileNameContainer.firstChild);
             }
@@ -526,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fileList.appendChild(li);
 
             if (fileDetails[file.name]) {
-                updateFileListItem(index, fileDetails[file.name].description, fileDetails[file.name].tags, fileDetails[file.name].eventDate, fileDetails[file.name].portalId, fileDetails[file.name].isExclusive);
+                updateFileListItem(index, fileDetails[file.name].description, fileDetails[file.name].tags, fileDetails[file.name].eventDate, fileDetails[file.name].portalId, fileDetails[file.name].folderId, fileDetails[file.name].isExclusive);
             }
         });
 
@@ -557,14 +547,63 @@ document.addEventListener('DOMContentLoaded', () => {
     sendBtn.addEventListener("click", async () => {
         const filesToSend = filesToUpload.slice(0, MAX_FILES);
         if (filesToSend.length === 0) return;
+        
         const gDesc = document.getElementById('globalDescription')?.value.trim() || "";
         const gSection = document.getElementById('globalSection')?.value || "";
         const gCategory = document.getElementById('globalCategory')?.value || "";
+        const gEventDate = document.getElementById('globalEventDate')?.value || "";
         const gPortal = document.getElementById('globalPortal')?.value || "";
         const gFolder = document.getElementById('globalFolder')?.value || "";
         const gExclusive = document.getElementById('globalExclusive')?.checked || false;
         const gTagsRaw = document.getElementById('globalTags')?.value || "";
         const gTagsArray = gTagsRaw.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        
+        const validRegions = ["France", "UK", "Canada", "USA", "Colombia", "Peru", "Brazil", "Honduras", "Guatemala", "Ivory Coast", "Ethiopia", "Uganda", "Rwanda", "Indonesia", "Philippines", "Thailand", "Vietnam", "China"];
+        const validProjectTypes = ["Agroforestry", "Reforestation", "Forest Conservation", "Regenerative Agriculture", "Coastal Restoration (Mangroves)", "Marine Ecosystems", "Carbon Insetting"];
+        const validActivities = ["Tree Planting", "Nursery Management", "Harvesting", "Pruning & Maintenance", "Farmer Training", "Community Workshop", "Monitoring & Mapping", "Soil Preparation"];
+        const validCommodities = ["Coffee", "Cocoa", "Vanilla", "Palm Oil", "Rice", "Sugar Cane", "Rubber", "Fruit Trees", "Cotton"];
+
+        for (const file of filesToSend) {
+            const details = fileDetails[file.name] || {};
+            const finalSection = details.section || gSection;
+            const finalCategory = details.category || gCategory;
+            const finalEventDate = details.eventDate || gEventDate;
+            let finalTags = [];
+            
+            if (details.tags && details.tags.length > 0) {
+                finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
+            } else {
+                finalTags = gTagsArray;
+            }
+
+            if (!finalEventDate) {
+                msg.className = "message error";
+                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Event Date.`;
+                return;
+            }
+            if (!finalSection) {
+                msg.className = "message error";
+                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Section.`;
+                return;
+            }
+            if (!finalCategory) {
+                msg.className = "message error";
+                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Category.`;
+                return;
+            }
+
+            const hasRegion = finalTags.some(t => validRegions.includes(t));
+            const hasProjectType = finalTags.some(t => validProjectTypes.includes(t));
+            const hasActivity = finalTags.some(t => validActivities.includes(t));
+            const hasCommodity = finalTags.some(t => validCommodities.includes(t));
+
+            if (!hasRegion || !hasProjectType || !hasActivity || !hasCommodity) {
+                msg.className = "message error";
+                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing mandatory tags. You must select at least one tag in Region, Project Type, Activity, and Commodity.`;
+                return;
+            }
+        }
+
         const formData = new FormData();
         const url = `/upload`;
         filesToSend.forEach((file) => {
@@ -576,21 +615,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalPortal = (details.portalId && details.portalId !== "none") ? details.portalId : gPortal;
             const finalFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
             const finalExclusive = details.isExclusive !== undefined ? details.isExclusive : gExclusive;
+            const finalEventDate = details.eventDate || gEventDate;
             let finalTags = [];
+            
             if (details.tags && details.tags.length > 0) {
                 finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
             } 
             else {
                 finalTags = gTagsArray;
             }
+            
             formData.append("descriptions", finalDesc);
             formData.append("tags", JSON.stringify(finalTags));
             
             let formattedDate = "";
-            if (details.eventDate) {
-                const [year, month, day] = details.eventDate.split('-');
+            if (finalEventDate) {
+                const [year, month, day] = finalEventDate.split('-');
                 formattedDate = `${day}-${month}-${year}`;
             }
+            
             formData.append("date_events", formattedDate);
             formData.append("portal_ids", finalPortal);
             formData.append("sections", finalSection);

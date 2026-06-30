@@ -352,8 +352,12 @@ header {
 .modal-action-btn:hover { background: rgba(255,255,255,0.2); }
 
 .badge-confidential {
-    background-color: #ef4444;
-    color: white;
+    background-color: #fb0303 !important;
+    color: rgb(255, 255, 255) !important;
+    -webkit-text-fill-color: rgb(9, 10, 10) !important;
+    -webkit-background-clip: border-box !important; 
+    background-clip: border-box !important;
+    display: inline-block !important; 
     font-size: 10px;
     padding: 4px 8px;
     border-radius: 4px;
@@ -362,7 +366,8 @@ header {
     text-transform: uppercase;
     font-weight: bold;
     letter-spacing: 0.5px;
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    box-shadow: 0 2px 4px rgba(133, 8, 35, 0.724);
+    z-index: 10;
 }
 
 .view-only-tag {

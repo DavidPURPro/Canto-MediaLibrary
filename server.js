@@ -8,6 +8,11 @@ const { Pool } = require('pg');
 const flash = require('connect-flash');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const appInsights = require('applicationinsights');
+const gm = require('gm').subClass({ imageMagick: true });
+const fs = require('fs');
+const os = require('os');
+const { pipeline } = require('stream/promises');
+
 let insightsClient;
 if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
     appInsights.setup()
@@ -69,9 +74,27 @@ const AzureStreamStorage = {
             const bufferSize = 4 * 1024 * 1024; 
             const maxBuffers = 20;
 
+            // Correction du Content-Type pour les extensions mal reconnues par certains navigateurs
+            const MIME_OVERRIDES = {
+                '.jfif': 'image/jpeg',
+                '.jpe':  'image/jpeg',
+                '.tif':  'image/tiff',
+                '.tiff': 'image/tiff',
+                '.bmp':  'image/bmp',
+                '.avif': 'image/avif',
+                '.heif': 'image/heif',
+                '.dng':  'image/x-adobe-dng',
+                '.cr2':  'image/x-canon-cr2',
+                '.nef':  'image/x-nikon-nef',
+                '.arw':  'image/x-sony-arw',
+                '.srt':  'text/plain',
+            };
+            const fileExt = path.extname(file.originalname).toLowerCase();
+            const correctedMime = MIME_OVERRIDES[fileExt] || file.mimetype;
+
             await blockBlobClient.uploadStream(file.stream, bufferSize, maxBuffers, {
                 blobHTTPHeaders: { 
-                    blobContentType: file.mimetype,
+                    blobContentType: correctedMime,
                     blobContentDisposition: 'inline' 
                 }
             });
@@ -95,7 +118,7 @@ const AzureStreamStorage = {
 // eviter certains extension
 const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const forbidden_extensions = [".heic", ".thm"];
+    const forbidden_extensions = [];
     
     if (forbidden_extensions.includes(ext)) {
         return cb(new Error(`Extension_Error:${ext}`));
@@ -278,6 +301,69 @@ app.get('/', loginRequiredHtml, (req, res) => {
     res.redirect('/index');
 });
 
+async function generateAndUploadThumbnail(filename, containerClient, pool) {
+    const ext = path.extname(filename).toLowerCase();
+
+    const visualExts = ['.ai', '.eps', '.psd', '.tiff', '.tif', '.arw', '.cr2', '.nef', '.dng'];
+    const dataExts = ['.srt', '.kml', '.txt'];
+
+    if (dataExts.includes(ext)) {
+        let iconUrl = '/static/icons/default.png';
+        if (ext === '.srt') iconUrl = '/static/icons/subtitle.png';
+        if (ext === '.kml') iconUrl = '/static/icons/map.png';
+
+        await pool.query("UPDATE documents SET thumbnail_url = $1 WHERE nom_fichier = $2", [iconUrl, filename]);
+        await pool.query("UPDATE portal_files SET thumbnail_url = $1 WHERE filename = $2", [iconUrl, filename]);
+        return;
+    }
+
+    if (!visualExts.includes(ext)) return;
+
+    const tmpOriginal = path.join(os.tmpdir(), filename);
+    const thumbFilename = `thumb_${filename}.jpg`;
+    const tmpThumb = path.join(os.tmpdir(), thumbFilename);
+
+    try {
+        const blockBlobClient = containerClient.getBlockBlobClient(filename);
+        const downloadResponse = await blockBlobClient.download(0);
+        await pipeline(downloadResponse.readableStreamBody, fs.createWriteStream(tmpOriginal));
+
+        await new Promise((resolve, reject) => {
+            let img = gm(`${tmpOriginal}[0]`)
+                .limit('memory', '512MB') 
+                .limit('map', '1GB');
+
+            if (['.tiff', '.tif', '.psd'].includes(ext)) {
+                img = img.colorspace('sRGB');
+            }
+
+            img.background('#FFFFFF')
+                .flatten()
+                .resize(800, 800, '>')
+                .quality(80)
+                .setFormat('jpg')
+                .write(tmpThumb, (err) => err ? reject(err) : resolve());
+        });
+
+        const thumbBlobClient = containerClient.getBlockBlobClient(thumbFilename);
+        await thumbBlobClient.uploadFile(tmpThumb, {
+            blobHTTPHeaders: { blobContentType: 'image/jpeg' }
+        });
+
+        const thumbUrl = thumbBlobClient.url;
+
+        await pool.query("UPDATE documents SET thumbnail_url = $1 WHERE nom_fichier = $2", [thumbUrl, filename]);
+        await pool.query("UPDATE portal_files SET thumbnail_url = $1 WHERE filename = $2", [thumbUrl, filename]);
+
+    } catch (error) {
+        const errorIcon = '/static/icons/broken_file.png';
+        await pool.query("UPDATE documents SET thumbnail_url = $1 WHERE nom_fichier = $2", [errorIcon, filename]);
+    } finally {
+        if (fs.existsSync(tmpOriginal)) fs.unlinkSync(tmpOriginal);
+        if (fs.existsSync(tmpThumb)) fs.unlinkSync(tmpThumb);
+    }
+}
+
 app.get('/', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const sort = req.query.sort || 'date_desc';
@@ -285,11 +371,12 @@ app.get('/', async (req, res) => {
     const limit = 12;
     const offset = (page - 1) * limit;
     const ext = {
-        images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
+        images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.jpe'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
         videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
         audio: ["'%.mp3'", "'%.wav'", "'%.aac'", "'%.flac'", "'%.ogg'", "'%.m4a'"],
         documents: ["'%.pdf'", "'%.doc'", "'%.docx'", "'%.xls'", "'%.xlsx'", "'%.txt'", "'%.rtf'", "'%.odt'"],
-        presentations: ["'%.ppt'", "'%.pptx'", "'%.key'", "'%.odp'"]
+        presentations: ["'%.ppt'", "'%.pptx'", "'%.key'", "'%.odp'"],
+        others: ["'%.ai'", "'%.kml'", "'%.zip'", "'%.rar'", "'%.eps'", "'%.psd'", "'%.heic'", "'%.heif'", "'%.thm'", "'%.emf'", "'%.srt'", "'%.tif'", "'%.tiff'"]
     };
     const allKnownExts = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
 
@@ -310,7 +397,8 @@ app.get('/', async (req, res) => {
         } else if (filter === 'presentations') {
             baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.presentations.join(',')}])`;
         } else if (filter === 'others') {
-            baseQuery += ` AND LOWER(d.nom_fichier) NOT LIKE ANY(ARRAY[${allKnownExts.join(',')}])`;
+            const knownWithoutOthers = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
+            baseQuery += ` AND (LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.others.join(',')}]) OR NOT LOWER(d.nom_fichier) LIKE ANY(ARRAY[${knownWithoutOthers.join(',')}]))`;
         }
 
         let orderBy = 'ORDER BY d.date_ajout DESC';
@@ -610,9 +698,95 @@ app.post('/update_folder_order', loginRequiredJson, adminRequired, express.json(
     }
 });
 
+// ── Recherche augmentée par IA ───────────────────────────────────────────────
+// Cache mémoire simple pour éviter de ré-appeler le modèle sur les mêmes requêtes
+const aiSearchCache = new Map();
+const AI_CACHE_MAX_SIZE = 200;
+const AI_CACHE_TTL_MS = 1000 * 60 * 60; // 1h
+
+async function expandSearchTermsWithAI(query) {
+    const cacheKey = query.toLowerCase().trim();
+    const cached = aiSearchCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < AI_CACHE_TTL_MS) {
+        return cached.terms;
+    }
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+        console.warn('ANTHROPIC_API_KEY non définie — recherche IA désactivée.');
+        return [];
+    }
+
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': process.env.ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 200,
+                messages: [{
+                    role: 'user',
+                    content: `Tu aides à élargir une recherche dans une médiathèque d'entreprise (photos, vidéos, documents classés par dossiers/pays/villes/projets).
+Requête de l'utilisateur : "${query}"
+
+Donne une liste de 5 à 10 termes étroitement liés qui pourraient apparaître dans des noms de fichiers, descriptions ou noms de dossiers en rapport avec cette requête (ex: si la requête est un pays, donne ses grandes villes, régions ou noms de projets typiques associés ; si c'est une ville, donne le pays et la région).
+
+Réponds UNIQUEMENT avec un objet JSON valide de cette forme, sans aucun texte avant ou après, sans balises markdown :
+{"terms": ["terme1", "terme2", "terme3"]}`
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            console.error('Anthropic API error:', response.status, await response.text());
+            return [];
+        }
+
+        const data = await response.json();
+        const textBlock = (data.content || []).find(b => b.type === 'text');
+        if (!textBlock) return [];
+
+        let parsed;
+        try {
+            const cleaned = textBlock.text.trim().replace(/^```json\s*|```$/g, '');
+            parsed = JSON.parse(cleaned);
+        } catch (e) {
+            console.error('Failed to parse AI search response:', textBlock.text);
+            return [];
+        }
+
+        const terms = Array.isArray(parsed.terms) ? parsed.terms.filter(t => typeof t === 'string' && t.trim()) : [];
+
+        // Cache avec éviction simple si trop gros
+        if (aiSearchCache.size >= AI_CACHE_MAX_SIZE) {
+            const oldestKey = aiSearchCache.keys().next().value;
+            aiSearchCache.delete(oldestKey);
+        }
+        aiSearchCache.set(cacheKey, { terms, timestamp: Date.now() });
+
+        return terms;
+
+    } catch (err) {
+        console.error('expandSearchTermsWithAI error:', err);
+        return [];
+    }
+}
+
+// Endpoint dédié pour pré-calculer les termes (utilisé par le frontend pour afficher les "termes liés")
+app.get('/ai_expand_search', loginRequiredJson, async (req, res) => {
+    const query = (req.query.q || '').trim();
+    if (!query) return res.json({ terms: [] });
+    const terms = await expandSearchTermsWithAI(query);
+    res.json({ terms });
+});
+
 app.get('/search_file', loginRequiredJson, async (req, res) => {
     try {
         const filename = req.query.filename;
+        const aiEnabled = req.query.ai === 'true';
         let tags = req.query.tag;
         if (tags && !Array.isArray(tags)) tags = [tags]; 
         const folder_id = req.query.folder_id;
@@ -623,8 +797,15 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         const filter = req.query.filter || 'all';
         const sectionFilter = req.query.section; 
         const categoryFilter = req.query.category;
+
+        // Termes additionnels générés par l'IA (synonymes, villes/pays liés, etc.)
+        let aiTerms = [];
+        if (aiEnabled && filename && filename.trim().length > 1) {
+            aiTerms = await expandSearchTermsWithAI(filename.trim());
+        }
+
         const ext = {
-            images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
+            images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.jpe'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'", "'%.tif'", "'%.tiff'", "'%.avif'", "'%.dng'", "'%.cr2'", "'%.nef'", "'%.arw'"],
             videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
             audio: ["'%.mp3'", "'%.wav'", "'%.aac'", "'%.flac'", "'%.ogg'", "'%.m4a'"],
             documents: ["'%.pdf'", "'%.doc'", "'%.docx'", "'%.xls'", "'%.xlsx'", "'%.txt'", "'%.rtf'", "'%.odt'"],
@@ -632,19 +813,30 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         };
         const allKnownExts = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
         let query = `
-            SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event, folder_id,
+            SELECT nom_fichier, lien_telechargement, description, tags, is_exclusive, date_ajout, date_event, folder_id, thumbnail_url,
                    COUNT(*) OVER() as total_count
             FROM documents
             WHERE 1=1
         `;
         const params = [];
         if (filename) {
+            // Termes de base = mots de la requête originale + termes IA (si activée)
             const searchWords = filename.split(/\s+/).filter(w => w.length > 0);
-            for (const word of searchWords) {
+            const allTerms = [...searchWords, ...aiTerms];
+
+            const wordConditions = [];
+            for (const word of allTerms) {
                 const searchTerm = `%${word}%`;
                 params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
                 const pLen = params.length;
-                query += ` AND (nom_fichier ILIKE $${pLen - 4} OR description ILIKE $${pLen - 3} OR tags::text ILIKE $${pLen - 2} OR section ILIKE $${pLen - 1} OR category ILIKE $${pLen})`;
+                wordConditions.push(`(nom_fichier ILIKE $${pLen - 4} OR description ILIKE $${pLen - 3} OR tags::text ILIKE $${pLen - 2} OR section ILIKE $${pLen - 1} OR category ILIKE $${pLen})`);
+            }
+            if (aiEnabled && aiTerms.length > 0) {
+                // Mode IA : un fichier matche s'il correspond à N'IMPORTE LEQUEL des termes (original OU lié)
+                query += ` AND (${wordConditions.join(" OR ")})`;
+            } else {
+                // Mode normal : tous les mots de la requête doivent matcher (comportement existant inchangé)
+                query += wordConditions.map(c => ` AND ${c}`).join('');
             }
         }
 
@@ -681,7 +873,7 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
         } else if (filter === 'presentations') {
             query += ` AND LOWER(nom_fichier) LIKE ANY(ARRAY[${ext.presentations.join(',')}])`;
         } else if (filter === 'others') {
-            query += ` AND LOWER(nom_fichier) NOT LIKE ANY(ARRAY[${allKnownExts.join(',')}])`;
+            query += ` AND NOT (LOWER(nom_fichier) LIKE ANY(ARRAY[${allKnownExts.join(',')}]))`;
         }
 
         if (sectionFilter && sectionFilter !== 'all') {
@@ -735,20 +927,62 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
                 is_exclusive: Boolean(row.is_exclusive),
                 date_ajout: formatDate(row.date_ajout),
                 date_event: formatDate(row.date_event),
-                folder_id: row.folder_id
+                folder_id: row.folder_id,
+                thumbnail: row.thumbnail_url || row.lien_telechargement
             };
         });
+
+        // ── Folders correspondants (nom de dossier matchant la requête ou les termes IA) ──
+        // Inclut le chemin complet (Parent > Sous-dossier > ...) pour distinguer les homonymes
+        let matchingFolders = [];
+        if (filename && filename.trim().length > 0) {
+            const folderTermsSet = aiEnabled ? [filename.trim(), ...aiTerms] : [filename.trim()];
+            const folderParams = [];
+            const folderConditions = folderTermsSet.map(term => {
+                folderParams.push(`%${term}%`);
+                return `name ILIKE $${folderParams.length}`;
+            });
+            const folderQuery = `
+                WITH RECURSIVE ancestry AS (
+                    -- Point de départ : les dossiers qui matchent la recherche
+                    SELECT id, name, parent_id, id AS origin_id, name::text AS path, 0 AS depth
+                    FROM folders
+                    WHERE ${folderConditions.join(' OR ')}
+
+                    UNION ALL
+
+                    -- Remontée récursive vers les parents pour construire le chemin
+                    SELECT f.id, f.name, f.parent_id, a.origin_id, (f.name || ' > ' || a.path)::text, a.depth + 1
+                    FROM folders f
+                    INNER JOIN ancestry a ON f.id = a.parent_id
+                    WHERE a.depth < 10
+                )
+                SELECT DISTINCT ON (origin_id)
+                    origin_id AS id, path
+                FROM ancestry
+                ORDER BY origin_id, depth DESC
+                LIMIT 30;
+            `;
+            const folderResult = await pool.query(folderQuery, folderParams);
+            matchingFolders = folderResult.rows.map(r => ({
+                id: r.id,
+                name: r.path.split(' > ').pop(),
+                path: r.path
+            }));
+        }
 
         res.json({
             files: files,
             total: total_count,
             page: page,
-            total_pages: Math.ceil(total_count / per_page)
+            total_pages: Math.ceil(total_count / per_page),
+            folders: matchingFolders,
+            ai_terms: aiTerms
         });
 
     } catch (error) {
         console.error("Erreur search_file:", error.message);
-        res.json({ files: [], total: 0, page: 1, total_pages: 0 });
+        res.json({ files: [], total: 0, page: 1, total_pages: 0, folders: [], ai_terms: [] });
     }
 });
 
@@ -876,6 +1110,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
                     }
                 });
             }
+            generateAndUploadThumbnail(filename, containerClient, pool);
         }
         res.json({ status: "success", urls: uploaded_urls });
 
@@ -986,7 +1221,17 @@ app.post('/delete_folder', loginRequiredJson, adminRequired, upload.none(), asyn
             return res.status(400).json({ status: "error", message: "ID du dossier requis" });
         }
 
-        const delRes = await pool.query("DELETE FROM folders WHERE id = $1 RETURNING name;", [folder_id]);
+        const delRes = await pool.query(`
+            WITH RECURSIVE folder_tree AS (
+                SELECT id, name FROM folders WHERE id = $1
+                UNION ALL
+                SELECT f.id, f.name FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            )
+            DELETE FROM folders 
+            WHERE id IN (SELECT id FROM folder_tree) 
+            RETURNING name;
+        `, [folder_id]);
         const folderName = delRes.rows.length > 0 ? delRes.rows[0].name : "Dossier Inconnu";
         insightsClient.trackEvent({
             name: "Folder_Supprime",
@@ -1691,7 +1936,7 @@ app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, r
 
         const rootCheck = await pool.query("SELECT folder_id FROM portal_folders WHERE portal_id = $1;", [real_portal_id]);
         const allowedRoots = rootCheck.rows.map(r => r.folder_id);
-        const allFoldersRes = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
+        const allFoldersRes = await pool.query("SELECT id, name, parent_id, creation_date FROM folders ORDER BY name;");
         const allFolders = allFoldersRes.rows;
         let currentRoot = null;
         let tempId = targetFolderId;
@@ -2591,6 +2836,338 @@ app.post('/update_file_metadata', loginRequiredHtml, adminRequired, async (req, 
     } catch (error) {
         console.error("Error /update_file_metadata :", error);
         res.status(500).json({ status: 'error', message: 'Error' });
+    }
+});
+
+// ── Liens de partage groupés ─────────────────────────────────────────────────
+
+app.post('/create_share_link', loginRequiredJson, upload.none(), async (req, res) => {
+    try {
+        let filenames;
+        try { filenames = JSON.parse(req.body.filenames || '[]'); } catch { filenames = []; }
+
+        if (!Array.isArray(filenames) || filenames.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'No files specified.' });
+        }
+
+        const ph = filenames.map((_, i) => `$${i + 1}`).join(', ');
+        const check = await pool.query(
+            `SELECT nom_fichier FROM documents WHERE nom_fichier IN (${ph})`, filenames
+        );
+        if (check.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'No matching files found.' });
+        }
+
+        const token = crypto.randomBytes(18).toString('base64url').slice(0, 24);
+
+        await pool.query(
+            `INSERT INTO shared_links (token, filenames, created_by, expires_at)
+             VALUES ($1, $2::jsonb, $3, NOW() + INTERVAL '30 days')`,
+            [token, JSON.stringify(filenames), req.session.user_email || null]
+        );
+
+        const shareUrl = `${req.protocol}://${req.get('host')}/s/${token}`;
+        res.json({ status: 'success', token, url: shareUrl });
+
+    } catch (err) {
+        console.error('create_share_link error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// Page publique du lien partagé — pas de login requis
+app.get('/s/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        const result = await pool.query(
+            `SELECT filenames, created_at, expires_at FROM shared_links WHERE token = $1`, [token]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Link not found — PUR</title>
+                <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f4f7;margin:0;}
+                .box{text-align:center;padding:48px;background:white;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.1);}
+                h2{color:#ef4444;margin-bottom:12px;}p{color:#64748b;}</style></head>
+                <body><div class="box"><h2>🔗 Link not found</h2><p>This share link does not exist or has expired.</p></div></body></html>`);
+        }
+
+        const row = result.rows[0];
+        if (new Date(row.expires_at) < new Date()) {
+            return res.status(410).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Link expired — PUR</title>
+                <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f4f7;margin:0;}
+                .box{text-align:center;padding:48px;background:white;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.1);}
+                h2{color:#f59e0b;margin-bottom:12px;}p{color:#64748b;}</style></head>
+                <body><div class="box"><h2>⏰ Link expired</h2><p>This share link expired on ${new Date(row.expires_at).toLocaleDateString()}.</p></div></body></html>`);
+        }
+
+        const filenames = row.filenames;
+        if (filenames.length === 0) return res.status(404).send('No files.');
+
+        const ph2 = filenames.map((_, i) => `$${i + 1}`).join(', ');
+        // 1. AJOUT DES COLONNES DE DATES DANS LA REQUÊTE SQL
+        const filesResult = await pool.query(
+            `SELECT nom_fichier AS name, lien_telechargement AS url, description, tags, date_ajout, date_event FROM documents WHERE nom_fichier IN (${ph2})`,
+            filenames
+        );
+
+        const files = filesResult.rows;
+        const createdAt = new Date(row.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        const expiresAt = new Date(row.expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+        // Petit helper interne pour formater les dates proprement (JJ/MM/AAAA)
+        const formatShareDate = (dateObj) => {
+            if (!dateObj) return "Not specified";
+            const d = new Date(dateObj);
+            if (isNaN(d.getTime())) return "Not specified";
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}/${month}/${year}`;
+        };
+
+        const fileCards = files.map(f => {
+            const ext = (f.name.split('.').pop() || '').toLowerCase();
+            const isImg = ['jpg','jpeg','png','gif','webp','svg'].includes(ext);
+            const isVideo = ['mp4','mov','webm','avi'].includes(ext);
+            
+            const safeName = f.name.replace(/"/g, '&quot;');
+            const safeDesc = (f.description || '').replace(/"/g, '&quot;');
+            
+            let parsedTags = [];
+            try {
+                if (typeof f.tags === 'string') parsedTags = JSON.parse(f.tags);
+                else if (Array.isArray(f.tags)) parsedTags = f.tags;
+            } catch(e) {}
+            const safeTags = JSON.stringify(parsedTags).replace(/"/g, '&quot;');
+
+            const preview = isImg
+                ? `<img src="${f.url}" alt="${safeName}" style="width:100%;height:175px;object-fit:cover;border-radius:12px 12px 0 0;">`
+                : isVideo
+                ? `<video src="${f.url}" style="width:100%;height:175px;object-fit:cover;border-radius:12px 12px 0 0;" muted></video>`
+                : `<div style="height:175px;background:linear-gradient(135deg,#f0f4f7,#e8eef5);border-radius:12px 12px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#94a3b8;">
+                     <span style="font-size:34px;">📄</span><span style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.05em;">${ext}</span>
+                   </div>`;
+                   
+            // 2. AJOUT DES ATTRIBUTS DE DONNÉES SUR LA CARTE HTML
+            return `<div style="background:white;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .2s,box-shadow .2s;cursor:pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 32px rgba(0,0,0,.1)'"
+                 onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'"
+                 data-url="${f.url}" 
+                 data-name="${safeName}" 
+                 data-desc="${safeDesc}" 
+                 data-tags="${safeTags}" 
+                 data-ext="${ext}"
+                 data-added="${formatShareDate(f.date_ajout)}"
+                 data-event="${formatShareDate(f.date_event)}"
+                 onclick="openModal(this)">
+              ${preview}
+              <div style="padding:14px 16px;">
+                <div style="font-weight:700;font-size:13.5px;color:#1e2533;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px;">${f.name}</div>
+                ${f.description ? `<div style="font-size:12px;color:#64748b;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${f.description}</div>` : ''}
+                
+                <button onclick="event.stopPropagation(); const a = document.createElement('a'); a.href='${f.url}'; a.download='${safeName}'; document.body.appendChild(a); a.click(); document.body.removeChild(a);"
+                   style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#16677c,#0d4555);color:white;padding:8px 16px;border-radius:50px;font-size:12.5px;font-weight:700;text-decoration:none;border:none;cursor:pointer;margin-top:8px;">
+                  ↓ Download
+                </button>
+              </div>
+            </div>`;
+        }).join('');
+
+        res.send(`<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Shared files — PUR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#f0f4f7;min-height:100vh;-webkit-font-smoothing:antialiased;}
+    .banner{background:linear-gradient(120deg,#0d4555 0%,#16677c 55%,#1a8fa8 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between;gap:20px;box-shadow:0 2px 16px rgba(13,69,85,.3);}
+    .banner-title{font-family:'Playfair Display',serif;font-size:1.55rem;font-weight:800;color:white;letter-spacing:-.02em;}
+    .banner-meta{color:rgba(255,255,255,.65);font-size:13px;margin-top:4px;}
+    .badge{background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.25);padding:8px 18px;border-radius:50px;font-size:13px;font-weight:700;white-space:nowrap;backdrop-filter:blur(6px);}
+    .container{max-width:1100px;margin:0 auto;padding:36px 20px;}
+    .meta-bar{background:white;border-radius:14px;border:1px solid #e2e8f0;padding:16px 24px;margin-bottom:28px;display:flex;gap:32px;flex-wrap:wrap;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.05);}
+    .meta-item{display:flex;flex-direction:column;gap:2px;}
+    .meta-label{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;}
+    .meta-value{font-size:14px;font-weight:700;color:#1e2533;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:18px;}
+    .footer{text-align:center;margin-top:40px;padding:20px;color:#94a3b8;font-size:13px;}
+    .footer a{color:#16677c;font-weight:700;text-decoration:none;}
+    
+    /* Styles Modale */
+    .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.85); z-index:9999; align-items:center; justify-content:center; padding:20px; opacity: 0; transition: opacity 0.3s ease;}
+    .modal-overlay.active { display:flex; opacity: 1; }
+    .modal-content { background:white; border-radius:16px; max-width:900px; width:100%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; position:relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);}
+    .modal-close { position:absolute; top:12px; right:12px; background:#f1f5f9; border:none; border-radius:50%; width:36px; height:36px; cursor:pointer; font-size:16px; color:#475569; display:flex; align-items:center; justify-content:center; transition:background 0.2s; z-index:10;}
+    .modal-close:hover { background:#e2e8f0; }
+    .modal-media { background:#f8fafc; display:flex; justify-content:center; align-items:center; flex:1; overflow:hidden; min-height:40vh; position:relative; border-bottom: 1px solid #e2e8f0;}
+    .modal-info { padding:24px; overflow-y:auto; max-height: 40vh; }
+    .modal-tag { display:inline-block; background:#f1f5f9; color:#475569; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:600; margin: 0 6px 6px 0;}
+    
+    /* Styles Métadonnées Dates */
+    .modal-meta-dates { display: flex; gap: 24px; margin-bottom: 20px; font-size: 13.5px; color: #475569; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .meta-date-item { display: flex; align-items: center; gap: 6px; }
+
+    @media(max-width:600px){.banner{flex-direction:column;text-align:center;padding:20px;}.meta-bar{gap:16px;}.modal-meta-dates{flex-direction:column; gap:8px;}}
+  </style>
+</head><body>
+  <div class="banner">
+    <div>
+      <div class="banner-title">📎 Shared files</div>
+      <div class="banner-meta">Shared via PUR Media Library</div>
+    </div>
+    <div class="badge">${files.length} file${files.length > 1 ? 's' : ''}</div>
+  </div>
+  <div class="container">
+    <div class="meta-bar">
+      <div class="meta-item"><span class="meta-label">Shared on</span><span class="meta-value">${createdAt}</span></div>
+      <div class="meta-item"><span class="meta-label">Expires on</span><span class="meta-value">${expiresAt}</span></div>
+      <div class="meta-item"><span class="meta-label">Files</span><span class="meta-value">${files.length}</span></div>
+    </div>
+    <div class="grid">${fileCards}</div>
+    <div class="footer">Powered by <a href="/">PUR Media Library</a></div>
+  </div>
+
+  <div id="mediaModal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div id="modalMediaContainer" class="modal-media"></div>
+      <div class="modal-info">
+        <h3 id="modalTitle" style="margin-bottom:8px;font-size:20px;color:#1e2533;font-weight:800;word-break:break-word;"></h3>
+        <p id="modalDesc" style="font-size:14.5px;color:#64748b;margin-bottom:16px;line-height:1.6;"></p>
+        
+        <div class="modal-meta-dates">
+          <div class="meta-date-item">
+            <span style="font-size:16px;"></span> <strong>Added on:</strong> <span id="modalAddedDate"></span>
+          </div>
+          <div class="meta-date-item">
+            <span style="font-size:16px;"></span> <strong>Event Date:</strong> <span id="modalEventDate"></span>
+          </div>
+        </div>
+
+        <div id="modalTagsContainer" style="margin-bottom:20px;"></div>
+        <a id="modalDownload" href="#" download style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#16677c,#0d4555);color:white;padding:12px 24px;border-radius:50px;font-size:14px;font-weight:700;text-decoration:none;">
+          ↓ Download original file
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openModal(el) {
+      const url = el.getAttribute('data-url');
+      const name = el.getAttribute('data-name');
+      const desc = el.getAttribute('data-desc');
+      const ext = el.getAttribute('data-ext');
+      
+      // Récupération des attributs de dates injectés
+      const addedDate = el.getAttribute('data-added');
+      const eventDate = el.getAttribute('data-event');
+      
+      let tags = [];
+      try { 
+        const tagsRaw = el.getAttribute('data-tags');
+        if (tagsRaw) tags = JSON.parse(tagsRaw); 
+      } catch(e) { console.error("Error parsing tags:", e); }
+
+      document.getElementById('modalTitle').textContent = name;
+      document.getElementById('modalDesc').textContent = desc || 'No description provided.';
+      
+      // Injection dynamique des dates dans les bons conteneurs
+      document.getElementById('modalAddedDate').textContent = addedDate;
+      document.getElementById('modalEventDate').textContent = eventDate;
+
+      const dlBtn = document.getElementById('modalDownload');
+      dlBtn.href = url;
+      dlBtn.download = name;
+
+      const tagsHtml = tags.length > 0 
+        ? tags.map(t => \`<span class="modal-tag">\${t}</span>\`).join('')
+        : '<span style="font-size:13px;color:#94a3b8;font-style:italic;">No tags</span>';
+      document.getElementById('modalTagsContainer').innerHTML = tagsHtml;
+
+      const mediaContainer = document.getElementById('modalMediaContainer');
+      const isImg = ['jpg','jpeg','png','gif','webp','svg'].includes(ext);
+      const isVideo = ['mp4','mov','webm','avi'].includes(ext);
+      const isAudio = ['mp3','wav','ogg'].includes(ext);
+
+      if (isImg) {
+        mediaContainer.innerHTML = \`<img src="\${url}" style="max-width:100%;max-height:50vh;object-fit:contain;">\`;
+      } else if (isVideo) {
+        mediaContainer.innerHTML = \`<video src="\${url}" controls autoplay style="max-width:100%;max-height:50vh;outline:none;background:black;"></video>\`;
+      } else if (isAudio) {
+        mediaContainer.innerHTML = \`<audio src="\${url}" controls autoplay style="width:80%;"></audio>\`;
+      } else if (ext === 'pdf') {
+        mediaContainer.innerHTML = \`<iframe src="\${url}" style="width:100%;height:50vh;border:none;"></iframe>\`;
+      } else if (['docx', 'pptx', 'xls', 'xlsx'].includes(ext)) {
+        mediaContainer.innerHTML = \`<iframe src="https://view.officeapps.live.com/op/view.aspx?src=\${encodeURIComponent(url)}" style="width:100%;height:50vh;border:none;"></iframe>\`;
+      } else {
+        mediaContainer.innerHTML = \`<div style="display:flex;flex-direction:column;align-items:center;"><div style="font-size:64px;color:#94a3b8;">📄</div><div style="margin-top:12px;font-weight:800;color:#64748b;font-size:20px;">\${ext.toUpperCase()}</div></div>\`;
+      }
+
+      const modal = document.getElementById('mediaModal');
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('mediaModal');
+      modal.classList.remove('active');
+      document.getElementById('modalMediaContainer').innerHTML = ''; 
+      document.body.style.overflow = 'auto';
+    }
+    
+    document.addEventListener('keydown', function(event) {
+      if (event.key === "Escape") {
+        closeModal();
+      }
+    });
+  </script>
+</body></html>`);
+
+    } catch (err) {
+        console.error('share page error:', err);
+        res.status(500).send('Server error.');
+    }
+});
+
+// partage dossier entier
+app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => {
+    try {
+        const targetFolderId = parseInt(req.params.folder_id);
+        const foldersRes = await pool.query("SELECT id, parent_id FROM folders");
+        const folders = foldersRes.rows;
+        const descendants = [];
+        function getDescendants(parentId) {
+            const children = folders.filter(f => f.parent_id === parentId);
+            children.forEach(c => {
+                descendants.push(c.id);
+                getDescendants(c.id); 
+            });
+        }
+        descendants.push(targetFolderId);
+        getDescendants(targetFolderId);
+        const filesRes = await pool.query(
+            "SELECT nom_fichier FROM documents WHERE folder_id = ANY($1::int[])",
+            [descendants]
+        );
+        const filenames = filesRes.rows.map(f => f.nom_fichier);
+        if (filenames.length === 0) {
+            return res.status(404).json({ status: "error", message: "This folder is empty." });
+        }
+        const token = crypto.randomBytes(18).toString('base64url').slice(0, 24);
+        await pool.query(
+            `INSERT INTO shared_links (token, filenames, created_by, expires_at)
+             VALUES ($1, $2::jsonb, $3, NOW() + INTERVAL '30 days')`,
+            [token, JSON.stringify(filenames), req.session.user_email || null]
+        );
+
+        const shareUrl = `${req.protocol}://${req.get('host')}/s/${token}`;
+        res.json({ status: 'success', token, url: shareUrl, count: filenames.length });
+
+    } catch (error) {
+        console.error("Erreur share_folder:", error);
+        res.status(500).json({ status: "error", message: error.message });
     }
 });
 

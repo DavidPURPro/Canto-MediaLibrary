@@ -42,7 +42,7 @@ let draggedFolderElement = null;
 
 // mappage des types de fichiers
 const fileTypeMap = {
-  images: ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'],
+  images: ['.png', '.jpg', '.jpeg', '.jfif', '.jpe', '.gif', '.bmp', '.svg', '.webp', '.tif', '.tiff', '.avif', '.heif', '.dng', '.cr2', '.nef', '.arw'],
   videos: ['.mp4', '.mov', '.avi', '.wmv', '.flv', '.mkv', '.webm'],
   audio: ['.mp3', '.wav', '.aac', '.flac', '.ogg', '.m4a'],
   documents: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.rtf', '.odt'],
@@ -53,23 +53,6 @@ function getFileExtension(filename) {
   return filename.slice(filename.lastIndexOf('.')).toLowerCase();
 }
 
-document.querySelectorAll('.sort-dropdown-content button[data-sort]').forEach(button => {
-    button.addEventListener('click', (e) => {
-        currentGlobalSort = e.currentTarget.getAttribute('data-sort');
-        const textCloned = e.currentTarget.textContent.trim();
-        document.getElementById('sortDropdownBtn').innerHTML = `<i class="fas fa-sort"></i> Sort: ${textCloned}`;
-        executeGlobalSearch(currentSearchQuery, 1);
-    });
-});
-
-document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEach(button => {
-    button.addEventListener('click', (e) => {
-        currentGlobalFilter = e.currentTarget.getAttribute('data-filter');
-        const textCloned = e.currentTarget.textContent.trim();
-        document.getElementById('filterDropdownBtn').innerHTML = `<i class="fas fa-filter"></i> ${textCloned}`;
-        executeGlobalSearch(currentSearchQuery, 1);
-    });
-});
 
 function formatDateForDisplay(dateString) {
   if (!dateString) return "No date";
@@ -230,6 +213,9 @@ function renderFolder(folder, parentElement) {
             <i class="fas fa-ellipsis-v"></i>
         </button>
         <div class="folder-actions">
+            <button class="share-folder-btn" title="Share folder" style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 4px;">
+                <i class="fas fa-share-nodes"></i>
+            </button>
             <button class="download-folder-btn" title="Download folder as ZIP" style="background: none; border: none; color: #10b981; cursor: pointer; padding: 4px;">
                 <i class="fas fa-file-archive"></i>
             </button>
@@ -251,6 +237,11 @@ function renderFolder(folder, parentElement) {
   }
 
   folderName.addEventListener('click', function(e) {
+    if (e.target.closest('.share-folder-btn')) { 
+      e.stopPropagation();
+      shareFolder(folder.id, folder.name);
+      return;
+    }
     if (e.target.closest('.download-folder-btn')) { 
       e.stopPropagation();
       downloadFolderAsZip(folder.id, e.target.closest('.download-folder-btn'));
@@ -378,7 +369,6 @@ function createFolder(name, parentId = null) {
 function deleteFolder(folderId) {
   const formData = new FormData();
   formData.append('folder_id', folderId);
-  
   fetch('/delete_folder', {
     method: 'POST',
     body: formData
@@ -386,8 +376,17 @@ function deleteFolder(folderId) {
   .then(response => response.json())
   .then(data => {
     if (data.status === 'success') {
-      loadFolders();
-      filterAndDisplay();
+      const folderElement = document.querySelector(`.folder[data-folder-id="${folderId}"]`);
+      if (folderElement) folderElement.remove();
+      if (currentFolderFilter == folderId) {
+          if (typeof resetFolderSelection === 'function') {
+              resetFolderSelection();
+          }
+      } 
+      else {
+          const currentSearch = document.getElementById('searchInput') ? document.getElementById('searchInput').value.trim() : '';
+          executeGlobalSearch(currentSearch, 1);
+      }
     } 
     else {
       alert('Error deleting folder: ' + data.message);
@@ -541,10 +540,10 @@ function filterAndDisplay() {
 }
 
 function sortGallery(asc = true) {
-  const items = Array.from(gallery.children).filter(item => item.classList.contains('gallery-item'));
+  const items = Array.from(gallery.children).filter(item => item.classList.contains('gallery-item') && !item.classList.contains('folder-card'));
   items.sort((a, b) => {
-    const nameA = a.getAttribute("data-name");
-    const nameB = b.getAttribute("data-name");
+    const nameA = a.getAttribute("data-name") || "";
+    const nameB = b.getAttribute("data-name") || "";
     return asc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
   });
   
@@ -736,9 +735,10 @@ function showFileModal(item) {
       console.error('Error fetching file details:', error);
     });
     
+  const EXTRA_IMAGE_EXTS = ['.jfif', '.jpe', '.bmp', '.tif', '.tiff', '.avif', '.heif', '.dng', '.cr2', '.nef', '.arw'];
   let previewContent = '';
-  if (fileTypeMap.images.includes(ext)) {
-      previewContent = `<img src="${link}" alt="${filename}" style="max-width:100%; max-height:80vh; object-fit:contain;" />`;
+  if (fileTypeMap.images.includes(ext) || EXTRA_IMAGE_EXTS.includes(ext)) {
+      previewContent = `<img src="${link}" alt="${filename}" style="max-width:100%; max-height:80vh; object-fit:contain;" onerror="this.outerHTML='<div style=\\'width:100%;height:100%;min-height:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#f8fafc;border-radius:12px;\\'><img src=\\'/static/No_preview.png\\' alt=\\'No preview\\' style=\\'width:100%;height:100%;object-fit:contain;position:absolute;top:0;left:0;\\'/><div style=\\'font-weight:800;color:#1e293b;font-size:28px;position:absolute;bottom:20px;background:rgba(255,255,255,0.9);padding:8px 24px;border-radius:12px;z-index:2;box-shadow:0 4px 12px rgba(0,0,0,0.15);\\'>${ext.slice(1).toUpperCase()}</div></div>'" />`;
   } else if (fileTypeMap.videos.includes(ext)) {
       previewContent = `<video controls autoplay style="width:100%; max-height:80vh;"><source src="${link}" type="video/${ext.slice(1)}"></video>`;
   } else if (fileTypeMap.audio.includes(ext)) {
@@ -748,7 +748,10 @@ function showFileModal(item) {
   } else if (['.docx', '.pptx'].includes(ext)) {
       previewContent = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(link)}" width="100%" height="100%" style="border:none;"></iframe>`;
   } else {
-      previewContent = `<div class="file-preview" style="width:100%; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;"><div style="font-size:24px; margin-bottom:10px;">${ext.toUpperCase()}</div><div>Preview not available</div></div>`;
+      previewContent = `<div class="file-preview" style="width: 100%; height: 100%; min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; background: #f8fafc; border-radius: 12px;">
+          <img src="/static/No_preview.png" alt="No preview available" style="width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0;" />
+          <div style="font-weight: 800; color: #1e293b; font-size: 28px; position: absolute; bottom: 20px; background: rgba(255,255,255,0.9); padding: 8px 24px; border-radius: 12px; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">${ext.toUpperCase()}</div>
+      </div>`;
   }
   
   if (modalPreview) modalPreview.innerHTML = previewContent;  
@@ -762,10 +765,25 @@ function loadFoldersForModal(currentFolderId) {
   fetch('/get_folders')
     .then(response => response.json())
     .then(data => {
+      const folderMap = {};
+      data.folders.forEach(folder => {
+        folderMap[folder.id] = { ...folder, element: null, subfolders: [] };
+      });
+
+      const getFullFolderPath = (folderId, map) => {
+        const parts = [];
+        let current = map[folderId];
+        while (current) {
+          parts.unshift(current.name);
+          current = current.parent_id ? map[current.parent_id] : null;
+        }
+        return parts.join(' / ');
+      };
+
       if (currentFolderId) {
-        const currentFolder = data.folders.find(f => f.id == currentFolderId);
+        const currentFolder = folderMap[currentFolderId];
         document.getElementById('currentFolderName').textContent = currentFolder 
-            ? currentFolder.name 
+            ? getFullFolderPath(currentFolderId, folderMap)
             : "Unknown";
       } 
       else {
@@ -775,10 +793,6 @@ function loadFoldersForModal(currentFolderId) {
       const folderTree = document.getElementById('folderTree');
       if (!folderTree) return; 
       folderTree.innerHTML = '';
-      const folderMap = {};
-      data.folders.forEach(folder => {
-        folderMap[folder.id] = { ...folder, element: null, subfolders: [] };
-      });
       Object.values(folderMap).forEach(folder => {
         if (folder.parent_id && folderMap[folder.parent_id]) {
           folderMap[folder.parent_id].subfolders.push(folder);
@@ -793,65 +807,7 @@ function loadFoldersForModal(currentFolderId) {
     .catch(error => console.error('Error loading folders:', error));
     
 }
-/*
-// assigner au portail
-    const btnAddPortal = document.getElementById('addToPortalBtn');
-    const portalList = document.getElementById('portalList');
-    if (portalNameFromCard !== 'None' && portalNameFromCard !== '') {
-        if (btnAddPortal) {
-            btnAddPortal.textContent = 'Change Portal';
-            btnAddPortal.style.display = 'block';
-        }
-        if (btnRemovePortal) btnRemovePortal.style.display = 'block'; 
-    } 
-    else {
-        if (btnAddPortal) {
-            btnAddPortal.textContent = 'Assign to Portal';
-            btnAddPortal.style.display = 'block';
-        }
-        if (btnRemovePortal) btnRemovePortal.style.display = 'none'; 
-    }
-    if (btnAddPortal && portalList) {
-        const newBtnAddPortal = btnAddPortal.cloneNode(true);
-        btnAddPortal.parentNode.replaceChild(newBtnAddPortal, btnAddPortal);
 
-        newBtnAddPortal.addEventListener('click', function(e) {
-            e.preventDefault();
-            if (portalList.style.display === 'none' || portalList.style.display === '') {
-                portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Chargement des portails...</span>';
-                portalList.style.display = 'block';
-
-                fetch('/get_all_portals')
-                .then(response => response.json())
-                .then(data => {
-                    portalList.innerHTML = '';
-                    if(data.portals && data.portals.length > 0) {
-                        data.portals.forEach(portal => {
-                            const btn = document.createElement('button');
-                            btn.className = 'modern-btn secondary-btn';
-                            btn.style.width = '100%';
-                            btn.style.marginBottom = '6px';
-                            btn.style.textAlign = 'left';
-                            btn.innerHTML = `${portal.name}`;
-                            btn.onclick = () => window.addFileToPortal(portal.id, portal.name);
-                            portalList.appendChild(btn);
-                        });
-                    } 
-                    else {
-                        portalList.innerHTML = '<span style="font-size:12px;">Aucun portail trouvé.</span>';
-                    }
-                })
-                .catch(err => {
-                    console.error("Erreur Fetch Portails :", err);
-                    portalList.innerHTML = '<span style="color:red; font-size:12px;">Erreur de chargement</span>';
-                });
-            } 
-            else {
-                portalList.style.display = 'none';
-            }
-        });
-    }
-*/
 
 const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
 if (btnRemoveFolder) {
@@ -898,7 +854,17 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
     if (e.target.closest('.select-folder-btn')) {
       e.stopPropagation();
       updateFileFolder(currentModalFilename, folder.id);
-      document.getElementById('currentFolderName').textContent = folder.name;
+      // Build full path by traversing parent_id chain
+      const buildPath = (f) => {
+        const parts = [];
+        let current = f;
+        while (current) {
+          parts.unshift(current.name);
+          current = current.parent_id ? folderMap[current.parent_id] : null;
+        }
+        return parts.join(' / ');
+      };
+      document.getElementById('currentFolderName').textContent = buildPath(folder);
       document.getElementById('folderTree').style.display = 'none';
       return;
     }
@@ -938,6 +904,9 @@ function filterAndDisplayWithFilter(filterValue) {
   let visibleCount = 0;
   const items = gallery.querySelectorAll(".gallery-item");
   items.forEach(item => {
+    if (item.classList.contains('folder-card')) {
+      return; 
+    }
     const name = item.getAttribute("data-name").toLowerCase();
     const ext = getFileExtension(name);
     const isExclusive = item.getAttribute("data-exclusive") === 'true';
@@ -965,6 +934,29 @@ const pagination = document.querySelector('.pagination');
 let typingTimer;                
 const doneTypingInterval = 400;  
 let currentSearchQuery = ""; 
+let __searchRequestToken = 0;
+
+// ── Toggle recherche IA ──────────────────────────────────────────────────────
+let aiSearchEnabled = false;
+const aiToggleBtn = document.getElementById('aiSearchToggle');
+const aiHintBox = document.getElementById('aiSearchHint');
+
+if (aiToggleBtn) {
+    aiToggleBtn.addEventListener('click', () => {
+        aiSearchEnabled = !aiSearchEnabled;
+        aiToggleBtn.classList.toggle('active', aiSearchEnabled);
+        if (!aiSearchEnabled) {
+            aiHintBox.style.display = 'none';
+            aiHintBox.innerHTML = '';
+        }
+        // Relancer la recherche courante avec/sans IA si une requête est en cours
+        const query = searchInput ? searchInput.value.trim() : '';
+        if (query.length > 0) {
+            executeGlobalSearch(query, 1);
+        }
+    });
+}
+
 if (searchInput) {
     searchInput.addEventListener('input', function() {
         clearTimeout(typingTimer);
@@ -983,68 +975,134 @@ if (searchInput) {
 
 let currentFolderFilter = null;
 function executeGlobalSearch(query, page = 1) {
+    const __myToken = ++__searchRequestToken;
     gallery.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
             <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
             <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">Loading...</p>
         </div>`;
-        let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}&section=${currentSectionFilter}&category=${currentCategoryFilter}`;
+        if (aiToggleBtn && aiSearchEnabled) aiToggleBtn.classList.add('loading');
+        let url = `/search_file?filename=${encodeURIComponent(query)}&page=${page}&per_page=100&sort=${currentGlobalSort}&filter=${currentGlobalFilter}&section=${currentSectionFilter}&category=${currentCategoryFilter}&ai=${aiSearchEnabled}`;
         if (currentFolderFilter) {
           url += `&folder_id=${currentFolderFilter}`;
         }
     fetch(url) 
         .then(response => response.json())
         .then(data => {
-            gallery.innerHTML = ''; 
-            if ((!query || query.trim() === '') && currentFolderFilter) {
-                let subfoldersToShow = globalFoldersList.filter(f => f.parent_id == currentFolderFilter);
-                subfoldersToShow.sort((a, b) => {
-                    const dateA = a.creation_date ? new Date(a.creation_date) : new Date(0);
-                    const dateB = b.creation_date ? new Date(b.creation_date) : new Date(0);
-                    return dateB - dateA; 
-                });
-                subfoldersToShow.forEach(subfolder => {
-                    let dateText = 'No date';
-                    if (subfolder.creation_date) {
-                        const d = new Date(subfolder.creation_date);
-                        dateText = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}`;
-                    }
+            if (__myToken !== __searchRequestToken) return;
+            gallery.innerHTML = ''; // Nettoyage initial de la galerie
+            if (aiToggleBtn) aiToggleBtn.classList.remove('loading');
+            if (aiSearchEnabled && data.ai_terms && data.ai_terms.length > 0) {
+                aiHintBox.style.display = 'flex';
+                aiHintBox.innerHTML = `<i class="fas fa-wand-magic-sparkles"></i> <strong>AI also searched for:</strong> ` +
+                    data.ai_terms.map(t => `<span class="ai-term-chip">${t}</span>`).join('');
+            } 
+            else if (aiHintBox) {
+                aiHintBox.style.display = 'none';
+                aiHintBox.innerHTML = '';
+            }
+
+            // Folders correspondants (recherche normale ou IA)
+            if (data.folders && data.folders.length > 0) {
+                data.folders.forEach(folder => {
                     const folderCardHtml = `
-                        <div class="gallery-item folder-card" data-folder-id="${subfolder.id}" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%;">
-                            <div style="width: 100%; text-align: left; padding: 10px 15px; font-size: 11px; color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">
-                                <i class="fas fa-calendar-alt" style="margin-right: 5px;"></i> ${dateText}
+                            <div class="gallery-item folder-card ${aiSearchEnabled ? 'folder-result-card' : ''}" onclick="forceNavigateToFolder('${folder.id}')" data-folder-id="${folder.id}" title="${folder.path || folder.name}" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%; position: relative;">                            ${aiSearchEnabled ? `<div class="ai-match-badge"><i class="fas fa-wand-magic-sparkles"></i> AI match</div>` : ''}
+                            <div style="width: 100%; text-align: left; padding: 10px 15px; font-size: 11px; color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                <i class="fas fa-folder-tree" style="margin-right: 5px;"></i> ${folder.path && folder.path.includes(' > ') ? folder.path.split(' > ').slice(0, -1).join(' > ') : 'Root'}
                             </div>
                             <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; padding: 20px 0;">
                                 <i class="far fa-folder" style="font-size: 65px; color: #1e293b;"></i>
                             </div>
-                            <div class="image-title" style="background: #94a3b8; color: white; width: 100%; text-align: center; padding: 12px 0; font-weight: 600; font-size: 14px; border-radius: 0 0 11px 11px;">
-                                ${subfolder.name}
+                            <div class="image-title" style="background: #94a3b8; color: white; width: 100%; text-align: center; padding: 12px 0; font-weight: 600; font-size: 14px; border-radius: 0 0 11px 11px;" title="${folder.path || folder.name}">
+                                ${folder.name}
                             </div>
                         </div>`;
                     gallery.insertAdjacentHTML('beforeend', folderCardHtml);
                 });
             }
-            const files = data.files;
-            const total = data.total;
-            const totalPages = data.total_pages;
+
+            let hasSubfolders = false;
+            if ((!query || query.trim() === '') && currentFolderFilter) {
+                let subfoldersToShow = globalFoldersList.filter(f => f.parent_id == currentFolderFilter);
+                
+                if (subfoldersToShow.length > 0) {
+                    hasSubfolders = true;
+                    
+                    gallery.insertAdjacentHTML('beforeend', `
+                        <div style="grid-column: 1 / -1; font-size: 16px; font-weight: 800; color: #1e2533; margin: 15px 0 5px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; width: 100%; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-folder-open" style="color: #16677c;"></i> SubFolders
+                        </div>
+                    `);
+
+                    subfoldersToShow.sort((a, b) => {
+                        const dateA = a.creation_date ? new Date(a.creation_date) : new Date(0);
+                        const dateB = b.creation_date ? new Date(b.creation_date) : new Date(0);
+                        return dateB - dateA; 
+                    });
+
+                    subfoldersToShow.forEach(subfolder => {
+                        let dateText = 'No date';
+                        if (subfolder.creation_date) {
+                            const d = new Date(subfolder.creation_date);
+                            dateText = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}`;
+                        }
+                        const folderCardHtml = `
+                            <div class="gallery-item folder-card" onclick="forceNavigateToFolder('${subfolder.id}')" data-folder-id="${subfolder.id}" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%;">
+                                <div style="width: 100%; text-align: left; padding: 10px 15px; font-size: 11px; color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">
+                                    <i class="fas fa-calendar-alt" style="margin-right: 5px;"></i> ${dateText}
+                                </div>
+                                <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; padding: 20px 0;">
+                                    <i class="far fa-folder" style="font-size: 65px; color: #1e293b;"></i>
+                                </div>
+                                <div class="image-title" style="background: #94a3b8; color: white; width: 100%; text-align: center; padding: 12px 0; font-weight: 600; font-size: 14px; border-radius: 0 0 11px 11px;">
+                                    ${subfolder.name}
+                                </div>
+                            </div>`;
+                        gallery.insertAdjacentHTML('beforeend', folderCardHtml);
+                    });
+                }
+            }
+
+            const files = data.files || [];
+            const total = data.total || 0;
+            const totalPages = data.total_pages || 0;
             if(fileCount) fileCount.innerHTML = `${total} results found`;
+
             if (files.length === 0) {
-                gallery.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
-                        <i class="fas fa-search-minus fa-2x" style="margin-bottom: 15px; color: #cbd5e1;"></i>
-                        <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">This folder is empty.</p>
-                    </div>`;
+                if (!hasSubfolders) {
+                    gallery.innerHTML = `
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
+                            <i class="fas fa-search-minus fa-2x" style="margin-bottom: 15px; color: #cbd5e1;"></i>
+                            <p style="font-family: 'Plus Jakarta Sans'; font-weight: 600;">This folder is empty.</p>
+                        </div>`;
+                } 
+                else {
+                    gallery.insertAdjacentHTML('beforeend', `
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #94a3b8; font-style: italic; font-size: 13px;">
+                            No direct files in this folder
+                        </div>
+                    `);
+                }
                 if (pagination) pagination.style.display = 'none';
                 return;
             }
-            let currentDateGroup = null; 
 
+            if (hasSubfolders && files.length > 0) {
+                gallery.insertAdjacentHTML('beforeend', `
+                    <div style="grid-column: 1 / -1; font-size: 16px; font-weight: 800; color: #1e2533; margin: 25px 0 5px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; width: 100%; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-file-alt" style="color: #10b981;"></i> Fichiers
+                    </div>
+                `);
+            }
+
+            let currentDateGroup = null; 
+            
             files.forEach(file => {
                 const ext = file.name.split('.').pop().toLowerCase();
                 let mediaHtml = '';
                 
-                if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
-                    mediaHtml = `<div class="img-placeholder"></div><img src="${file.url}" alt="${file.name}" loading="lazy" />`;
+                if (['png', 'jpg', 'jpeg', 'jfif', 'jpe', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'avif', 'heif', 'dng', 'cr2', 'nef', 'arw'].includes(ext)) {
+                    mediaHtml = `<div class="img-placeholder"></div><img src="${file.url}" alt="${file.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f1f5f9;border-radius:11px 11px 0 0;\\'><img src=\\'/static/No_preview.png\\' style=\\'width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;\\' /><div style=\\'font-weight:800;color:#1e293b;font-size:18px;position:absolute;bottom:12px;background:rgba(255,255,255,0.9);padding:4px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);\\'>${ext.toUpperCase()}</div></div>'" />`;
                 } 
                 else if (['mp4', 'webm', 'mov'].includes(ext)) {
                     mediaHtml = `<video controls width="100%" style="max-height: 200px; border-radius: 11px 11px 0 0; object-fit: cover;" preload="none"><source src="${file.url}" type="video/${ext}"></video>`;
@@ -1055,11 +1113,14 @@ function executeGlobalSearch(query, page = 1) {
                 else if (['docx', 'pptx'].includes(ext)) {
                     mediaHtml = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(file.url)}" width="100%" height="200px" style="border: none;" loading="lazy" preload="none"></iframe>`;
                 }
-                else if (['emf', 'heic', 'thm', 'psd'].includes(ext)) {
+                else if (['emf', 'heic', 'thm', 'psd', 'ai', 'kml', 'zip', 'rar', 'eps'].includes(ext)) {
                     mediaHtml = `<img src="/static/icons/${ext}.png" alt="${file.name}" style="max-height: 200px; object-fit: contain;" loading="lazy" />`;
                 } 
                 else {
-                    mediaHtml = `<div class="file-preview"><img src="/static/No_preview.png" style="max-width:80px;"/><div style="font-weight: 700; color: var(--gray-500);">${ext.toUpperCase()}</div></div>`;
+                    mediaHtml = `<div class="file-preview" style="width: 100%; height: 200px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: #f8fafc; border-radius: 11px 11px 0 0;">
+                        <img src="/static/No_preview.png" alt="No preview available" style="width: 100%; height: 100%; object-fit: cover; object-position: center; position: absolute; top: 0; left: 0;" loading="lazy" />
+                        <div style="font-weight: 800; color: #1e293b; font-size: 18px; position: absolute; bottom: 12px; background: rgba(255,255,255,0.9); padding: 4px 16px; border-radius: 8px; z-index: 2; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">${ext.toUpperCase()}</div>
+                    </div>`;
                 }
 
                 if (currentGlobalSort === 'date_desc') {
@@ -1097,7 +1158,7 @@ function executeGlobalSearch(query, page = 1) {
                             </button>
                             <button class="copy-link-btn" data-link="${file.url}"><span class="tooltip">Copy Link</span><i class="fas fa-link"></i></button>
                             <a href="${file.url}" class="download-btn" download="${file.name}"><span class="tooltip">Download</span><i class="fas fa-download"></i></a>
-                            <button class="exclusive-btn ${isExclusive ? 'exclusive' : ''}" data-filename="${file.name}"><span class="tooltip">${isExclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${isExclusive ? 'fas fa-star' : 'far fa-star'}"></i></button>
+                            <button class="exclusive-btn ${isExclusive ? 'exclusive' : ''}" data-filename="${file.name}"><span class="tooltip">${isExclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${isExclusive ? 'fas fa-crown' : 'fas fa-crown'}"></i></button>
                         </div>
                     </div>`;
                 gallery.insertAdjacentHTML('beforeend', cardHtml);
@@ -1115,7 +1176,7 @@ function executeGlobalSearch(query, page = 1) {
                     <h3 style="font-family: 'Plus Jakarta Sans'; color: #1e293b; margin-bottom: 10px; font-weight: 700;">Session expired</h3>
                     <p style="color: #64748b; margin-bottom: 25px; font-size: 14px;">Your session has been inactive for a while. The page will refresh automatically to reconnect you.</p>
                     <button onclick="window.location.reload()" class="modern-btn primary-btn" style="margin: 0 auto; display: inline-flex;">
-                        <i class="fas fa-sync-alt fa-spin" style="margin-right: 8px;"></i> Reconnexion en cours...
+                        <i class="fas fa-sync-alt fa-spin" style="margin-right: 8px;"></i> Reconnection in progress...
                     </button>
                 </div>`;
             setTimeout(() => {
@@ -1250,7 +1311,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
         if (tooltip) {
           tooltip.textContent = data.is_exclusive ? 'Exclusive' : 'Not Exclusive';
         }
-        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${data.is_exclusive ? 'fas fa-star' : 'far fa-star'}"></i>`;
+        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${data.is_exclusive ? 'fas fa-crown' : 'fas fa-crown'}"></i>`;
         
         const galleryItem = button.closest('.gallery-item');
         if (galleryItem) {
@@ -1351,7 +1412,8 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
       if (isExclusive) {
         currentDownloadLink = downloadBtn.href;
         confirmModal.classList.add('active');
-      } else {
+      } 
+      else {
         // download normal pour les fichiers non exclusifs
         const a = document.createElement('a');
         a.href = downloadBtn.href;
@@ -1509,12 +1571,13 @@ function setupExclusiveButtons() {
         if (tooltip) {
           tooltip.textContent = data.is_exclusive ? 'Exclusive' : 'Not Exclusive';
         }
-        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${data.is_exclusive ? 'fas fa-star' : 'far fa-star'}"></i>`;        
+        button.innerHTML = `<span class="tooltip">${data.is_exclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${data.is_exclusive ? 'fas fa-crown' : 'fas fa-crown'}"></i>`;        
         const galleryItem = button.closest('.gallery-item');
         if (galleryItem) {
           galleryItem.setAttribute('data-exclusive', data.is_exclusive.toString());
         }
-      } else {
+      } 
+      else {
         console.error('Failed to update exclusive status');
       }
     } catch (error) {
@@ -1526,7 +1589,7 @@ function setupExclusiveButtons() {
 function setupGalleryItemClicks() {
   const items = document.querySelectorAll('.gallery-item');
   items.forEach(item => {
-    item.addEventListener('click', (e) => {
+    item.onclick = (e) => {
       if (e.target.closest('.copy-link-btn') || 
           e.target.closest('.download-btn') || 
           e.target.closest('.exclusive-btn') ||
@@ -1537,15 +1600,17 @@ function setupGalleryItemClicks() {
 
       if (item.classList.contains('folder-card')) {
           const folderId = item.getAttribute('data-folder-id');
-          const sidebarFolderBtn = document.querySelector(`.folder[data-folder-id="${folderId}"] > .folder-name`);
-          if (sidebarFolderBtn) {
-              sidebarFolderBtn.click();
+          if (typeof window.triggerFolderClick === 'function') {
+              window.triggerFolderClick(folderId);
+          } 
+          else {
+              const sidebarFolderBtn = document.querySelector(`.folder[data-folder-id="${folderId}"] > .folder-name`);
+              if (sidebarFolderBtn) sidebarFolderBtn.click();
           }
           return; 
       }
-
       showFileModal(item);
-    });
+    };
   });
 }
 
@@ -1760,8 +1825,9 @@ function loadPortalsForModal(currentPortalId) {
               btn.onclick = () => addFileToPortal(portal.id, portal.name);
               portalList.appendChild(btn);
           });
-      } else {
-          portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">Aucun portail trouvé.</span>';
+      } 
+      else {
+          portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">No portal found</span>';
       }
     })
     .catch(err => {
@@ -2165,23 +2231,90 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // bouton copier tous les liens
-    const btnCopy = document.getElementById('bulkCopyBtn');
-    if (btnCopy) {
-        btnCopy.addEventListener('click', () => {
-            const linksText = selectedFiles.map(f => `${f.filename} :\r\n${f.link}`).join('\r\n\r\n');
+    // Bouton Partager — génère un lien groupé via /create_share_link
+    const btnShare = document.getElementById('bulkShareBtn');
+    if (btnShare) {
+        btnShare.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
 
-            navigator.clipboard.writeText(linksText).then(() => {
-                const oldContent = btnCopy.innerHTML;
-                btnCopy.innerHTML = `<i class="fas fa-check"></i> Links Copied!`;
-                btnCopy.style.backgroundColor = "#dcfce7";
-                btnCopy.style.color = "#166534";
+            const modal = document.getElementById('shareModal');
+            const loading = document.getElementById('shareLoading');
+            const result = document.getElementById('shareResult');
+            const errorDiv = document.getElementById('shareError');
+            const errorMsg = document.getElementById('shareErrorMsg');
+            const countLabel = document.getElementById('shareFileCount');
+            const urlInput = document.getElementById('shareUrlInput');
+            const openBtn = document.getElementById('shareOpenBtn');
+            const previewContainer = document.getElementById('shareFilePreview');
+
+            // Reset state
+            loading.style.display = 'none';
+            result.style.display = 'none';
+            errorDiv.style.display = 'none';
+            openBtn.style.display = 'none';
+            urlInput.value = '';
+
+            countLabel.textContent = `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} selected`;
+            modal.classList.add('active');
+            loading.style.display = 'block';
+
+            try {
+                const fd = new FormData();
+                fd.append('filenames', JSON.stringify(selectedFiles.map(f => f.filename)));
+
+                const res = await fetch('/create_share_link', { method: 'POST', body: fd });
+                const data = await res.json();
+
+                loading.style.display = 'none';
+
+                if (data.status === 'success') {
+                    urlInput.value = data.url;
+                    result.style.display = 'block';
+                    openBtn.style.display = 'inline-flex';
+
+                    // Aperçu des fichiers dans la modale
+                    previewContainer.innerHTML = selectedFiles.map(f => {
+                        const ext = (f.filename.split('.').pop() || '').toLowerCase();
+                        const isImg = ['jpg','jpeg','png','gif','webp','svg'].includes(ext);
+                        return `<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;color:#334155;max-width:220px;overflow:hidden;">
+                            ${isImg
+                                ? `<img src="${f.link}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0;">`
+                                : `<span style="font-size:16px;">📄</span>`}
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}</span>
+                        </div>`;
+                    }).join('');
+
+                    // Copier automatiquement dans le clipboard
+                    try { await navigator.clipboard.writeText(data.url); } catch {}
+
+                } else {
+                    errorMsg.textContent = data.message || 'Failed to generate share link.';
+                    errorDiv.style.display = 'block';
+                }
+
+            } catch (err) {
+                loading.style.display = 'none';
+                errorMsg.textContent = 'Network error — please try again.';
+                errorDiv.style.display = 'block';
+            }
+        });
+    }
+
+    // Bouton copier dans la modale de partage
+    const shareCopyBtn = document.getElementById('shareCopyBtn');
+    if (shareCopyBtn) {
+        shareCopyBtn.addEventListener('click', async () => {
+            const urlInput = document.getElementById('shareUrlInput');
+            try {
+                await navigator.clipboard.writeText(urlInput.value);
+                const orig = shareCopyBtn.innerHTML;
+                shareCopyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                shareCopyBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
                 setTimeout(() => {
-                    btnCopy.innerHTML = oldContent;
-                    btnCopy.style.backgroundColor = "";
-                    btnCopy.style.color = "";
+                    shareCopyBtn.innerHTML = orig;
+                    shareCopyBtn.style.background = '';
                 }, 2000);
-            });
+            } catch {}
         });
     }
 
@@ -2308,7 +2441,6 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                     };
                     treeContainer.appendChild(rootDiv);
 
-                    // --- 2. SOUS-DOSSIERS ---
                     if (data.folders && data.folders.length > 0) {
                         const folderMap = {};
                         data.folders.forEach(f => folderMap[f.id] = { ...f, subfolders: [] });
@@ -2504,7 +2636,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         deleteFile(filename);
     });
 
-    // ── Suppression en masse ─────────────────────────────────────────────────
+    // suppression en masse
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     if (bulkDeleteBtn) {
         bulkDeleteBtn.addEventListener('click', async () => {
@@ -2747,6 +2879,25 @@ window.triggerFolderClick = function(folderId) {
     executeGlobalSearch(searchInput ? searchInput.value.trim() : '', 1);
 };
 
+window.forceNavigateToFolder = function(folderId) {
+    if (typeof window.triggerFolderClick === 'function') {
+        window.triggerFolderClick(folderId);        
+        setTimeout(() => {
+            const targetNode = document.querySelector(`.folder[data-folder-id="${folderId}"]`);
+            if (targetNode) {
+                targetNode.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+            }
+        }, 100);
+    }
+    else {
+        console.error("Dossier " + folderId + " ou fonction de navigation introuvable.");
+    }
+};
+
+
 window.resetFolderSelection = function() {
     document.querySelectorAll('.folder').forEach(f => f.classList.remove('active'));
     document.querySelectorAll('.folder-name').forEach(fn => fn.classList.remove('is-selected'));
@@ -2755,3 +2906,49 @@ window.resetFolderSelection = function() {
     updateBreadcrumbs(null);
     executeGlobalSearch(document.getElementById('searchInput').value.trim(), 1);
 };
+
+// partager un doss
+async function shareFolder(folderId, folderName) {
+    const modal = document.getElementById('shareModal');
+    const loading = document.getElementById('shareLoading');
+    const result = document.getElementById('shareResult');
+    const errorDiv = document.getElementById('shareError');
+    const errorMsg = document.getElementById('shareErrorMsg');
+    const countLabel = document.getElementById('shareFileCount');
+    const urlInput = document.getElementById('shareUrlInput');
+    const openBtn = document.getElementById('shareOpenBtn');
+    const previewContainer = document.getElementById('shareFilePreview');
+    loading.style.display = 'none';
+    result.style.display = 'none';
+    errorDiv.style.display = 'none';
+    openBtn.style.display = 'none';
+    urlInput.value = '';
+    previewContainer.innerHTML = '';
+    countLabel.textContent = `Sharing folder: ${folderName}`;
+    modal.classList.add('active');
+    loading.style.display = 'block';
+
+    try {
+        const res = await fetch(`/api/share_folder/${folderId}`, { method: 'POST' });
+        const data = await res.json();
+        loading.style.display = 'none';
+        if (data.status === 'success') {
+            urlInput.value = data.url;
+            result.style.display = 'block';
+            openBtn.style.display = 'inline-flex';
+            countLabel.textContent = `${data.count} file(s) in ${folderName}`;
+            previewContainer.innerHTML = `<div style="font-size:13px; color:#64748b; font-weight: 600;">Includes ${data.count} files (with subfolders)</div>`;
+            try { await navigator.clipboard.writeText(data.url); } catch {}
+
+        } 
+        else {
+            errorMsg.textContent = data.message || 'Failed to generate share link.';
+            errorDiv.style.display = 'block';
+        }
+
+    } catch (err) {
+        loading.style.display = 'none';
+        errorMsg.textContent = 'Network error — please try again.';
+        errorDiv.style.display = 'block';
+    }
+}
