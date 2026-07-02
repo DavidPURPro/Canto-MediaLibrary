@@ -1002,7 +1002,7 @@ function executeGlobalSearch(query, page = 1) {
                 aiHintBox.innerHTML = '';
             }
 
-            // Folders correspondants (recherche normale ou IA)
+            // folders correspondant (ia)
             if (data.folders && data.folders.length > 0) {
                 data.folders.forEach(folder => {
                     const folderCardHtml = `

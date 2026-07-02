@@ -698,11 +698,10 @@ app.post('/update_folder_order', loginRequiredJson, adminRequired, express.json(
     }
 });
 
-// ── Recherche augmentée par IA ───────────────────────────────────────────────
-// Cache mémoire simple pour éviter de ré-appeler le modèle sur les mêmes requêtes
+// recherche par ia
 const aiSearchCache = new Map();
 const AI_CACHE_MAX_SIZE = 200;
-const AI_CACHE_TTL_MS = 1000 * 60 * 60; // 1h
+const AI_CACHE_TTL_MS = 1000 * 60 * 60; 
 
 async function expandSearchTermsWithAI(query) {
     const cacheKey = query.toLowerCase().trim();
@@ -711,56 +710,54 @@ async function expandSearchTermsWithAI(query) {
         return cached.terms;
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-        console.warn('ANTHROPIC_API_KEY non définie — recherche IA désactivée.');
+    if (!process.env.GEMINI_API_KEY) {
+        console.warn('GEMINI_API_KEY is not defined — AI search disabled.');
         return [];
     }
 
     try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20251001',
-                max_tokens: 200,
-                messages: [{
-                    role: 'user',
-                    content: `Tu aides à élargir une recherche dans une médiathèque d'entreprise (photos, vidéos, documents classés par dossiers/pays/villes/projets).
-Requête de l'utilisateur : "${query}"
+                contents: [{
+                    parts: [{
+                        text: `You are assisting in expanding a search query for a corporate media library containing photos, videos, and documents organized in folders, cities, regions, and projects.
+User search query: "${query}"
 
-Donne une liste de 5 à 10 termes étroitement liés qui pourraient apparaître dans des noms de fichiers, descriptions ou noms de dossiers en rapport avec cette requête (ex: si la requête est un pays, donne ses grandes villes, régions ou noms de projets typiques associés ; si c'est une ville, donne le pays et la région).
+Provide a list of 5 to 10 closely related terms that might appear in file names, descriptions, or folder names related to this query (e.g., if the query is a country, provide its major cities, regions, or typical project names; if it is a city, provide the country and region).
 
-Réponds UNIQUEMENT avec un objet JSON valide de cette forme, sans aucun texte avant ou après, sans balises markdown :
-{"terms": ["terme1", "terme2", "terme3"]}`
-                }]
+Respond ONLY with a valid JSON object in this exact format, without any markdown tags, backticks, or extra text:
+{"terms": ["term1", "term2", "term3"]}`
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             })
         });
 
         if (!response.ok) {
-            console.error('Anthropic API error:', response.status, await response.text());
+            console.error('Gemini API error:', response.status, await response.text());
             return [];
         }
 
         const data = await response.json();
-        const textBlock = (data.content || []).find(b => b.type === 'text');
-        if (!textBlock) return [];
+        const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!textResponse) return [];
 
         let parsed;
         try {
-            const cleaned = textBlock.text.trim().replace(/^```json\s*|```$/g, '');
+            const cleaned = textResponse.trim().replace(/^```json\s*|```$/g, '');
             parsed = JSON.parse(cleaned);
         } catch (e) {
-            console.error('Failed to parse AI search response:', textBlock.text);
+            console.error('Failed to parse AI search response:', textResponse);
             return [];
         }
 
         const terms = Array.isArray(parsed.terms) ? parsed.terms.filter(t => typeof t === 'string' && t.trim()) : [];
 
-        // Cache avec éviction simple si trop gros
         if (aiSearchCache.size >= AI_CACHE_MAX_SIZE) {
             const oldestKey = aiSearchCache.keys().next().value;
             aiSearchCache.delete(oldestKey);
@@ -770,12 +767,11 @@ Réponds UNIQUEMENT avec un objet JSON valide de cette forme, sans aucun texte a
         return terms;
 
     } catch (err) {
-        console.error('expandSearchTermsWithAI error:', err);
+        console.error('expandSearchTermsWithAI (Gemini) error:', err);
         return [];
     }
 }
 
-// Endpoint dédié pour pré-calculer les termes (utilisé par le frontend pour afficher les "termes liés")
 app.get('/ai_expand_search', loginRequiredJson, async (req, res) => {
     const query = (req.query.q || '').trim();
     if (!query) return res.json({ terms: [] });
