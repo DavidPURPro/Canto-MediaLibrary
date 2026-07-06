@@ -178,6 +178,10 @@ document.addEventListener('DOMContentLoaded', function() {
       profileBtn.style.backgroundColor = '#ef4444'; 
       profileBtn.title = "Administrator";
     } 
+    else if (userRole === 'basic_admin') {
+      profileBtn.style.backgroundColor = '#3b82f6';
+      profileBtn.title = "Moderator";
+    }
     else if (userRole === 'uploader') {
       profileBtn.style.backgroundColor = '#f97316'; 
       profileBtn.title = "Uploader";

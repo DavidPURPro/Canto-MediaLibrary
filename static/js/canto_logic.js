@@ -1,4 +1,8 @@
 const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+const userRole = document.body.getAttribute('data-user-role');
+const isBasicAdmin = userRole === 'basic_admin';
+const canManageFolders = isAdmin || isBasicAdmin;
+const canEditFiles = isAdmin || isBasicAdmin;
 let isListView = false;
 let isSortedByDate = false;
 let isAuthenticated = false;
@@ -117,8 +121,8 @@ function renderFolder(folder, parentElement) {
   const folderElement = document.createElement('div');
   folderElement.className = 'folder';
   folderElement.dataset.folderId = folder.id;
-  if (isAdmin) {
-      folderElement.setAttribute('draggable', 'true');
+  if (canManageFolders) {
+    folderElement.setAttribute('draggable', 'true');
       folderElement.addEventListener('dragstart', function(e) {
           draggedFolderElement = folderElement;
           e.stopPropagation();
@@ -194,7 +198,7 @@ function renderFolder(folder, parentElement) {
   const iconHtml = folder.subfolders && folder.subfolders.length > 0 
     ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px; margin-right: 8px;"></i>' 
     : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; margin-right: 8px; opacity: 0.7;"></i>';
-  const adminButtons = isAdmin ? `
+  const adminButtons = canManageFolders ? `
         <button class="add-folder-btn" title="Add subfolder" style="background: none; border: none; color: #16677c; cursor: pointer; padding: 2px 4px;">
             <i class="fas fa-plus"></i>
         </button>
@@ -202,7 +206,7 @@ function renderFolder(folder, parentElement) {
             <i class="fas fa-times"></i>
         </button>
   ` : ''; 
-  const renameAction = isAdmin ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-click to rename" style="cursor: text;"` : '';
+  const renameAction = canManageFolders ? `ondblclick="renameFolder(this, ${folder.id})" title="Double-click to rename" style="cursor: text;"` : '';
   folderName.innerHTML = `
     <div style="display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-grow: 1;">
         <span class="folder-icon">${iconHtml}</span>
@@ -249,12 +253,12 @@ function renderFolder(folder, parentElement) {
     }
     if (e.target.closest('.add-folder-btn')) {
       e.stopPropagation();
-      if (isAdmin) showFolderInput(subfolders, folder.id);
+    if (canManageFolders) showFolderInput(subfolders, folder.id);
       return;
     }
     if (e.target.closest('.delete-folder-btn')) {
       e.stopPropagation();
-      if (isAdmin && confirm('Delete this folder?')) deleteFolder(folder.id);
+    if (canManageFolders && confirm('Delete this folder?')) deleteFolder(folder.id);
       return;
     }
     document.querySelectorAll('.folder-name').forEach(el => el.classList.remove('is-selected'));
@@ -793,6 +797,7 @@ function loadFoldersForModal(currentFolderId) {
       const folderTree = document.getElementById('folderTree');
       if (!folderTree) return; 
       folderTree.innerHTML = '';
+      folderTree.style.display = 'none';
       Object.values(folderMap).forEach(folder => {
         if (folder.parent_id && folderMap[folder.parent_id]) {
           folderMap[folder.parent_id].subfolders.push(folder);
@@ -812,10 +817,9 @@ function loadFoldersForModal(currentFolderId) {
 const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
 if (btnRemoveFolder) {
     btnRemoveFolder.addEventListener('click', function() {
-        if (isAdmin) {
+        if (canManageFolders) {
             removeFileFromFolder(currentModalFilename);
-        } 
-        else {
+        } else {
             alert("You don't have permission to perform this action. Only administrators can modify folders.");
         }
     });
@@ -831,12 +835,14 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
     ? '<i class="far fa-folder" style="color: #1e293b; font-size: 16px;"></i>' 
     : '<i class="far fa-folder" style="color: #64748b; font-size: 15px; opacity: 0.7;"></i>';
 
+  const isChecked = currentFolderId && folder.id == currentFolderId;
+
   folderHeader.innerHTML = `
     <span class="folder-icon" style="margin-right: 10px;">${iconHtml}</span>
     <span class="folder-title" style="font-weight: 500; color: #334155; flex-grow: 1;">${folder.name}</span>
-    <button class="select-folder-btn" title="Select this folder" style="background: none; border: none; color: #16a34a; cursor: pointer;">
-        <i class="fas fa-check"></i>
-    </button>
+    <input type="checkbox" class="select-folder-checkbox" title="Select this folder"
+           style="width: 18px; height: 18px; cursor: pointer; accent-color: #16677c; flex-shrink: 0;"
+           ${isChecked ? 'checked' : ''}>
   `;
   
   const subfoldersContainer = document.createElement('div');
@@ -849,25 +855,36 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
         renderFolderNode(subfolder, subfoldersContainer, currentFolderId);
       });
   }
+
+  const buildFolderPath = (f) => {
+    const parts = [];
+    let current = f;
+    while (current) {
+      parts.unshift(current.name);
+      current = current.parent_id ? globalFoldersList.find(gf => gf.id == current.parent_id) : null;
+    }
+    return parts.join(' / ');
+  };
+
+  // Gérer le clic sur la checkbox
+  const checkbox = folderHeader.querySelector('.select-folder-checkbox');
+  checkbox.addEventListener('change', function(e) {
+    e.stopPropagation();
+    if (this.checked) {
+      // Décocher toutes les autres checkboxes
+      document.querySelectorAll('#folderTree .select-folder-checkbox').forEach(cb => {
+        if (cb !== this) cb.checked = false;
+      });
+      // Assigner le fichier à ce dossier
+      updateFileFolder(currentModalFilename, folder.id);
+      document.getElementById('currentFolderName').textContent = buildFolderPath(folder);
+    }
+  });
   
   folderHeader.addEventListener('click', function(e) {
-    if (e.target.closest('.select-folder-btn')) {
-      e.stopPropagation();
-      updateFileFolder(currentModalFilename, folder.id);
-      // Build full path by traversing parent_id chain
-      const buildPath = (f) => {
-        const parts = [];
-        let current = f;
-        while (current) {
-          parts.unshift(current.name);
-          current = current.parent_id ? folderMap[current.parent_id] : null;
-        }
-        return parts.join(' / ');
-      };
-      document.getElementById('currentFolderName').textContent = buildPath(folder);
-      document.getElementById('folderTree').style.display = 'none';
-      return;
-    }
+    // Si on a cliqué sur la checkbox, ne pas faire le toggle (déjà géré par l'événement change)
+    if (e.target.closest('.select-folder-checkbox')) return;
+
     folderElement.classList.toggle('active');
     if (folderElement.classList.contains('active')) {
         subfoldersContainer.style.display = 'block';
@@ -1283,7 +1300,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     e.stopPropagation();
     
     const userRole = document.body.getAttribute('data-user-role');
-    const isAuthorized = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin' || userRole === 'uploader';
+    const isAuthorized = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin' || userRole === 'uploader'|| userRole === 'basic_admin';
     
     if (!isAuthorized) {
       alert("You do not have permission to change the exclusive status.");
@@ -1454,9 +1471,10 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
   const addMainFolderBtn = document.getElementById('addMainFolderBtn'); 
 if (addMainFolderBtn) {
     addMainFolderBtn.addEventListener('click', function() {
-        if (isAdmin) {
+        if (canEditFiles) {
             showFolderInput(foldersContainer);
-        } else {
+        }
+        else {
             alert("You don't have permission to perform this action. Only administrators can modify folders.");
         }
     });
@@ -1486,7 +1504,7 @@ if (addMainFolderBtn) {
   const btnAddFolder = document.getElementById('addToFolderBtn');
   if (btnAddFolder) {
       btnAddFolder.addEventListener('click', function() {
-          if (isAdmin) {
+          if (canEditFiles) {
               const folderTree = document.getElementById('folderTree');
               folderTree.style.display = folderTree.style.display === 'none' ? 'block' : 'none';
           } else {
@@ -1499,7 +1517,7 @@ if (addMainFolderBtn) {
   const btnAddPortal = document.getElementById('addToPortalBtn');
   if (btnAddPortal) {
       btnAddPortal.addEventListener('click', function() {
-          if (isAdmin) {
+          if (canEditFiles) {
               const portalList = document.getElementById('portalList');
               if (portalList) {
                   portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
@@ -1543,7 +1561,7 @@ function setupExclusiveButtons() {
     e.stopPropagation();
     
     const userRole = document.body.getAttribute('data-user-role');
-    const isAuthorized = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin' || userRole === 'uploader';
+    const isAuthorized = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin' || userRole === 'uploader' || userRole === 'basic_admin';
     
     if (!isAuthorized) {
       alert("You do not have permission to change the exclusive status.");
@@ -1626,7 +1644,7 @@ function setupTooltips() {
 
 // authentification
 function promptForPassword(actionCallback) {
-  if (isAdmin) {
+  if (canManageFolders) {
     actionCallback();
   } 
   else {
@@ -1757,6 +1775,12 @@ function setProfileButtonColor() {
       profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#c9302c'; });
       profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#d9534f'; });
     } 
+    else if (userRole === 'basic_admin') {
+      profileBtn.style.backgroundColor = '#3b82f6';
+      profileBtn.title = "Moderator / Admin";
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#2563eb'; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#3b82f6'; });
+    }
     else if (userRole === 'uploader') {
       profileBtn.style.backgroundColor = '#f97316'; 
       profileBtn.title = "Uploader";
@@ -1781,17 +1805,10 @@ function setProfileButtonColor() {
 }
 
 function enforceNonAdminLock() {
-  const adminButtons = document.querySelectorAll('.add-folder-btn, .delete-folder-btn, .add-main-folder-btn');
+  const adminButtons = document.querySelectorAll('.add-main-folder-btn, .add-folder-btn, .delete-folder-btn, #addToPortalBtn, #addToFolderBtn, #removeFromFolderBtn');
   adminButtons.forEach(button => {
-    if (!isAdmin) {
-      button.classList.add('disabled');
-      button.setAttribute('disabled', '');
-      button.title = "Admins only";
-    } 
-    else {
-      button.classList.remove('disabled');
-      button.removeAttribute('disabled');
-      button.removeAttribute('title');
+    if (!canManageFolders) {
+      button.style.display = 'none';
     }
   });
 }
@@ -1875,6 +1892,10 @@ function checkFileInPortal(filename, portalId) {
 // === ÉCOUTEUR GLOBAL POUR LE RETRAIT D'UN PORTAIL ===
 document.addEventListener('click', function(e) {
     if (e.target && e.target.id === 'removeFromPortalBtn') {
+        if (!canEditFiles) {
+            alert("You don't have permission to perform this action. Only administrators can modify portals.");
+            return;
+        }
         if (confirm("Voulez-vous vraiment retirer ce fichier du portail ?")) {
             removeFileFromPortal();
         }
@@ -2085,6 +2106,11 @@ function updateBulkActionBar() {
 
     if (selectedFiles.length > 0) {
         bar.style.display = 'flex';
+        bar.style.position = 'fixed';
+        bar.style.bottom = '30px';
+        bar.style.left = '50%';
+        bar.style.transform = 'translateX(-50%)';
+        bar.style.zIndex = '9999';
         countSpan.textContent = selectedFiles.length;
     } 
     else {
@@ -2692,9 +2718,7 @@ fetch('/my_favorites')
     });
 
 document.addEventListener('dblclick', function(e) {
-    const userRole = document.body.getAttribute('data-user-role');
-    const isAdminMode = document.body.getAttribute('data-is-admin') === 'true' || userRole === 'admin';
-    if (!isAdminMode) return;
+    if (!canEditFiles) return;
     const target = e.target.closest('.editable-field');
     if (!target || !currentModalFilename) return;
     if (e.target.classList.contains('modal-tag')) return;

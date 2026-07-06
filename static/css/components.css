@@ -219,6 +219,13 @@
 }
 #modalDownloadBtn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(22,103,124,0.4) !important; }
 
+#portalList .modern-btn.secondary-btn {
+  color: #1e293b !important;
+}
+#portalList .modern-btn.secondary-btn:hover {
+  color: #0f172a !important;
+}
+
 .favorite-btn {
   background: none; border: 1px solid var(--gray-200);
   padding: 9px 12px; border-radius: var(--radius-lg);

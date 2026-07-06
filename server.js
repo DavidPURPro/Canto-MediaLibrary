@@ -438,27 +438,20 @@ app.get('/index', loginRequiredHtml, (req, res) => {
 
 async function getUserRole(accessToken) {
     const adminGroupId = process.env.ADMIN_GROUP_ID;
+    const moderatorGroupId = process.env.MODERATOR_GROUP_ID; 
     const uploaderGroupId = process.env.UPLOADER_GROUP_ID; 
-    
     try {
         const client = Client.init({ authProvider: (done) => done(null, accessToken) });        
         const response = await client.api('/me/memberOf').select('id').get();
         if (response.value && response.value.length > 0) {
             const userGroupIds = response.value.map(group => group.id);            
-            if (adminGroupId && userGroupIds.includes(adminGroupId)) {
-                return 'admin';
-            }
-            if (uploaderGroupId && userGroupIds.includes(uploaderGroupId)) {
-                return 'uploader';
-            }
+            if (adminGroupId && userGroupIds.includes(adminGroupId)) return 'admin'; // super admin
+            if (moderatorGroupId && userGroupIds.includes(moderatorGroupId)) return 'basic_admin'; // admin basique (modo)
+            if (uploaderGroupId && userGroupIds.includes(uploaderGroupId)) return 'uploader'; // uploader
         }        
         return 'viewer';
     } catch (e) {
-        if (e.message && e.message.includes("Insufficient privileges")) {
-            console.warn("Privilèges insuffisants pour lire les groupes Azure.");
-            return 'viewer';
-        }
-        console.error("Erreur Graph API (Role Check):", e.message);
+        console.warn("Erreur Graph API (Role Check):", e.message);
         return 'viewer';
     }
 }
@@ -466,7 +459,7 @@ async function getUserRole(accessToken) {
 // admins et uploaders
 function uploadAccessRequired(req, res, next) {
     const role = req.session.user_role;
-    if (role === 'admin' || role === 'uploader') {
+    if (role === 'admin' || role === 'basic_admin' || role === 'uploader') {
         return next();
     }
     if (req.method === 'GET' && !req.headers.accept?.includes('application/json')) {
@@ -514,6 +507,24 @@ function adminRequired(req, res, next) {
     next();
 }
 
+function basicAdminRequired(req, res, next) {
+    const role = req.session.user_role;
+    if (role !== 'admin' && role !== 'basic_admin') {
+        if (req.method === 'GET' && !req.headers.accept?.includes('application/json')) {
+            return res.redirect('/');
+        }
+        return res.status(403).json({ status: "error", message: "Moderator or Admin Access Required" });
+    }
+    next();
+}
+
+function uploaderOrAdminRequired(req, res, next) {
+    const role = req.session.user_role;
+    if (role !== 'admin' && role !== 'basic_admin' && role !== 'uploader') {
+        return res.status(403).json({ status: "error", message: "Admin, Moderator or Uploader Access Required" });
+    }
+    next();
+}
 
 // routes authentification msal entra id 
 app.get('/login', (req, res) => {
@@ -672,7 +683,7 @@ app.get('/get_folders', loginRequiredJson, async (req, res) => {
     }
 });
 
-app.post('/update_folder_order', loginRequiredJson, adminRequired, express.json(), async (req, res) => {
+app.post('/update_folder_order', loginRequiredJson, basicAdminRequired, express.json(), async (req, res) => {
     try {
         const { folder_order } = req.body; 
         if (!folder_order || !Array.isArray(folder_order)) {
@@ -1175,7 +1186,7 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
 });
 
 // routes gestion folders
-app.post('/create_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/create_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
         const name = req.body.name;
         const parent_id = (req.body.parent_id && req.body.parent_id !== "none") ? req.body.parent_id : null;
@@ -1209,7 +1220,7 @@ app.post('/create_folder', loginRequiredJson, adminRequired, upload.none(), asyn
 });
 
 // supprimer un dossier
-app.post('/delete_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/delete_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
         const folder_id = req.body.folder_id;
 
@@ -1244,7 +1255,7 @@ app.post('/delete_folder', loginRequiredJson, adminRequired, upload.none(), asyn
 });
 
 // rename un dossier
-app.post('/rename_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/rename_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
         const { folder_id, new_name } = req.body;
         if (!folder_id || !new_name || new_name.trim() === "") {
@@ -1337,7 +1348,7 @@ app.post('/r_file_folder', async (req, res) => {
 });
 
 // ASSIGNATION EN MASSE DE FICHIERS À UN DOSSIER
-app.post('/bulk_update_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/bulk_update_file_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
         const { folder_id, filenames } = req.body; 
         const filesArray = JSON.parse(filenames || "[]");
@@ -1449,7 +1460,7 @@ app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
 
 // routes suppr et syncro
 // retier un fichier de son dossier
-app.post('/remove_file_from_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/remove_file_from_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
         
@@ -1501,7 +1512,7 @@ app.post('/sync_file_folder', loginRequiredJson, upload.none(), async (req, res)
     }
 });
 
-app.post('/remove_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/remove_file_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     const filename = req.body.filename;
     if (!filename) {
         return res.status(400).json({ 
@@ -1525,7 +1536,7 @@ app.post('/remove_file_folder', loginRequiredJson, adminRequired, upload.none(),
 });
 
 // réassigner fichier a un folder
-app.post('/assign_file_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
+app.post('/assign_file_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     const { filename, folder_id } = req.body;
     if (!filename || !folder_id) {
         return res.status(400).json({ 
@@ -1661,9 +1672,9 @@ app.post('/bulk_delete', loginRequiredJson, adminRequired, upload.none(), async 
         res.status(500).json({ status: 'error', message: error.message });
     }
 });
-app.post('/update_exclusive', loginRequiredJson, upload.none(), async (req, res) => {
+app.post('/update_exclusive', loginRequiredJson, uploaderOrAdminRequired, upload.none(), async (req, res) => {
     const role = req.session.user_role;
-    if (role !== 'admin' && role !== 'uploader') {
+    if (role !== 'admin' && role != 'basic_admin' && role !== 'uploader') {
         return res.status(403).json({ status: "error", message: "Access denied. Reserved for administrators and uploaders." });
     }
     try {
@@ -2783,7 +2794,7 @@ app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
     }
 });
 
-app.post('/update_file_metadata', loginRequiredHtml, adminRequired, async (req, res) => {
+app.post('/update_file_metadata', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     try {
         let { original_filename, field, value } = req.body;
         if (!original_filename || !field) return res.status(400).json({ status: 'error', message: 'param missing' });
@@ -3166,6 +3177,99 @@ app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => 
         res.status(500).json({ status: "error", message: error.message });
     }
 });
+
+// ============================================
+
+// Route invisible appelée automatiquement par le Webhook de l'API Canto
+app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
+    // 1. On répond immédiatement "OK" à Canto 
+    res.status(200).send('Webhook bien reçu');
+
+    try {
+        const payload = req.body || {};
+        const canto_id = payload.id;
+        const scheme = payload.scheme || 'image';
+        const nom_fichier = payload.displayname;
+        
+        // Sécurité : On vérifie le token défini dans l'interface Canto
+        if (payload.secure_token !== 'motdepasse') return;
+        if (!canto_id || !nom_fichier) return;
+
+        console.log(`[Auto-Sync] Fichier détecté : ${nom_fichier}. Interrogation de l'API Canto...`);
+
+        // 2. On interroge Canto avec TON token (comme le fait canto_client.py)
+        const cantoDomain = (process.env.CANTO_DOMAIN || "").replace('https://', '').replace('http://', '').replace(/\/$/, '');
+        const cantoToken = process.env.CANTO_API_TOKEN; // Ton token issu d'Azure
+
+        const detailResponse = await fetch(`https://${cantoDomain}/api/v1/${scheme}/${canto_id}`, {
+            headers: { 
+                'Authorization': `Bearer ${cantoToken}`,
+                'User-Agent': 'App Canto Publishing', // Obligatoire
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!detailResponse.ok) throw new Error(`Erreur API Canto (${detailResponse.status})`);
+        const assetData = await detailResponse.json();
+
+        // 3. Extraction du lien de téléchargement
+        const download_url = (assetData.url && assetData.url.directUrlOriginal) ? assetData.url.directUrlOriginal : (assetData.url && assetData.url.download);
+        if (!download_url) {
+            console.log(`[Auto-Sync] Pas de lien direct pour ${nom_fichier}.`);
+            return;
+        }
+
+        // 4. Extraction des Tags, Description et Dossier
+        const description = assetData.description || "";
+        let tags = [];
+        if (assetData.smartTags) tags = tags.concat(assetData.smartTags);
+        if (assetData.tag) tags = tags.concat(typeof assetData.tag === 'string' ? assetData.tag.split(',') : assetData.tag);
+        
+        let folder_id = null;
+        if (assetData.relatedAlbums && assetData.relatedAlbums.length > 0) {
+            const albumName = assetData.relatedAlbums[0].name;
+            const folderRes = await pool.query("SELECT id FROM folders WHERE name = $1 LIMIT 1", [albumName]);
+            if (folderRes.rows.length > 0) folder_id = folderRes.rows[0].id;
+        }
+
+        console.log(`[Auto-Sync] Aspiration de : ${nom_fichier} en cours...`);
+
+        // 5. Téléchargement depuis Canto et transfert vers Azure
+        const fileResponse = await fetch(download_url);
+        if (!fileResponse.ok) throw new Error("Erreur téléchargement image");
+
+        const { Readable } = require('stream');
+        const nodeStream = Readable.fromWeb(fileResponse.body);
+
+        const blockBlobClient = containerClient.getBlockBlobClient(nom_fichier);
+        await blockBlobClient.uploadStream(nodeStream, 4 * 1024 * 1024, 20);
+        const azureUrl = blockBlobClient.url;
+
+        // 6. Enregistrement en BDD
+        const date_ajout = new Date().toISOString().split('T')[0];
+        await pool.query(`
+            INSERT INTO documents (
+                nom_fichier, description, folder_id, is_exclusive, 
+                date_ajout, date_event, section, category, tags, 
+                lien_telechargement, thumbnail_url
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (nom_fichier) DO NOTHING;
+        `, [
+            nom_fichier, description, folder_id, false, date_ajout, null, 
+            "General", "General", JSON.stringify(tags), azureUrl, null
+        ]);
+
+        // 7. Création de la miniature
+        generateAndUploadThumbnail(nom_fichier, containerClient, pool);
+        console.log(`[Auto-Sync] 🎉 Terminé ! Fichier ${nom_fichier} est en ligne avec ses métadonnées.`);
+
+    } catch (error) {
+        console.error('[Auto-Sync] Erreur fatale:', error.message);
+    }
+});
+
+// ============================================
+
 
 app.listen(PORT, () => {
     console.log(`serv Node.js démarré sur http://localhost:${PORT}`);

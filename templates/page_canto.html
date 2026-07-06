@@ -197,7 +197,7 @@
 </div>
       <a href="/portals" class="modern-btn secondary-btn"><i class="fas fa-globe"></i> Portals</a>
       
-      {% if is_admin or user_role == 'uploader' %}
+      {% if is_admin or user_role == 'basic_admin' or user_role == 'uploader' %}
       <a href="/upload" class="modern-btn primary-btn" title="Upload files"><i class="fas fa-cloud-upload-alt" ></i> Upload</a>
       {% endif %}
       {% if is_admin %}
@@ -220,6 +220,12 @@
             <div class="profile-admin-badge">
                 <i class="fas fa-shield-alt"></i> Admin
             </div>
+
+          {% elif user_role == 'basic_admin' %}
+            <div class="profile-admin-badge" style="background-color: #3b82f6; color: white; border-color: #3b82f6;">
+                <i class="fas fa-user-shield" style="color: white;"></i> Moderator
+            </div>
+        
         {% elif user_role == 'uploader' %}
             <div class="profile-admin-badge" style="background-color: #f97316; color: white; border-color: #ea580c;">
                 <i class="fas fa-cloud-upload-alt" style="color: white;"></i> Uploader
@@ -241,7 +247,7 @@
 
   <div class="content-wrapper">
     <div class="sidebar" id="sidebar">
-      {% if is_admin %}
+      {% if is_admin or user_role == 'basic_admin' %}
       <button class="add-main-folder-btn" id="addMainFolderBtn">
         <i class="fas fa-folder-plus"></i> Add New Folder
       </button>
@@ -422,20 +428,17 @@
           <h4><i class="far fa-folder-open"></i> Folder Assignment</h4>
           <div class="current-status"><strong>Current:</strong> <span id="currentFolderName">None</span></div>
           
-          {% if is_admin %}
+          {% if is_admin or user_role == 'basic_admin' %}
           <div class="action-group">
-            <button class="modern-btn secondary-btn" id="addToFolderBtn">Change Folder</button>
-            <button class="modern-btn danger-btn" id="removeFromFolderBtn" style="display: none;">Remove</button>
+            <button id="addToFolderBtn">Change Folder</button>
+            <button id="removeFromFolderBtn">Remove</button>
           </div>
-          <div class="folder-tree" id="folderTree" style="display: none;"></div>
+          <div id="folderTree"></div>
           {% endif %}
-        </div>
-
-        <div class="portal-selector" id="portalSelector">
+        </div> <div class="portal-selector" id="portalSelector">
           <h4><i class="fas fa-globe"></i> Portal Assignment</h4>
           <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
-          
-          {% if is_admin %}
+          {% if is_admin or user_role == 'basic_admin' %}
           <div class="action-group">
             <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
             <button class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none;">Remove</button>
@@ -476,7 +479,7 @@
     </div>
   </div>
   
-  <div class="bulk-action-bar" id="bulkActionBar" style="display: none;">
+  <div class="bulk-action-bar" id="bulkActionBar" style="display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 9999;">
         <div class="bulk-info">
             <span id="bulkCount">0</span>
         </div>
@@ -486,7 +489,7 @@
             </button>
             <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
             
-            {% if is_admin %}
+            {% if is_admin or user_role == 'basic_admin' %}
             <button id="bulkRemoveFolderBtn" class="modern-btn danger-btn bulk-btn" style="background: #d64141e3;">
               <i class="fas fa-folder-minus"></i> Remove from Folder
             </button>

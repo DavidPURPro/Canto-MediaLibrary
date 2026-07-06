@@ -38,6 +38,12 @@
                     <div class="profile-admin-badge">
                         <i class="fas fa-shield-alt"></i> Admin
                     </div>
+
+                {% elif user_role == 'basic_admin' %}
+                  <div class="profile-admin-badge" style="background-color: #3b82f6; color: white; border-color: #3b82f6;">
+                      <i class="fas fa-user-shield" style="color: white;"></i> Moderator
+                  </div>
+
                 {% elif user_role == 'uploader' %}
                     <div class="profile-admin-badge" style="background-color: #f97316; color: white; border-color: #ea580c;">
                         <i class="fas fa-cloud-upload-alt" style="color: white;"></i> Uploader

@@ -384,7 +384,6 @@ header.ultra-header .nav-controls {
     flex-wrap: nowrap !important;
 }
 
-/* Neutralise aussi les sous-éléments de header.css qui ne s'appliquent pas ici */
 header.ultra-header .header-left,
 header.ultra-header .header-center,
 header.ultra-header .header-right {

@@ -19,6 +19,14 @@ function setProfileButtonColor() {
       profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#c9302c'; });
       profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#d9534f'; });
     } 
+
+    else if (userRole === 'basic_admin') {
+      profileBtn.style.backgroundColor = '#3b82f6';
+      profileBtn.title = "Moderator";
+      profileBtn.addEventListener('mouseenter', () => { profileBtn.style.backgroundColor = '#2563eb'; });
+      profileBtn.addEventListener('mouseleave', () => { profileBtn.style.backgroundColor = '#3b82f6'; });
+    }
+    
     else if (userRole === 'uploader') {
       profileBtn.style.backgroundColor = '#f97316'; 
       profileBtn.title = "Uploader";
