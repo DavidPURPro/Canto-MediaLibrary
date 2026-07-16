@@ -15,6 +15,7 @@
   <header class="ultra-header">
     <div class="header-bubbles" id="headerBubbles"></div>
     <div class="header-container">
+      <a href="/index">
         <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR" class="main-logo" />
       </a>  
         <h1 class="shimmer-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Portals</h1>
@@ -121,7 +122,7 @@
   </main>
 
   <div id="addPortalModal" class="modern-modal-overlay">
-    <div class="modal-window">
+    <div class="modal-window" style="max-height: 85vh; overflow-y: auto;">
       <h3>Add New Portal</h3>
       <form id="portalForm" class="modern-form">
         <div class="form-group">
@@ -129,14 +130,14 @@
           <input type="text" id="portalName" name="name" required placeholder="Ex: Client XYZ">
         </div>
         <div class="form-group">
-          <label for="newPortalFolderSelect"><i class="fas fa-folder-open"></i> Link to Folder (Optional)</label>
-          <div class="form-group">
           <label><i class="fas fa-folder-open"></i> Link to Folders (Optional)</label>
-          <div id="newPortalFoldersChecklist" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;">
-              </div>
+          <div id="newPortalFoldersChecklist" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;"></div>
         </div>
-              <option value="">No folder linked</option>
-          </select>
+        
+        <div class="form-group">
+          <label><i class="fas fa-folder"></i> Root Folder (Portal Isolation) *</label>
+          <div id="portalRootFolderTree" class="portal-folders-tree-checklist" style="max-height: 180px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;"></div>
+          <p style="font-size: 11px; color: #64748b; margin-top: 4px;">The client portal will be strictly restricted to this folder and its subfolders.</p>
         </div>
         <div class="form-group">
           <label for="portalAccess">Access Type</label>
@@ -171,7 +172,10 @@
   <div class="about-overlay" id="aboutModal">
   <div class="about-card">
     <div class="about-header">
-      <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+      <a href="/index">
+        <img src="https://comptestockageapi.blob.core.windows.net/testcanto/01_New_PUR_LOGO_Color.png" alt="Logo PUR">
+
+      </a>
     </div>
     <div class="about-body">
       <p>PUR is a global leader in Nature-Based Solutions and the original Insetting organization. As a certified B Corp, we work with over 150 companies across 40 countries to regenerate the ecosystems they depend upon while empowering local communities to operate long-term socio-environmental projects including agroforestry, land preservation and more sustainable agricultural practices.</p>
@@ -181,27 +185,17 @@
 </div>
 
 <div id="linkFolderModal" class="modern-modal-overlay">
-    <div class="modal-window">
+    <div class="modal-window" style="max-height: 85vh; overflow-y: auto;">
         <h3>Link <span id="linkPortalNameText" style="color: #16677c;"></span> to a Folder</h3>
         <div class="form-group" style="margin-top: 15px;">
-            <label for="existingPortalFolderSelect"><i class="fas fa-folder"></i> Select Folder</label>
-            <div class="form-group" style="margin-top: 15px;">
             <label><i class="fas fa-folder"></i> Select Folders to display</label>
-            <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;">
-              <label class="folder-row">
-                  <input type="checkbox" value="FOLDER_ID">
-                  <span>FOLDER_NAME</span>
-                  <select class="folder-size" data-folder="FOLDER_ID">
-                    <option value="standard">Standard (1×1)</option>
-                    <option value="large">Large (2×1)</option>
-                    <option value="tall">Tall (1×2)</option>
-                    <option value="hero">Hero (full)</option>
-                  </select>
-                </label>
-                </div>
+            <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;"></div>
         </div>
-                <option value="">No folder linked</option>
-            </select>
+        
+        <div class="form-group" style="margin-top: 15px;">
+          <label><i class="fas fa-folder"></i> Root Folder (Portal Isolation)</label>
+          <div id="existingPortalRootFolderTree" class="portal-folders-tree-checklist" style="max-height: 180px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;"></div>
+          <p style="font-size: 11px; color: #64748b; margin-top: 4px;">Root folder for recursive isolation of this portal.</p>
         </div>
         <div class="modal-actions">
             <button class="btn-secondary" onclick="document.getElementById('linkFolderModal').classList.remove('active')">Cancel</button>
@@ -211,5 +205,5 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/portals_logic.js') }}"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b97e07ecac4e73',t:'MTc4NDEyNjExMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

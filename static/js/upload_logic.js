@@ -1,3 +1,76 @@
+// Role management matching canto_logic.js
+const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+const userRole = document.body.getAttribute('data-user-role');
+const isBasicAdmin = userRole === 'basic_admin';
+
+// Globals for Custom Precision Metadata
+let globalMetaArrays = {
+    activity: [],
+    challenge: [],
+    commodity: [],
+    ecosystem_service: [],
+    intervention_project_type: []
+};
+
+let fileMetaArrays = {
+    activity: [],
+    challenge: [],
+    commodity: [],
+    ecosystem_service: [],
+    intervention_project_type: []
+};
+
+window.addGlobalMetaTag = function(key, selectElement) {
+    const val = selectElement.value;
+    if (!val) return;
+    if (!globalMetaArrays[key].includes(val)) {
+        globalMetaArrays[key].push(val);
+        renderMetaPills('global', key);
+    }
+    selectElement.selectedIndex = 0;
+};
+
+window.addFileMetaTag = function(key, selectElement) {
+    const val = selectElement.value;
+    if (!val) return;
+    if (!fileMetaArrays[key].includes(val)) {
+        fileMetaArrays[key].push(val);
+        renderMetaPills('file', key);
+    }
+    selectElement.selectedIndex = 0;
+};
+
+window.removeMetaTag = function(scope, key, val) {
+    const array = scope === 'global' ? globalMetaArrays[key] : fileMetaArrays[key];
+    const index = array.indexOf(val);
+    if (index > -1) {
+        array.splice(index, 1);
+        renderMetaPills(scope, key);
+    }
+};
+
+function capitalizeFirstLetter(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function renderMetaPills(scope, key) {
+    const array = scope === 'global' ? globalMetaArrays[key] : fileMetaArrays[key];
+    let idSuffix = capitalizeFirstLetter(key);
+    if (key === 'intervention_project_type') idSuffix = 'Intervention';
+    if (key === 'ecosystem_service') idSuffix = 'EcosystemService';
+    
+    const container = document.getElementById(scope === 'global' ? `globalMeta${idSuffix}Tags` : `fileMeta${idSuffix}Tags`);
+    if (!container) return;
+    
+    container.innerHTML = '';
+    array.forEach(val => {
+        const pill = document.createElement('span');
+        pill.className = 'meta-pill';
+        pill.innerHTML = `${val} <i class="fas fa-times" onclick="removeMetaTag('${scope}', '${key}', '${val}')"></i>`;
+        container.appendChild(pill);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const fileEventDate = document.getElementById("fileEventDate");
     const dropArea = document.getElementById("drop-area");
@@ -22,7 +95,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileCategory = document.getElementById("category");
     let currentFileIndex = -1;
 
-    fetch('/get_portals_list')
+    // Auto-format date inputs as dd/mm/yyyy
+    const formatDateInput = (input) => {
+        if (!input) return;
+        input.addEventListener('input', (e) => {
+            let val = input.value.replace(/\D/g, ''); // keep digits only
+            if (val.length > 8) val = val.slice(0, 8);
+            let formatted = '';
+            if (val.length > 0) {
+                formatted += val.slice(0, 2);
+            }
+            if (val.length > 2) {
+                formatted += '/' + val.slice(2, 4);
+            }
+            if (val.length > 4) {
+                formatted += '/' + val.slice(4, 8);
+            }
+            input.value = formatted;
+        });
+    };
+    formatDateInput(document.getElementById('globalEventDate'));
+    formatDateInput(fileEventDate);
+
+    fetch('/get_portals')
         .then(response => response.json())
         .then(data => {
             const portalSelect = document.getElementById('filePortal');
@@ -221,6 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const folderId = document.getElementById('fileFolder').value;
             const isExclusive = document.getElementById('fileExclusive').checked;
             
+            const author = document.getElementById('fileMetaAuthor')?.value.trim() || "";
+            const copyright = document.getElementById('fileMetaCopyright')?.value.trim() || "";
+            const cooperative = document.getElementById('fileMetaCooperative')?.value.trim() || "";
+            const country = document.getElementById('fileMetaCountry')?.value.trim() || "";
+            const farmer_consent = document.getElementById('fileMetaFarmerConsent')?.value || "";
+            const project_name = document.getElementById('fileMetaProjectName')?.value.trim() || "";
+            const region = document.getElementById('fileMetaRegion')?.value.trim() || "";
+            const wave = document.getElementById('fileMetaWave')?.value.trim() || "";
+
             fileDetails[file.name] = {
                 description,
                 tags,
@@ -229,7 +333,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 folderId,
                 section,
                 category,
-                isExclusive
+                isExclusive,
+                metadata: {
+                    author,
+                    copyright,
+                    activity: [...fileMetaArrays.activity],
+                    challenge: [...fileMetaArrays.challenge],
+                    commodity: [...fileMetaArrays.commodity],
+                    cooperative,
+                    country,
+                    ecosystem_service: [...fileMetaArrays.ecosystem_service],
+                    farmer_consent,
+                    intervention_project_type: [...fileMetaArrays.intervention_project_type],
+                    project_name,
+                    region,
+                    wave
+                }
             };
 
             updateFileListItem(currentFileIndex, description, tags, eventDate, portalId, folderId, isExclusive);
@@ -243,6 +362,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.addTagFromSelect = function(selectElement) {
+        if (selectElement.value) {
+            const existingTags = Array.from(tagsContainer.querySelectorAll('.tag'))
+                .map(tag => tag.textContent.replace('×', '').trim());
+            
+            if (!existingTags.includes(selectElement.value)) {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.innerHTML = `${selectElement.value}<i class="fas fa-times tag-remove"></i>`;
+                
+                tag.querySelector('.tag-remove').addEventListener('click', () => { tag.remove(); });
+                tagsContainer.appendChild(tag);
+            }
+            selectElement.selectedIndex = 0;
+        }
+    };
+
+    window.addTagFromSuggestions = function(selectElement) {
         if (selectElement.value) {
             const existingTags = Array.from(tagsContainer.querySelectorAll('.tag'))
                 .map(tag => tag.textContent.replace('×', '').trim());
@@ -380,6 +516,22 @@ document.addEventListener('DOMContentLoaded', () => {
             resetFolderPicker('fileFolderPicker', 'none');
             if (fileSection) fileSection.value = "";
             if (fileCategory) fileCategory.value = "";
+            fileEventDate.value = "";
+            
+            // Reset individual file metadata inputs and arrays
+            document.getElementById('fileMetaAuthor').value = "";
+            document.getElementById('fileMetaCopyright').value = "";
+            document.getElementById('fileMetaCooperative').value = "";
+            document.getElementById('fileMetaCountry').value = "";
+            document.getElementById('fileMetaFarmerConsent').value = "";
+            document.getElementById('fileMetaProjectName').value = "";
+            document.getElementById('fileMetaRegion').value = "";
+            document.getElementById('fileMetaWave').value = "";
+            
+            ['activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'].forEach(key => {
+                fileMetaArrays[key] = [];
+                renderMetaPills('file', key);
+            });
             
             if (file.type.startsWith("image/")) {
                 const reader = new FileReader();
@@ -414,6 +566,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     tagEl.querySelector(".tag-remove").addEventListener("click", () => { tagEl.remove(); });
                     tagsContainer.appendChild(tagEl);
                 });
+
+                if (fileDetails[file.name].metadata) {
+                    const detailsMeta = fileDetails[file.name].metadata;
+                    document.getElementById('fileMetaAuthor').value = detailsMeta.author || "";
+                    document.getElementById('fileMetaCopyright').value = detailsMeta.copyright || "";
+                    document.getElementById('fileMetaCooperative').value = detailsMeta.cooperative || "";
+                    document.getElementById('fileMetaCountry').value = detailsMeta.country || "";
+                    document.getElementById('fileMetaFarmerConsent').value = detailsMeta.farmer_consent || "";
+                    document.getElementById('fileMetaProjectName').value = detailsMeta.project_name || "";
+                    document.getElementById('fileMetaRegion').value = detailsMeta.region || "";
+                    document.getElementById('fileMetaWave').value = detailsMeta.wave || "";
+                    
+                    ['activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'].forEach(key => {
+                        fileMetaArrays[key] = detailsMeta[key] ? [...detailsMeta[key]] : [];
+                        renderMetaPills('file', key);
+                    });
+                }
             }
             
             modal.classList.add('active');
@@ -557,49 +726,68 @@ document.addEventListener('DOMContentLoaded', () => {
         const gExclusive = document.getElementById('globalExclusive')?.checked || false;
         const gTagsRaw = document.getElementById('globalTags')?.value || "";
         const gTagsArray = gTagsRaw.split(',').map(t => t.trim()).filter(t => t.length > 0);
-        
-        const validRegions = ["France", "UK", "Canada", "USA", "Colombia", "Peru", "Brazil", "Honduras", "Guatemala", "Ivory Coast", "Ethiopia", "Uganda", "Rwanda", "Indonesia", "Philippines", "Thailand", "Vietnam", "China"];
-        const validProjectTypes = ["Agroforestry", "Reforestation", "Forest Conservation", "Regenerative Agriculture", "Coastal Restoration (Mangroves)", "Marine Ecosystems", "Carbon Insetting"];
-        const validActivities = ["Tree Planting", "Nursery Management", "Harvesting", "Pruning & Maintenance", "Farmer Training", "Community Workshop", "Monitoring & Mapping", "Soil Preparation"];
-        const validCommodities = ["Coffee", "Cocoa", "Vanilla", "Palm Oil", "Rice", "Sugar Cane", "Rubber", "Fruit Trees", "Cotton"];
+
+        const gCopyright = document.getElementById('globalMetaCopyright')?.value.trim() || "";
+        const gCooperative = document.getElementById('globalMetaCooperative')?.value.trim() || "";
+        const gCountry = document.getElementById('globalMetaCountry')?.value.trim() || "";
+        const gFarmerConsent = document.getElementById('globalMetaFarmerConsent')?.value || "";
+        const gProjectName = document.getElementById('globalMetaProjectName')?.value.trim() || "";
+        const gRegion = document.getElementById('globalMetaRegion')?.value.trim() || "";
+        const gWave = document.getElementById('globalMetaWave')?.value.trim() || "";
+
+        const isValidDate = (dateStr) => {
+            if (!dateStr) return false;
+            const reg = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            if (!reg.test(dateStr)) return false;
+            const parts = dateStr.match(reg);
+            const day = parseInt(parts[1], 10);
+            const month = parseInt(parts[2], 10);
+            const year = parseInt(parts[3], 10);
+            if (month < 1 || month > 12) return false;
+            if (day < 1 || day > 31) return false;
+            if ([4, 6, 9, 11].includes(month) && day > 30) return false;
+            if (month === 2) {
+                const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+                if (isLeap && day > 29) return false;
+                if (!isLeap && day > 28) return false;
+            }
+            return true;
+        };
 
         for (const file of filesToSend) {
             const details = fileDetails[file.name] || {};
-            const finalSection = details.section || gSection;
-            const finalCategory = details.category || gCategory;
             const finalEventDate = details.eventDate || gEventDate;
-            let finalTags = [];
             
-            if (details.tags && details.tags.length > 0) {
-                finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
-            } else {
-                finalTags = gTagsArray;
+            const detailsMeta = details.metadata || {};
+            const finalCountry = detailsMeta.country || gCountry;
+            const finalRegion = detailsMeta.region || gRegion;
+            const finalProjectName = detailsMeta.project_name || gProjectName;
+
+            const isSuperAdmin = (isAdmin || userRole === 'admin');
+
+            if (!isSuperAdmin) {
+                // For non-super-admins, country, region and project name are strictly mandatory
+                if (!finalCountry) {
+                    msg.className = "message error";
+                    msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Country (mandatory).`;
+                    return;
+                }
+                if (!finalRegion) {
+                    msg.className = "message error";
+                    msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Region (mandatory).`;
+                    return;
+                }
+                if (!finalProjectName) {
+                    msg.className = "message error";
+                    msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Project Name (mandatory).`;
+                    return;
+                }
             }
 
-            if (!finalEventDate) {
+            // For everyone, if Event Date is filled, validate its format to avoid server-side crash
+            if (finalEventDate && !isValidDate(finalEventDate)) {
                 msg.className = "message error";
-                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Event Date.`;
-                return;
-            }
-            if (!finalSection) {
-                msg.className = "message error";
-                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Section.`;
-                return;
-            }
-            if (!finalCategory) {
-                msg.className = "message error";
-                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Category.`;
-                return;
-            }
-
-            const hasRegion = finalTags.some(t => validRegions.includes(t));
-            const hasProjectType = finalTags.some(t => validProjectTypes.includes(t));
-            const hasActivity = finalTags.some(t => validActivities.includes(t));
-            const hasCommodity = finalTags.some(t => validCommodities.includes(t));
-
-            if (!hasRegion || !hasProjectType || !hasActivity || !hasCommodity) {
-                msg.className = "message error";
-                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing mandatory tags. You must select at least one tag in Region, Project Type, Activity, and Commodity.`;
+                msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" has an invalid Event Date format. Please use dd/mm/yyyy.`;
                 return;
             }
         }
@@ -610,8 +798,8 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append("files", file);
             const details = fileDetails[file.name] || {};
             const finalDesc = details.description || gDesc;
-            const finalSection = details.section || gSection;
-            const finalCategory = details.category || gCategory;
+            const finalSection = details.section || gSection || "General";
+            const finalCategory = details.category || gCategory || "General";
             const finalPortal = (details.portalId && details.portalId !== "none") ? details.portalId : gPortal;
             const finalFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
             const finalExclusive = details.isExclusive !== undefined ? details.isExclusive : gExclusive;
@@ -630,8 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let formattedDate = "";
             if (finalEventDate) {
-                const [year, month, day] = finalEventDate.split('-');
-                formattedDate = `${day}-${month}-${year}`;
+                formattedDate = finalEventDate.replace(/\//g, '-');
             }
             
             formData.append("date_events", formattedDate);
@@ -640,6 +827,25 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append("categories", finalCategory);
             formData.append("folder_ids", finalFolder);
             formData.append("is_exclusives", finalExclusive);
+
+            const detailsMeta = details.metadata || {};
+            const finalMetadata = {
+                author: detailsMeta.author || "",
+                copyright: detailsMeta.copyright || gCopyright,
+                activity: (detailsMeta.activity && detailsMeta.activity.length > 0) ? detailsMeta.activity : globalMetaArrays.activity,
+                challenge: (detailsMeta.challenge && detailsMeta.challenge.length > 0) ? detailsMeta.challenge : globalMetaArrays.challenge,
+                commodity: (detailsMeta.commodity && detailsMeta.commodity.length > 0) ? detailsMeta.commodity : globalMetaArrays.commodity,
+                cooperative: detailsMeta.cooperative || gCooperative,
+                country: detailsMeta.country || gCountry,
+                ecosystem_service: (detailsMeta.ecosystem_service && detailsMeta.ecosystem_service.length > 0) ? detailsMeta.ecosystem_service : globalMetaArrays.ecosystem_service,
+                farmer_consent: detailsMeta.farmer_consent || gFarmerConsent,
+                intervention_project_type: (detailsMeta.intervention_project_type && detailsMeta.intervention_project_type.length > 0) ? detailsMeta.intervention_project_type : globalMetaArrays.intervention_project_type,
+                project_name: detailsMeta.project_name || gProjectName,
+                region: detailsMeta.region || gRegion,
+                wave: detailsMeta.wave || gWave
+            };
+            
+            formData.append("metadata", JSON.stringify(finalMetadata));
         });
 
         try {

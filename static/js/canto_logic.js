@@ -3,6 +3,75 @@ const userRole = document.body.getAttribute('data-user-role');
 const isBasicAdmin = userRole === 'basic_admin';
 const canManageFolders = isAdmin || isBasicAdmin;
 const canEditFiles = isAdmin || isBasicAdmin;
+
+let currentFileMetadata = {};
+
+const dropdownFieldsConfig = {
+    // Standard fields
+    'section': [
+        "Agroforestry", "Biodiversity", "Carbon & Climate", "Community & Livelihoods", "Corporate", "Events", "General", 
+        "Mangrove & Coastal", "Marketing", "Monitoring & Reporting", "Products", "Projects", "Reforestation", 
+        "Regenerative Agriculture", "Supply Chain & Sourcing", "Water & Watershed"
+    ],
+    'category': [
+        "Cereals & Grains", "Cocoa", "Coconut", "Coffee", "Cotton", "Data Rooms", "Fruits & Nuts", "General", "Guidelines", 
+        "Livestock & Dairy", "Official Photos", "Palm Oil", "Presentations", "Reports", "Rubber", "Social Media", 
+        "Spices", "Tea", "Tutorials", "Vanilla", "Web Banners"
+    ],
+    // Metadata fields
+    'farmer_consent': ["yes", "no"],
+    'activity': [
+        "Agroforestry (Pre/Post)", "Awareness", "Beekeeping", "Biomass Inventory", "Carb Audit", 
+        "Carbon Certification", "Cookstove", "Cooperative", "Feasibility Study", "Field Study", "Field Visit", "Harvesting", 
+        "Impact Study", "Income Diversification", "Monitoring", "Parcel Pre/Pruning", "Processing",
+        "PreRegistration", "Socialization", "Soil test", "Training", "Transportation", "Theater Tour",
+        "Tree Distribution", "Tree Nursery", "Tree Planting"
+    ],
+    'challenge': ["Animal Welfare", "Bad agricultural practice", "Deforestation", "Desertification", "Drought", "Poor Livelihood", "Soil erosion", "Soil impaction", "Wildfires", "None"],
+    'commodity': ["Banana", "Coffee", "Cocoa", "Carbon", "Corn", "Cotton", "Cereals", "Coconut", "Rice", "Sugarcane", "Timber", "Leather", "Medicinal plants", "Vanilla", "Fruits", "Vegetables", "Nuts", "Wine", "Honey", "Dairy", "Flowers", "Wool", "Silk"],
+    'ecosystem_service': ["Air Quality", "Biodiversity", "Climate regulation", "Cover cropping", "Cultural/Aesthetic", "Disease and pest regulation", "Food", "Medicinal Resources", "Nutrient cycling", "Photosynthesis", "Pollination", "Raw material", "Soil formation", "Water regulation/Purification", "None"],
+    'intervention_project_type': ["Agroforestry", "Animal", "Awareness-raising", "Certified Carbon", "Cocoa", "Coffee", "Conservation", "Livelihood", "Marine", "Reforestation", "Regenerative Agriculture"]
+};
+
+function capitalizeFirstLetter(string) {
+    if (!string) return '';
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function renderMetaFieldDisplay(element, key, val) {
+    if (!element) return;
+    element.innerHTML = '';
+    const isMulti = ['activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'].includes(key);    
+    if (isMulti) {
+        let array = [];
+        if (Array.isArray(val)) array = val;
+        else if (typeof val === 'string' && val) array = [val];
+        
+        if (array.length === 0) {
+            element.textContent = '—';
+            element.style.color = '#94a3b8';
+        } 
+        else {
+            element.style.color = '';
+            array.forEach(item => {
+                const pill = document.createElement('span');
+                pill.style.cssText = 'background: #f1f5f9; color: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 5px; display: inline-block; border: 1px solid #e2e8f0; font-weight: 500;';
+                pill.textContent = item;
+                element.appendChild(pill);
+            });
+        }
+    } 
+    else {
+        if (val === undefined || val === null || val === '') {
+            element.textContent = '—';
+            element.style.color = '#94a3b8';
+        } else {
+            element.style.color = '';
+            element.textContent = val;
+        }
+    }
+}
+
 let isListView = false;
 let isSortedByDate = false;
 let isAuthenticated = false;
@@ -111,7 +180,7 @@ function renderFolderStructure(folders) {
   });
   
   folders.forEach(folder => {
-    if (!folder.parent_id) {
+    if (!folder.parent_id || !folderMap.has(folder.parent_id)) {
       renderFolder(folderMap.get(folder.id), foldersContainer);
     }
   });
@@ -696,10 +765,25 @@ function showFileModal(item) {
           ? `<p>${data.description}</p>`
           : "<p>No description available</p>";
       if (modalDescription) modalDescription.innerHTML = descriptionHTML;
-      if (modalAddedDate) modalAddedDate.textContent = data.date_ajout || "Unknown";
-      if (modalEventDate) modalEventDate.textContent = data.date_event || "Not specified";
-      if (modalSection) modalSection.textContent = data.section || "None";
-      if (modalCategory) modalCategory.textContent = data.category || "None";
+      if (modalAddedDate) modalAddedDate.textContent = data.date_ajout || "—";
+      if (modalEventDate) modalEventDate.textContent = data.date_event || "—";
+      if (modalSection) modalSection.textContent = data.section || "—";
+      if (modalCategory) modalCategory.textContent = data.category || "—";
+
+      currentFileMetadata = data.metadata || {};
+      
+      const metaKeys = ['copyright', 'cooperative', 'country', 'farmer_consent', 'project_name', 'region', 'wave', 'author', 'activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'];
+      metaKeys.forEach(key => {
+          let idSuffix = capitalizeFirstLetter(key);
+          if (key === 'intervention_project_type') idSuffix = 'Intervention';
+          if (key === 'ecosystem_service') idSuffix = 'EcosystemService';
+          
+          const element = document.getElementById(`modalMeta${idSuffix}`);
+          if (element) {
+              const val = currentFileMetadata[key];
+              renderMetaFieldDisplay(element, key, val);
+          }
+      });
 
       if (modalTags) {
           modalTags.innerHTML = ''; 
@@ -804,7 +888,7 @@ function loadFoldersForModal(currentFolderId) {
         }
       });
       Object.values(folderMap).forEach(folder => {
-        if (!folder.parent_id) {
+        if (!folder.parent_id || !folderMap[folder.parent_id]) {
           renderFolderNode(folder, folderTree, currentFolderId);
         }
       });
@@ -2719,12 +2803,147 @@ fetch('/my_favorites')
 
 document.addEventListener('dblclick', function(e) {
     if (!canEditFiles) return;
-    const target = e.target.closest('.editable-field');
+    const target = e.target.closest('.editable-field, .editable-meta-field');
     if (!target || !currentModalFilename) return;
     if (e.target.classList.contains('modal-tag')) return;
-    if (target.querySelector('input') || target.querySelector('textarea')) return;
+    if (target.querySelector('input') || target.querySelector('textarea') || target.querySelector('select')) return;
+    
+    const isMeta = target.classList.contains('editable-meta-field');
     const field = target.getAttribute('data-field');
-    let currentValue = target.textContent.trim();    
+    const metaKey = target.getAttribute('data-meta-key');
+    
+    const dropdownOptions = dropdownFieldsConfig[field] || dropdownFieldsConfig[metaKey];
+    
+    // Multi-select meta fields editor
+    const isMultiSelect = dropdownOptions && ['activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'].includes(metaKey);
+    
+    const originalHTML = target.innerHTML;
+    let currentValue = target.textContent.trim();
+    if (['—', 'None', 'Unknown', 'Not specified'].includes(currentValue)) currentValue = '';
+    
+    if (isMultiSelect) {
+        // Build multi-select dropdown editor inline
+        const editContainer = document.createElement('div');
+        editContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px; width: 100%; border: 1.5px solid #16677c; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;';
+        
+        const select = document.createElement('select');
+        select.style.cssText = 'width: 100%; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none; font-size: 13px;';
+        
+        const defOpt = document.createElement('option');
+        defOpt.value = '';
+        defOpt.textContent = `Select ${capitalizeFirstLetter(metaKey)}...`;
+        select.appendChild(defOpt);
+        
+        dropdownOptions.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
+        });
+        
+        const pillsContainer = document.createElement('div');
+        pillsContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;';
+        
+        // Load current array
+        let currentArray = [];
+        try {
+            const rawVal = currentFileMetadata[metaKey];
+            if (Array.isArray(rawVal)) currentArray = [...rawVal];
+            else if (typeof rawVal === 'string' && rawVal) currentArray = [rawVal];
+        } catch(err) {}
+        
+        const renderEditPills = () => {
+            pillsContainer.innerHTML = '';
+            currentArray.forEach(val => {
+                const pill = document.createElement('span');
+                pill.style.cssText = 'background: #f1f5f9; color: #1e293b; padding: 2px 8px; border-radius: 4px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #e2e8f0; font-weight: 500;';
+                pill.innerHTML = `${val} <i class="fas fa-times" style="color: #ef4444; cursor: pointer;"></i>`;
+                pill.querySelector('i').addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const idx = currentArray.indexOf(val);
+                    if (idx > -1) {
+                        currentArray.splice(idx, 1);
+                        renderEditPills();
+                    }
+                });
+                pillsContainer.appendChild(pill);
+            });
+        };
+        
+        renderEditPills();
+        
+        select.addEventListener('change', () => {
+            const val = select.value;
+            if (val && !currentArray.includes(val)) {
+                currentArray.push(val);
+                renderEditPills();
+            }
+            select.selectedIndex = 0;
+        });
+        
+        const actionRow = document.createElement('div');
+        actionRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px;';
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.cssText = 'padding: 4px 10px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; color: #475569; font-weight: 500;';
+        cancelBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            target.innerHTML = originalHTML;
+        });
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.style.cssText = 'padding: 4px 12px; font-size: 12px; border: none; border-radius: 6px; background: #16677c; color: #fff; cursor: pointer; font-weight: 500;';
+        saveBtn.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            
+            select.disabled = true;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            
+            currentFileMetadata[metaKey] = currentArray;
+            
+            const params = new URLSearchParams();
+            params.append('original_filename', currentModalFilename);
+            params.append('field', 'metadata');
+            params.append('value', JSON.stringify(currentFileMetadata));
+            
+            try {
+                const res = await fetch('/update_file_metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params
+                });
+                const responseData = await res.json();
+                if (responseData.status === 'success') {
+                    renderMetaFieldDisplay(target, metaKey, currentArray);
+                    target.style.backgroundColor = '#dcfce7';
+                    setTimeout(() => { target.style.backgroundColor = ''; }, 1000);
+                } else {
+                    alert("Error: " + responseData.message);
+                    target.innerHTML = originalHTML;
+                }
+            } catch(err) {
+                console.error(err);
+                alert("Connection error.");
+                target.innerHTML = originalHTML;
+            }
+        });
+        
+        editContainer.appendChild(select);
+        editContainer.appendChild(pillsContainer);
+        actionRow.appendChild(cancelBtn);
+        actionRow.appendChild(saveBtn);
+        editContainer.appendChild(actionRow);
+        
+        target.innerHTML = '';
+        target.appendChild(editContainer);
+        select.focus();
+        return;
+    }
+    
+    // For single-select or text inputs
     if (field === 'tags') {
         const tagSpans = target.querySelectorAll('.modal-tag');
         const tagArray = [];
@@ -2736,12 +2955,35 @@ document.addEventListener('dblclick', function(e) {
         currentValue = tagArray.join(', ');
     }
     
-    if (['No description available', 'No description', 'None'].includes(currentValue)) currentValue = '';
+    let inputElement;
+    const isSingleSelect = dropdownOptions && ['section', 'category', 'farmer_consent'].includes(field || metaKey);
     const isTextarea = field === 'description';
-    const inputElement = document.createElement(isTextarea ? 'textarea' : 'input');
     
-    if (!isTextarea) inputElement.type = 'text';
-    inputElement.value = currentValue;
+    if (isSingleSelect) {
+        inputElement = document.createElement('select');
+        const blankOpt = document.createElement('option');
+        blankOpt.value = '';
+        blankOpt.textContent = 'Select...';
+        inputElement.appendChild(blankOpt);
+        
+        dropdownOptions.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            if (opt === currentValue) {
+                option.selected = true;
+            }
+            inputElement.appendChild(option);
+        });
+    } else if (isTextarea) {
+        inputElement = document.createElement('textarea');
+        inputElement.value = currentValue;
+    } else {
+        inputElement = document.createElement('input');
+        inputElement.type = 'text';
+        inputElement.value = currentValue;
+    }
+    
     inputElement.style.cssText = `
         width: 100%;
         font-family: inherit;
@@ -2756,12 +2998,18 @@ document.addEventListener('dblclick', function(e) {
         resize: vertical;
     `;
     
-    const originalHTML = target.innerHTML;
     target.innerHTML = '';
     target.appendChild(inputElement);
     inputElement.focus();
+    
     const saveEdit = async () => {
-        const newValue = inputElement.value.trim();        
+        let newValue = inputElement.value.trim();        
+        
+        // Default empty Section or Category to "General"
+        if ((field === 'section' || field === 'category') && !newValue) {
+            newValue = "General";
+        }
+
         if (newValue === currentValue) {
             target.innerHTML = originalHTML;
             return;
@@ -2771,8 +3019,16 @@ document.addEventListener('dblclick', function(e) {
         inputElement.style.opacity = '0.5';
         const params = new URLSearchParams();
         params.append('original_filename', currentModalFilename);
-        params.append('field', field);
-        params.append('value', newValue);
+        
+        if (isMeta) {
+            currentFileMetadata[metaKey] = newValue;
+            params.append('field', 'metadata');
+            params.append('value', JSON.stringify(currentFileMetadata));
+        } else {
+            params.append('field', field);
+            params.append('value', newValue);
+        }
+        
         try {
             const res = await fetch('/update_file_metadata', {
                 method: 'POST',
@@ -2782,41 +3038,44 @@ document.addEventListener('dblclick', function(e) {
             const data = await res.json();
 
             if (data.status === 'success') {
-                if (field === 'tags') {
-                    target.innerHTML = `<span style="color:#10b981; font-weight:bold; font-size:12px;">✓ Updated tags (Reload to view)</span>`;
-                } 
-                else {
-                    target.textContent = newValue || (field === 'description' ? 'No description available' : 'None');
-                }
-                const safeFilename = currentModalFilename.replace(/"/g, '\\"');
-                const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"], .file-card[data-filename="${safeFilename}"]`);
-                
-                if (card) {
-                    if (field === 'filename') {
-                        card.setAttribute('data-filename', newValue);
-                        card.setAttribute('data-name', newValue.toLowerCase());
-                        const titleElem = card.querySelector('.image-title, .file-name');
-                        if (titleElem) titleElem.textContent = newValue;
-                        currentModalFilename = newValue; 
-                    } 
-                    else if (field === 'description') {
-                        card.setAttribute('data-description', newValue);
-                        const descElem = card.querySelector('.file-description');
-                        if (descElem) descElem.textContent = newValue;
+                if (isMeta) {
+                    renderMetaFieldDisplay(target, metaKey, newValue);
+                } else {
+                    if (field === 'tags') {
+                        target.innerHTML = `<span style="color:#10b981; font-weight:bold; font-size:12px;">✓ Updated tags (Reload to view)</span>`;
+                    } else {
+                        target.textContent = newValue || '—';
+                    }
+                    
+                    const safeFilename = currentModalFilename.replace(/"/g, '\\"');
+                    const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"], .file-card[data-filename="${safeFilename}"]`);
+                    
+                    if (card) {
+                        if (field === 'filename') {
+                            card.setAttribute('data-filename', newValue);
+                            card.setAttribute('data-name', newValue.toLowerCase());
+                            const titleElem = card.querySelector('.image-title, .file-name');
+                            if (titleElem) titleElem.textContent = newValue;
+                            currentModalFilename = newValue; 
+                        } 
+                        else if (field === 'description') {
+                            card.setAttribute('data-description', newValue);
+                            const descElem = card.querySelector('.file-description');
+                            if (descElem) descElem.textContent = newValue;
+                        }
                     }
                 }
                 
                 target.style.backgroundColor = '#dcfce7';
                 setTimeout(() => { target.style.backgroundColor = ''; }, 1000);
 
-            } 
-            else {
-                alert("Erreur: " + data.message);
+            } else {
+                alert("Error: " + data.message);
                 target.innerHTML = originalHTML;
             }
         } catch (err) {
             console.error(err);
-            alert("Erreur de connexion.");
+            alert("Connection error.");
             target.innerHTML = originalHTML;
         }
     };

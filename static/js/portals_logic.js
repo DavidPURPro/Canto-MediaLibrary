@@ -251,6 +251,53 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             const checklistNew = document.getElementById('newPortalFoldersChecklist');
             const checklistExisting = document.getElementById('existingPortalFoldersChecklist');
+            
+            // Populate Root Folder selection trees in hierarchy/arborescence order
+            const rootTreeContainer = document.getElementById('portalRootFolderTree');
+            const existRootTreeContainer = document.getElementById('existingPortalRootFolderTree');
+
+            function createRootFolderTreeNode(folder, prefixId, radioName) {
+                const node = document.createElement('div');
+                node.style.marginLeft = folder.parent_id ? '25px' : '0px';
+                node.style.marginTop = '4px';
+                const header = document.createElement('div');
+                header.style.display = 'flex';
+                header.style.alignItems = 'center';
+                header.style.gap = '8px';
+                const hasChildren = folder.subfolders && folder.subfolders.length > 0;
+                const chevronHtml = hasChildren 
+                    ? '<i class="fas fa-chevron-right chevron-toggle" style="width:15px; cursor:pointer; color:#94a3b8; text-align:center;" title="Expand"></i>' 
+                    : '<span style="width:15px; display:inline-block;"></span>';
+                
+                header.innerHTML = `
+                    ${chevronHtml}
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#334155; font-weight:500; margin:0; flex-grow:1;">
+                        <input type="radio" name="${radioName}" value="${folder.id}" id="${prefixId}_root_${folder.id}" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+                        <span style="user-select:none;"><i class="far fa-folder" style="color:#1e293b; margin-right:6px;"></i>${folder.name}</span>
+                    </label>
+                `;
+
+                const childrenContainer = document.createElement('div');
+                childrenContainer.style.display = 'none';
+                if (hasChildren) {
+                    folder.subfolders.forEach(sub => childrenContainer.appendChild(createRootFolderTreeNode(sub, prefixId, radioName)));
+                }
+
+                const chevron = header.querySelector('.chevron-toggle');
+                if (chevron) {
+                    chevron.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const isHidden = childrenContainer.style.display === 'none';
+                        childrenContainer.style.display = isHidden ? 'block' : 'none';
+                        chevron.className = isHidden ? 'fas fa-chevron-down chevron-toggle' : 'fas fa-chevron-right chevron-toggle';
+                    });
+                }
+                node.appendChild(header);
+                node.appendChild(childrenContainer);
+                return node;
+            }
+
             if (data.folders && data.folders.length > 0) {
                 const folderMap = {};
                 data.folders.forEach(f => folderMap[f.id] = { ...f, subfolders: [] });
@@ -311,6 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!f.parent_id) {
                         if (checklistNew) checklistNew.appendChild(createTreeNode(f, 'new_f'));
                         if (checklistExisting) checklistExisting.appendChild(createTreeNode(f, 'exist_f'));
+                        
+                        // Populate root trees
+                        if (rootTreeContainer) rootTreeContainer.appendChild(createRootFolderTreeNode(f, 'new_f_root', 'new_portal_root_folder'));
+                        if (existRootTreeContainer) existRootTreeContainer.appendChild(createRootFolderTreeNode(f, 'exist_f_root', 'existing_portal_root_folder'));
                     }
                 });
             }
@@ -329,10 +380,14 @@ document.getElementById('portalForm')?.addEventListener('submit', function(e) {
     id: parseInt(cb.value),
     size: document.getElementById(`new_f_size_${cb.value}`)?.value || 'standard'
     }));
+    const checkedRadio = document.querySelector('input[name="new_portal_root_folder"]:checked');
+    const root_folder_id = checkedRadio ? parseInt(checkedRadio.value) : null;
+
     const portalData = {
         name: document.getElementById('portalName').value.trim(),
         access: document.getElementById('portalAccess').value || 'Public',
-        folders: JSON.stringify(folders)
+        folders: JSON.stringify(folders),
+        root_folder_id: root_folder_id
     };
 
     fetch('/add_portal', {
@@ -362,13 +417,27 @@ window.prepareLinkFolder = function(portalId, portalName) {
     fetch(`/portal_folders/${portalId}`)
         .then(res => res.json())
         .then(data => {
-            if (data.status === 'success' && data.folders) {
-                data.folders.forEach(({ folder_id, display_size }) => {
-                    const cb = document.getElementById(`exist_f_${folder_id}`);
-                    if (cb) cb.checked = true;
-                    const sel = document.getElementById(`exist_f_size_${folder_id}`);
-                    if (sel) sel.value = display_size || 'standard';
+            if (data.status === 'success') {
+                // Reset all existing root folder radio buttons
+                document.querySelectorAll('input[name="existing_portal_root_folder"]').forEach(r => {
+                    r.checked = false;
+                    r.dataset.wasChecked = 'false';
                 });
+                if (data.root_folder_id) {
+                    const radio = document.getElementById(`exist_f_root_root_${data.root_folder_id}`);
+                    if (radio) {
+                        radio.checked = true;
+                        radio.dataset.wasChecked = 'true';
+                    }
+                }
+                if (data.folders) {
+                    data.folders.forEach(({ folder_id, display_size }) => {
+                        const cb = document.getElementById(`exist_f_${folder_id}`);
+                        if (cb) cb.checked = true;
+                        const sel = document.getElementById(`exist_f_size_${folder_id}`);
+                        if (sel) sel.value = display_size || 'standard';
+                    });
+                }
             }
             document.getElementById('linkFolderModal').classList.add('active');
         });
@@ -382,9 +451,12 @@ document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () =>
         id: parseInt(cb.value),
         size: document.getElementById(`exist_f_size_${cb.value}`)?.value || 'standard'
     }));    
+    const checkedRadio = document.querySelector('input[name="existing_portal_root_folder"]:checked');
+    const root_folder_id = checkedRadio ? parseInt(checkedRadio.value) : "";
     const formData = new FormData();
     formData.append('portal_id', portalToLink_id);
     formData.append('folder_ids', JSON.stringify(folders)); 
+    formData.append('root_folder_id', root_folder_id);
     const btn = document.getElementById('confirmLinkFolderBtn');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
     
@@ -408,4 +480,21 @@ document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () =>
         console.error("Error linking folder:", err);
         btn.innerHTML = 'Save Link';
     });
+});
+
+// Allow unchecking radio buttons on click
+document.addEventListener('click', (e) => {
+    const radio = e.target.closest('input[type="radio"]');
+    if (radio && (radio.name === 'new_portal_root_folder' || radio.name === 'existing_portal_root_folder')) {
+        if (radio.dataset.wasChecked === 'true') {
+            radio.checked = false;
+            radio.dataset.wasChecked = 'false';
+        } else {
+            // Reset all other radios in the same group
+            document.querySelectorAll(`input[name="${radio.name}"]`).forEach(r => {
+                r.dataset.wasChecked = 'false';
+            });
+            radio.dataset.wasChecked = 'true';
+        }
+    }
 });

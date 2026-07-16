@@ -9,12 +9,17 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/upload_style.css') }}">
+  <style>
+    
+</style>
 </head>
-<body>
+<body data-is-admin="{% if is_admin %}true{% else %}false{% endif %}" data-user-role="{{ user_role }}">
 
   <header class="ultra-header">
     <div class="header-container">
+      <a href="/index">
       <img src="{{ url_for('static', filename='01_New_PUR_LOGO_Color.png') }}" alt="Logo PUR" class="main-logo">
+      </a>
       <h1 class="header-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Media Library Upload</h1>
       <nav class="nav-controls">
         <a href="{{ url_for('index') }}" class="btn-nav-glass"><i class="fas fa-arrow-left"></i> Back to Gallery</a>
@@ -72,7 +77,7 @@
 
         <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
           <div class="form-group half" style="flex: 1;">
-            <label style="font-weight: 600; font-size: 13px;">Section <span style="color: #ef4444;">*</span></label>
+            <label style="font-weight: 600; font-size: 13px;">Section</label>
             <select id="globalSection" class="modern-input" style="width: 100%; padding: 8px;">
               <option value="">Select Section...</option>
               <option value="Agroforestry">Agroforestry</option>
@@ -94,7 +99,7 @@
             </select>
           </div>
           <div class="form-group half" style="flex: 1;">
-            <label style="font-weight: 600; font-size: 13px;">Category <span style="color: #ef4444;">*</span></label>
+            <label style="font-weight: 600; font-size: 13px;">Category</label>
             <select id="globalCategory" class="modern-input" style="width: 100%; padding: 8px;">
               <option value="">Select Category...</option>
               <option value="Cereals & Grains">Cereals & Grains</option>
@@ -124,8 +129,8 @@
 
         <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
           <div class="form-group half" style="flex: 1;">
-            <label style="font-weight: 600; font-size: 13px;">Global Event Date <span style="color: #ef4444;">*</span></label>
-            <input type="date" id="globalEventDate" class="modern-input" style="width: 100%; box-sizing: border-box; padding: 8px;">
+            <label style="font-weight: 600; font-size: 13px;">Global Event Date</label>
+            <input type="text" id="globalEventDate" class="modern-input" style="width: 100%; box-sizing: border-box; padding: 8px;" placeholder="dd/mm/yyyy">
           </div>
           <div class="form-group half" style="flex: 1;">
             <label style="font-weight: 600; font-size: 13px;">Global Tags (comma separated)</label>
@@ -143,6 +148,179 @@
                 <input type="checkbox" id="globalExclusive" style="width: 16px; height: 16px;">
                 <i class="fas fa-crown" style="color: #eab308;"></i> Mark all as Exclusive
             </label>
+        </div>
+
+        <!-- Precision Metadata for Global -->
+        <div class="metadata-section-title">
+          <i class="fas fa-info-circle" style="color: #16677c;"></i> Global Precision Metadata (Optional)
+        </div>
+        <div id="globalMetaContent">
+          <div class="metadata-grid">
+            <div class="meta-form-group">
+              <label for="globalMetaCopyright">Copyright</label>
+              <input type="text" id="globalMetaCopyright" class="modern-input" style="padding: 8px;" placeholder="e.g. © PUR 2026">
+            </div>
+            
+            <div class="meta-form-group">
+              <label for="globalMetaCooperative">Cooperative</label>
+              <input type="text" id="globalMetaCooperative" class="modern-input" style="padding: 8px;" placeholder="e.g. Coop Name">
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaCountry">Country {% if not is_admin %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+              <input type="text" id="globalMetaCountry" class="modern-input" style="padding: 8px;" placeholder="e.g. Colombia">
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaFarmerConsent">Farmer Consent</label>
+              <select id="globalMetaFarmerConsent" class="modern-input" style="padding: 8px;">
+                <option value="">Select...</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaProjectName">Project Name {% if not is_admin %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+              <input type="text" id="globalMetaProjectName" class="modern-input" style="padding: 8px;" placeholder="e.g. reforestation project">
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaRegion">Region {% if not is_admin %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+              <input type="text" id="globalMetaRegion" class="modern-input" style="padding: 8px;" placeholder="e.g. Antioquia">
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaWave">Wave</label>
+              <input type="text" id="globalMetaWave" class="modern-input" style="padding: 8px;" placeholder="e.g. Wave 1">
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaActivity">Activity</label>
+              <select id="globalMetaActivity" class="modern-input" style="padding: 8px;" onchange="addGlobalMetaTag('activity', this)">
+                <option value="">Select...</option>
+                <option value="Agroforestry (Pre/Post)">Agroforestry (Pre/Post)</option>
+                <option value="Awareness">Awareness</option>
+                <option value="Beekeeping">Beekeeping</option>
+                <option value="Biomass Inventory">Biomass Inventory</option>
+                <option value="Carb Audit">Carb Audit</option>
+                <option value="Carbon Certification">Carbon Certification</option>
+                <option value="Cookstove">Cookstove</option>
+                <option value="Cooperative">Cooperative</option>
+                <option value="Feasibility Study">Feasibility Study</option>
+                <option value="Field Study">Field Study</option>
+                <option value="Field Visit">Field Visit</option>
+                <option value="Harvesting">Harvesting</option>
+                <option value="Impact Study">Impact Study</option>
+                <option value="Income Diversification">Income Diversification</option>
+                <option value="Monitoring">Monitoring</option>
+                <option value="Parcel Pre/Pruning">Parcel Pre/Pruning</option>
+                <option value="Processing">Processing</option>
+                <option value="PreRegistration">PreRegistration</option>
+                <option value="Socialization">Socialization</option>
+                <option value="Soil test">Soil test</option>
+                <option value="Training">Training</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Theater Tour">Theater Tour</option>
+                <option value="Tree Distribution">Tree Distribution</option>
+                <option value="Tree Nursery">Tree Nursery</option>
+                <option value="Tree Planting">Tree Planting</option>
+              </select>
+              <div id="globalMetaActivityTags" class="meta-tag-container"></div>
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaChallenge">Challenge</label>
+              <select id="globalMetaChallenge" class="modern-input" style="padding: 8px;" onchange="addGlobalMetaTag('challenge', this)">
+                <option value="">Select...</option>
+                <option value="Animal Welfare">Animal Welfare</option>
+                <option value="Bad agricultural practice">Bad agricultural practice</option>
+                <option value="Deforestation">Deforestation</option>
+                <option value="Desertification">Desertification</option>
+                <option value="Drought">Drought</option>
+                <option value="Poor Livelihood">Poor Livelihood</option>
+                <option value="Soil erosion">Soil erosion</option>
+                <option value="Soil impaction">Soil impaction</option>
+                <option value="Wildfires">Wildfires</option>
+                <option value="None">None</option>
+
+              </select>
+              <div id="globalMetaChallengeTags" class="meta-tag-container"></div>
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaCommodity">Commodity</label>
+              <select id="globalMetaCommodity" class="modern-input" style="padding: 8px;" onchange="addGlobalMetaTag('commodity', this)">
+                <option value="">Select...</option>
+                <option value="Banana">Banana</option>
+                <option value="Coffee">Coffee</option>
+                <option value="Cocoa">Cocoa</option>
+                <option value="Carbon">Carbon</option>
+                <option value="Corn">Corn</option>
+                <option value="Cotton">Cotton</option>
+                <option value="Cereals">Cereals</option>
+                <option value="Coconut">Coconut</option>
+                <option value="Rice">Rice</option>
+                <option value="Sugarcane">Sugarcane</option>
+                <option value="Timber">Timber</option>
+                <option value="Leather">Leather</option>
+                <option value="Medicinal plants">Medicinal plants</option>
+                <option value="Vanilla">Vanilla</option>
+                <option value="Fruits">Fruits</option>
+                <option value="Vegetables">Vegetables</option>
+                <option value="Nuts">Nuts</option>
+                <option value="Wine">Wine</option>
+                <option value="Honey">Honey</option>
+                <option value="Dairy">Dairy</option>
+                <option value="Flowers">Flowers</option>
+                <option value="Wool">Wool</option>
+                <option value="Silk">Silk</option>
+              </select>
+              <div id="globalMetaCommodityTags" class="meta-tag-container"></div>
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaEcosystemService">Ecosystem Service</label>
+              <select id="globalMetaEcosystemService" class="modern-input" style="padding: 8px;" onchange="addGlobalMetaTag('ecosystem_service', this)">
+                <option value="">Select...</option>
+                <option value="Air Quality">Air Quality</option>
+                <option value="Biodiversity">Biodiversity</option>
+                <option value="Climate regulation">Climate regulation</option>
+                <option value="Cover cropping">Cover cropping</option>
+                <option value="Cultural/Aesthetic">Cultural/Aesthetic</option>
+                <option value="Disease and pest regulation">Disease and pest regulation</option>
+                <option value="Food">Food</option>
+                <option value="Medicinal Resources">Medicinal Resources</option>
+                <option value="Nutrient cycling">Nutrient cycling</option>
+                <option value="Photosynthesis">Photosynthesis</option>
+                <option value="Pollination">Pollination</option>
+                <option value="Raw material">Raw material</option>
+                <option value="Soil formation">Soil formation</option>
+                <option value="Water regulation/Purification">Water regulation/Purification</option>
+                <option value="None">None</option>
+              </select>
+              <div id="globalMetaEcosystemServiceTags" class="meta-tag-container"></div>
+            </div>
+
+            <div class="meta-form-group">
+              <label for="globalMetaIntervention">Intervention / Project Type</label>
+              <select id="globalMetaIntervention" class="modern-input" style="padding: 8px;" onchange="addGlobalMetaTag('intervention_project_type', this)">
+                <option value="">Select...</option>
+                <option value="Agroforestry">Agroforestry</option>
+                <option value="Animal">Animal</option>
+                <option value="Awareness-raising">Awareness-raising</option>
+                <option value="Certified Carbon"> Certified Carbon</option>
+                <option value="Cocoa">Cocoa</option>
+                <option value="Coffee">Coffee</option>
+                <option value="Conservation">Conservation</option>
+                <option value="Livelihood"> Livelihood</option>
+                <option value="Marine">Marine</option>
+                <option value="Reforestation">Reforestation</option>
+                <option value=" Regenerative Agriculture">Regenerative Agriculture</option>
+              </select>
+              <div id="globalMetaInterventionTags" class="meta-tag-container"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -187,8 +365,8 @@
             </div>
             
             <div class="form-group" style="margin-bottom: 15px;">
-              <label for="fileEventDate" style="font-weight: 600; display: block; margin-bottom: 5px;">Event Date <span style="color: #ef4444;">*</span></label>
-              <input type="date" id="fileEventDate" class="modern-input" style="width: 100%; box-sizing: border-box;">
+              <label for="fileEventDate" style="font-weight: 600; display: block; margin-bottom: 5px;">Event Date</label>
+              <input type="text" id="fileEventDate" class="modern-input" style="width: 100%; box-sizing: border-box;" placeholder="dd/mm/yyyy">
             </div>
 
             <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
@@ -219,7 +397,7 @@
             </div>
 
             <div class="form-group" style="margin-bottom: 15px;">
-            <label for="section" style="font-weight: 600; display: block; margin-bottom: 5px;">Section <span style="color: #ef4444;">*</span></label>
+            <label for="section" style="font-weight: 600; display: block; margin-bottom: 5px;">Section</label>
             <select name="section" id="section" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
                 <option value="">Select Section...</option>
                 <option value="Agroforestry">Agroforestry</option>
@@ -242,7 +420,7 @@
         </div>
 
         <div class="form-group" style="margin-bottom: 20px;">
-            <label for="category" style="font-weight: 600; display: block; margin-bottom: 5px;">Category <span style="color: #ef4444;">*</span></label>
+            <label for="category" style="font-weight: 600; display: block; margin-bottom: 5px;">Category</label>
             <select name="category" id="category" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
                 <option value="">Select Category...</option>
                 <option value="Cereals & Grains">Cereals & Grains</option>
@@ -269,98 +447,209 @@
             </select>
         </div>
 
-            <div class="form-group tags-section">
-              <label>Select Tags <span style="color: #ef4444; font-size: 11px;">(At least 1 per block)</span></label>
-              <div class="tag-selects-grid">
-
-                <div class="select-wrapper">
-      <span class="tag-category">Region <span style="color: #ef4444;">*</span></span>
-      <select class="modern-select" id="regionTags" onchange="addTagFromSelect(this)">
-        <option value="">Select...</option>
-        <optgroup label="Europe & North America">
-          <option value="France">France</option>
-          <option value="UK">UK</option>
-          <option value="Canada">Canada</option>
-          <option value="USA">USA</option>
-        </optgroup>
-        <optgroup label="Latin America">
-          <option value="Colombia">Colombia</option>
-          <option value="Peru">Peru</option>
-          <option value="Brazil">Brazil</option>
-          <option value="Honduras">Honduras</option>
-          <option value="Guatemala">Guatemala</option>
-        </optgroup>
-        <optgroup label="Africa">
-          <option value="Ivory Coast">Ivory Coast</option>
-          <option value="Ethiopia">Ethiopia</option>
-          <option value="Uganda">Uganda</option>
-          <option value="Rwanda">Rwanda</option>
-        </optgroup>
-        <optgroup label="Asia">
-          <option value="Indonesia">Indonesia</option>
-          <option value="Philippines">Philippines</option>
-          <option value="Thailand">Thailand</option>
-          <option value="Vietnam">Vietnam</option>
-          <option value="China">China</option>
-        </optgroup>
-      </select>
-    </div>
-    
-    <div class="select-wrapper">
-      <span class="tag-category">Project Type <span style="color: #ef4444;">*</span></span>
-      <select class="modern-select" id="projectTypeTags" onchange="addTagFromSelect(this)">
-        <option value="">Select...</option>
-        <option value="Agroforestry">Agroforestry</option>
-        <option value="Reforestation">Reforestation</option>
-        <option value="Forest Conservation">Forest Conservation</option>
-        <option value="Regenerative Agriculture">Regenerative Agriculture</option>
-        <option value="Coastal Restoration (Mangroves)">Coastal Restoration (Mangroves)</option>
-        <option value="Marine Ecosystems">Marine Ecosystems</option>
-        <option value="Carbon Insetting">Carbon Insetting</option>
-      </select>
-    </div>
-
-    <div class="select-wrapper">
-      <span class="tag-category">Activity <span style="color: #ef4444;">*</span></span>
-      <select class="modern-select" id="activityTags" onchange="addTagFromSelect(this)">
-        <option value="">Select...</option>
-        <option value="Tree Planting">Tree Planting</option>
-        <option value="Nursery Management">Nursery Management</option>
-        <option value="Harvesting">Harvesting</option>
-        <option value="Pruning & Maintenance">Pruning & Maintenance</option>
-        <option value="Farmer Training">Farmer Training</option>
-        <option value="Community Workshop">Community Workshop</option>
-        <option value="Monitoring & Mapping">Monitoring & Mapping</option>
-        <option value="Soil Preparation">Soil Preparation</option>
-      </select>
-    </div>
-
-    <div class="select-wrapper">
-      <span class="tag-category">Commodity <span style="color: #ef4444;">*</span></span>
-      <select class="modern-select" id="commodityTags" onchange="addTagFromSelect(this)">
-        <option value="">Select...</option>
-        <option value="Coffee">Coffee</option>
-        <option value="Cocoa">Cocoa</option>
-        <option value="Vanilla">Vanilla</option>
-        <option value="Palm Oil">Palm Oil</option>
-        <option value="Rice">Rice</option>
-        <option value="Sugar Cane">Sugar Cane</option>
-        <option value="Rubber">Rubber</option>
-        <option value="Fruit Trees">Fruit Trees</option>
-        <option value="Cotton">Cotton</option>
-      </select>
-    </div>
-    
-  </div>
-
-              <div class="custom-tag-section mt-3">
-                <div class="tag-input-container">
-                  <input type="text" id="fileTags" class="modern-input" placeholder="Add custom tags and press enter...">
-                  <button id="addTagBtn" class="btn-add-tag"><i class="fas fa-plus"></i></button>
-                </div>
-                <div id="tagsContainer" class="tags-container"></div>
+            <div class="form-group tags-section" style="margin-bottom: 20px;">
+              <label style="font-weight: 600; display: block; margin-bottom: 5px;">Custom Tags</label>
+              
+              <!-- Dropdown for suggestions if they don't have ideas -->
+              <div style="margin-bottom: 10px;">
+                <select class="modern-input" id="tagSuggestions" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;" onchange="addTagFromSuggestions(this)">
+                  <option value="">Select a suggested tag (Example)...</option>
+                  <option value="Landscape">Landscape</option>
+                  <option value="Farmer Portrait">Farmer/Producer Portrait</option>
+                  <option value="Training Session">Training Session</option>
+                  <option value="Nursery">Nursery</option>
+                  <option value="Soil Health">Soil Health</option>
+                  <option value="Harvest">Harvest</option>
+                  <option value="Community Meeting">Community Meeting</option>
+                  <option value="Erosion Control">Ecosystem Control</option>
+                  <option value="High Quality">High Quality</option>
+                  <option value="Biodiversity">Biodiversity</option>
+                </select>
               </div>
+
+              <div class="tag-input-container">
+                <input type="text" id="fileTags" class="modern-input" placeholder="Add custom tags and press enter...">
+                <button id="addTagBtn" class="btn-add-tag"><i class="fas fa-plus"></i></button>
+              </div>
+              <div id="tagsContainer" class="tags-container"></div>
             </div>
+
+              <!-- Precision Metadata for Individual File -->
+              <div class="metadata-section-title" style="margin-top: 20px;">
+                <i class="fas fa-info-circle" style="color: #16677c;"></i> Precision Metadata
+              </div>
+              <div id="fileMetaContent">
+                <div class="metadata-grid">
+                  <div class="meta-form-group">
+                    <label for="fileMetaAuthor">Author (Uploaded by)</label>
+                    <input type="text" id="fileMetaAuthor" class="modern-input" style="padding: 8px; background-color: #f1f5f9; cursor: not-allowed;" readonly placeholder="Filled automatically...">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaCopyright">Copyright</label>
+                    <input type="text" id="fileMetaCopyright" class="modern-input" style="padding: 8px;" placeholder="e.g. © PUR 2026">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaCooperative">Cooperative</label>
+                    <input type="text" id="fileMetaCooperative" class="modern-input" style="padding: 8px;" placeholder="e.g. Coop Name">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaCountry">Country {% if not is_admin %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+                    <input type="text" id="fileMetaCountry" class="modern-input" style="padding: 8px;" placeholder="e.g. Colombia">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaFarmerConsent">Farmer Consent</label>
+                    <select id="fileMetaFarmerConsent" class="modern-input" style="padding: 8px;">
+                      <option value="">Select...</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaProjectName">Project Name {% if not is_admin %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+                    <input type="text" id="fileMetaProjectName" class="modern-input" style="padding: 8px;" placeholder="e.g. reforestation project">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaRegion">Region {% if not is_admin %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+                    <input type="text" id="fileMetaRegion" class="modern-input" style="padding: 8px;" placeholder="e.g. Antioquia">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaWave">Wave</label>
+                    <input type="text" id="fileMetaWave" class="modern-input" style="padding: 8px;" placeholder="e.g. Wave 1">
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaActivity">Activity</label>
+                    <select id="fileMetaActivity" class="modern-input" style="padding: 8px;" onchange="addFileMetaTag('activity', this)">
+                      <option value="">Select...</option>
+                      <option value="Agroforestry (Pre/Post)">Agroforestry (Pre/Post)</option>
+                      <option value="Awareness">Awareness</option>
+                      <option value="Beekeeping">Beekeeping</option>
+                      <option value="Biomass Inventory">Biomass Inventory</option>
+                      <option value="Carb Audit">Carb Audit</option>
+                      <option value="Carbon Certification">Carbon Certification</option>
+                      <option value="Cookstove">Cookstove</option>
+                      <option value="Cooperative">Cooperative</option>
+                      <option value="Feasibility Study">Feasibility Study</option>
+                      <option value="Field Study">Field Study</option>
+                      <option value="Field Visit">Field Visit</option>
+                      <option value="Harvesting">Harvesting</option>
+                      <option value="Impact Study">Impact Study</option>
+                      <option value="Income Diversification">Income Diversification</option>
+                      <option value="Monitoring">Monitoring</option>
+                      <option value="Parcel Pre/Pruning">Parcel Pre/Pruning</option>
+                      <option value="Processing">Processing</option>
+                      <option value="PreRegistration">PreRegistration</option>
+                      <option value="Socialization">Socialization</option>
+                      <option value="Soil test">Soil test</option>
+                      <option value="Training">Training</option>
+                      <option value="Transportation">Transportation</option>
+                      <option value="Theater Tour">Theater Tour</option>
+                      <option value="Tree Distribution">Tree Distribution</option>
+                      <option value="Tree Nursery">Tree Nursery</option>
+                      <option value="Tree Planting">Tree Planting</option>
+                    </select>
+                    <div id="fileMetaActivityTags" class="meta-tag-container"></div>
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaChallenge">Challenge</label>
+                    <select id="fileMetaChallenge" class="modern-input" style="padding: 8px;" onchange="addFileMetaTag('challenge', this)">
+                      <option value="">Select...</option>
+                      <option value="Animal Welfare">Animal Welfare</option>
+                      <option value="Bad agricultural practice">Bad agricultural practice</option>
+                      <option value="Deforestation">Deforestation</option>
+                      <option value="Desertification">Desertification</option>
+                      <option value="Drought">Drought</option>
+                      <option value="Poor Livelihood">Poor Livelihood</option>
+                      <option value="Soil erosion">Soil erosion</option>
+                      <option value="Soil impaction">Soil impaction</option>
+                      <option value="Wildfires">Wildfires</option>
+                      <option value="None">None</option>
+                    </select>
+                    <div id="fileMetaChallengeTags" class="meta-tag-container"></div>
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaCommodity">Commodity</label>
+                    <select id="fileMetaCommodity" class="modern-input" style="padding: 8px;" onchange="addFileMetaTag('commodity', this)">
+                      <option value="">Select...</option>
+                      <option value="Banana">Banana</option>
+                      <option value="Coffee">Coffee</option>
+                      <option value="Cocoa">Cocoa</option>
+                      <option value="Carbon">Carbon</option>
+                      <option value="Corn">Corn</option>
+                      <option value="Cotton">Cotton</option>
+                      <option value="Cereals">Cereals</option>
+                      <option value="Coconut">Coconut</option>
+                      <option value="Rice">Rice</option>
+                      <option value="Sugarcane">Sugarcane</option>
+                      <option value="Timber">Timber</option>
+                      <option value="Leather">Leather</option>
+                      <option value="Medicinal plants">Medicinal plants</option>
+                      <option value="Vanilla">Vanilla</option>
+                      <option value="Fruits">Fruits</option>
+                      <option value="Vegetables">Vegetables</option>
+                      <option value="Nuts">Nuts</option>
+                      <option value="Wine">Wine</option>
+                      <option value="Honey">Honey</option>
+                      <option value="Dairy">Dairy</option>
+                      <option value="Flowers">Flowers</option>
+                      <option value="Wool">Wool</option>
+                      <option value="Silk">Silk</option>
+                    </select>
+                    <div id="fileMetaCommodityTags" class="meta-tag-container"></div>
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaEcosystemService">Ecosystem Service</label>
+                    <select id="fileMetaEcosystemService" class="modern-input" style="padding: 8px;" onchange="addFileMetaTag('ecosystem_service', this)">
+                      <option value="">Select...</option>
+                      <option value="Air Quality">Air Quality</option>
+                      <option value="Biodiversity">Biodiversity</option>
+                      <option value="Climate regulation">Climate regulation</option>
+                      <option value="Cover cropping">Cover cropping</option>
+                      <option value="Cultural/Aesthetic">Cultural/Aesthetic</option>
+                      <option value="Disease and pest regulation">Disease and pest regulation</option>
+                      <option value="Food">Food</option>
+                      <option value="Medicinal Resources">Medicinal Resources</option>
+                      <option value="Nutrient cycling">Nutrient cycling</option>
+                      <option value="Photosynthesis">Photosynthesis</option>
+                      <option value="Pollination">Pollination</option>
+                      <option value="Raw material">Raw material</option>
+                      <option value="Soil formation">Soil formation</option>
+                      <option value="Water regulation/Purification">Water regulation/Purification</option>
+                      <option value="None">None</option>
+                    </select>
+                    <div id="fileMetaEcosystemServiceTags" class="meta-tag-container"></div>
+                  </div>
+
+                  <div class="meta-form-group">
+                    <label for="fileMetaIntervention">Intervention / Project Type</label>
+                    <select id="fileMetaIntervention" class="modern-input" style="padding: 8px;" onchange="addFileMetaTag('intervention_project_type', this)">
+                      <option value="">Select...</option>
+                      <option value="Agroforestry">Agroforestry</option>
+                      <option value="Animal">Animal</option>
+                      <option value="Awareness-raising">Awareness-raising</option>
+                      <option value="Certified Carbon"> Certified Carbon</option>
+                      <option value="Cocoa">Cocoa</option>
+                      <option value="Coffee">Coffee</option>
+                      <option value="Conservation">Conservation</option>
+                      <option value="Livelihood"> Livelihood</option>
+                      <option value="Marine">Marine</option>
+                      <option value="Reforestation">Reforestation</option>
+                      <option value=" Regenerative Agriculture">Regenerative Agriculture</option>
+                    </select>
+                    <div id="fileMetaInterventionTags" class="meta-tag-container"></div>
+                  </div>
+                </div>
+              </div>
           </div>
         </div>
       </div>
@@ -371,7 +660,12 @@
       </div>
     </div>
   </div>
+  </div>
 
+  <script>
+    window.currentUserRole = "{{ user_role }}";
+    window.currentUserIsAdmin = {% if is_admin %}true{% else %}false{% endif %};
+  </script>
   <script src="{{ url_for('static', filename='js/upload_logic.js') }}"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a18fdad17a6999ac',t:'MTc4MzY4OTUxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b74158ffcb2a1d',t:'MTc4NDEwMjY1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b78b66085ba2e9',t:'MTc4NDEwNTY4OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

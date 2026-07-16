@@ -206,7 +206,7 @@
     </div>
     
     <div class="profile-container">
-      {% set active_email = user_email if user_email else (session.get('user_email') or session.get('portal_user_email') or 'Client@portail.com') %}
+      {% set active_email = user_email if user_email else (session.get('user_email') or session.get('portal_user_email') or '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="71321d18141f0531011e030510181d5f121e1c">[email&#160;protected]</a>') %}
       {% set parts = active_email.split('@')[0].split('.') %}
       
       <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
@@ -423,6 +423,25 @@
           <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate" class="editable-field" data-field="date_ajout" title="Double-click to edit"></span></div>
           <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate" class="editable-field" data-field="date_event" title="Double-click to edit"></span></div>
         </div>
+
+        <div class="modal-precision-metadata" style="margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+          <h4 style="margin-top: 0; color: #16677c; font-size: 15px; margin-bottom: 10px;"><i class="fas fa-info-circle"></i> Precision Metadata</h4>
+          <div class="modal-meta" id="modalPrecisionMetaContainer" style="display: flex; flex-direction: column; gap: 8px;">
+            <div><i class="fas fa-user-edit" style="width: 20px;"></i> <strong>Author:</strong> <span id="modalMetaAuthor" class="editable-meta-field" data-meta-key="author" title="Author is filled automatically"></span></div>
+            <div><i class="far fa-copyright" style="width: 20px;"></i> <strong>Copyright:</strong> <span id="modalMetaCopyright" class="editable-meta-field" data-meta-key="copyright" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-users" style="width: 20px;"></i> <strong>Cooperative:</strong> <span id="modalMetaCooperative" class="editable-meta-field" data-meta-key="cooperative" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-globe-americas" style="width: 20px;"></i> <strong>Country:</strong> <span id="modalMetaCountry" class="editable-meta-field" data-meta-key="country" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-handshake" style="width: 20px;"></i> <strong>Farmer Consent:</strong> <span id="modalMetaFarmerConsent" class="editable-meta-field" data-meta-key="farmer_consent" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-folder" style="width: 20px;"></i> <strong>Project Name:</strong> <span id="modalMetaProjectName" class="editable-meta-field" data-meta-key="project_name" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-map-marker-alt" style="width: 20px;"></i> <strong>Region:</strong> <span id="modalMetaRegion" class="editable-meta-field" data-meta-key="region" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-wave-square" style="width: 20px;"></i> <strong>Wave:</strong> <span id="modalMetaWave" class="editable-meta-field" data-meta-key="wave" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-running" style="width: 20px;"></i> <strong>Activity:</strong> <span id="modalMetaActivity" class="editable-meta-field" data-meta-key="activity" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-exclamation-triangle" style="width: 20px;"></i> <strong>Challenge:</strong> <span id="modalMetaChallenge" class="editable-meta-field" data-meta-key="challenge" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-seedling" style="width: 20px;"></i> <strong>Commodity:</strong> <span id="modalMetaCommodity" class="editable-meta-field" data-meta-key="commodity" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-leaf" style="width: 20px;"></i> <strong>Ecosystem Service:</strong> <span id="modalMetaEcosystemService" class="editable-meta-field" data-meta-key="ecosystem_service" title="Double-click to edit"></span></div>
+            <div><i class="fas fa-project-diagram" style="width: 20px;"></i> <strong>Intervention / Project Type:</strong> <span id="modalMetaIntervention" class="editable-meta-field" data-meta-key="intervention_project_type" title="Double-click to edit"></span></div>
+          </div>
+        </div>
         
         <div class="folder-selector" id="folderSelector">
           <h4><i class="far fa-folder-open"></i> Folder Assignment</h4>
@@ -590,7 +609,7 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
   {% if is_sandbox %}
@@ -720,7 +739,7 @@
         });
     }
   </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b89e8598986f70',t:'MTc4NDExNjk1Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
 </body>
 </html>

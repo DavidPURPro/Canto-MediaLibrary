@@ -294,6 +294,52 @@ async function checkPortalAccess(email, portalId, password = null) {
     return true;
 }
 
+// recup uniquement le dossier root et ses descendants — jamais les parents/frères
+async function getFolderSubtree(rootFolderId) {
+    if (!rootFolderId) return [];
+    const result = await pool.query(`
+        WITH RECURSIVE folder_tree AS (
+            SELECT id, name, parent_id, creation_date, 0 AS depth
+            FROM folders
+            WHERE id = $1
+
+            UNION ALL
+
+            SELECT f.id, f.name, f.parent_id, f.creation_date, ft.depth + 1
+            FROM folders f
+            INNER JOIN folder_tree ft ON f.parent_id = ft.id
+        )
+        SELECT * FROM folder_tree ORDER BY depth, name;
+    `, [rootFolderId]);
+    return result.rows;
+}
+
+app.get('/portal/:portal_id/tree', loginRequiredHtml, async (req, res) => {
+    try {
+        const identifier = req.params.portal_id;
+        const portalRes = await pool.query("SELECT * FROM portals WHERE id::text = $1 OR slug = $1;", [identifier]);
+        if (portalRes.rows.length === 0) return res.status(404).json({ status: "error" });
+        const portalRow = portalRes.rows[0];
+        const isGlobalAuth = !!req.session.user_email;
+        const isAuthorizedPortalUser = !!req.session.portal_user_email && (req.session.portal_access == portalRow.id);
+        if (!isGlobalAuth && !isAuthorizedPortalUser) return res.status(403).json({ status: "error" });
+        if (!portalRow.root_folder_id) {
+            return res.json({ status: "success", tree: [], root_id: null });
+        }
+        const flatTree = await getFolderSubtree(portalRow.root_folder_id);
+        const map = {};
+        flatTree.forEach(f => map[f.id] = { ...f, subfolders: [] });
+        flatTree.forEach(f => {
+            if (f.parent_id && map[f.parent_id]) map[f.parent_id].subfolders.push(map[f.id]);
+        });
+
+        res.json({ status: "success", tree: map[portalRow.root_folder_id] || null, root_id: portalRow.root_folder_id });
+    } catch (error) {
+        console.error("Erreur /portal/:portal_id/tree:", error);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 
@@ -578,6 +624,13 @@ app.get('/getAToken', async (req, res) => {
         req.session.access_token = response.accessToken;
         req.session.user_email = email;
         req.session.username = email.split('@')[0];
+        
+        // Extract given_name and family_name from idTokenClaims if available
+        const given_name = response.idTokenClaims?.given_name || "";
+        const family_name = response.idTokenClaims?.family_name || "";
+        const fullName = (given_name && family_name) ? `${given_name} ${family_name}` : (response.account.name || response.account.username || "");
+        req.session.user_fullname = fullName;
+
         req.session.user_role = role;
         req.session.is_admin = (role === 'admin');
         if (insightsClient) {
@@ -1015,7 +1068,9 @@ app.get('/upload', loginRequiredHtml, uploadAccessRequired, async (req, res) => 
         const portalsRes = await pool.query("SELECT id, name FROM portals ORDER BY name ASC;");
         res.render('upload.html', { 
             folders: folders, 
-            portals: portalsRes.rows 
+            portals: portalsRes.rows,
+            is_admin: req.session.is_admin,      
+            user_role: req.session.user_role
         });
     } catch (error) {
         console.error("Erreur chargement page upload:", error);
@@ -1054,6 +1109,9 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
         const uploaded_urls = [];
         const currentDate = new Date().toISOString().split('T')[0]; 
         const is_exclusives = [].concat(req.body.is_exclusives || []);
+        const metadata_list = [].concat(req.body.metadata || []);
+        
+        const user_role = req.session.user_role; 
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -1080,13 +1138,42 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
 
             const is_exclusive = (is_exclusives[i] === 'true');
 
+            let metadata = {};
+            try {
+                if (metadata_list[i]) {
+                    metadata = typeof metadata_list[i] === 'string' ? JSON.parse(metadata_list[i]) : metadata_list[i];
+                }
+            } catch (e) {
+                console.error("Error parsing file metadata:", e);
+            }
+
+            // Super Admin (role 'admin') can bypass the Country/Region requirement; every other role must fill them in.
+            const isAdmin = (req.session.user_role === 'admin');
+
+            if (!isAdmin) {
+                if (!metadata.country || metadata.country.trim() === "") {
+                    return res.status(400).json({ 
+                        status: "error", 
+                        message: `The 'Country' field is mandatory for the file: ${originalName}` 
+                    });
+                }
+                if (!metadata.region || metadata.region.trim() === "") {
+                    return res.status(400).json({ 
+                        status: "error", 
+                        message: `The 'Region' field is mandatory for the file: ${originalName}` 
+                    });
+                }
+            }
+
+            metadata.author = req.session.user_fullname || req.session.username || req.session.user_email || "Unknown";
+
             // enregistre dans la table globale (documents)
             await pool.query(`
                 INSERT INTO documents (
                     nom_fichier, lien_telechargement, description, tags, 
-                    date_ajout, date_event, folder_id, section, category, is_exclusive
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id, section, category, is_exclusive]);
+                    date_ajout, date_event, folder_id, section, category, is_exclusive, metadata
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+            `, [filename, blob_url, description, JSON.stringify(tags), currentDate, date_event, folder_id, section, category, is_exclusive, JSON.stringify(metadata)]);
 
             // si associé à un portail, enregistre dans portal_files
             if (portal_id) {
@@ -1096,11 +1183,13 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
                 else if (['.pdf'].includes(ext)) file_type = "PDF";
                 else if (['.doc', '.docx'].includes(ext)) file_type = "Document";
                 else if (['.xls', '.xlsx'].includes(ext)) file_type = "Spreadsheet";
+                
                 let size_display;
                 if (size_bytes >= 1024 ** 3) size_display = (size_bytes / (1024 ** 3)).toFixed(2) + "GB";
                 else if (size_bytes >= 1024 ** 2) size_display = (size_bytes / (1024 ** 2)).toFixed(2) + "MB";
                 else if (size_bytes >= 1024) size_display = (size_bytes / 1024).toFixed(2) + "KB";
                 else size_display = size_bytes + "Bytes";
+                
                 await pool.query(`
                     INSERT INTO portal_files (portal_id, filename, description, file_url, file_type, upload_date, size_bytes, size)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
@@ -1108,6 +1197,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
             }
 
             uploaded_urls.push(blob_url);
+            
             if (typeof insightsClient !== 'undefined' && insightsClient) {
                 insightsClient.trackEvent({
                     name: "Fichier_upload",
@@ -1117,8 +1207,10 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
                     }
                 });
             }
+            
             generateAndUploadThumbnail(filename, containerClient, pool);
         }
+        
         res.json({ status: "success", urls: uploaded_urls });
 
     } catch (error) {
@@ -1136,7 +1228,7 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
         }
 
         const docResult = await pool.query(`
-            SELECT description, tags, date_ajout, is_exclusive, date_event, folder_id, section, category
+            SELECT description, tags, date_ajout, is_exclusive, date_event, folder_id, section, category, metadata
             FROM documents
             WHERE nom_fichier = $1;
         `, [filename]);
@@ -1176,7 +1268,8 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
             folder_id: doc.folder_id,
             portal_id: portal_id,
             section : doc.section || "",
-            category : doc.category || ""
+            category : doc.category || "",
+            metadata: doc.metadata || {}
         });
 
     } catch (error) {
@@ -1852,28 +1945,55 @@ app.get('/portal/:portal_id', async (req, res) => {
             ORDER BY pf.upload_date DESC NULLS LAST;
         `, [real_portal_id]);
 
-        const totalFilesRes = await pool.query(`
-            WITH RECURSIVE folder_tree AS (
-                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
-                UNION
-                SELECT f.id FROM folders f
-                INNER JOIN folder_tree ft ON f.parent_id = ft.id
-            )
-            SELECT COUNT(DISTINCT filename) as count FROM (
-                SELECT filename FROM portal_files WHERE portal_id = $1
-                UNION
-                SELECT nom_fichier FROM documents WHERE folder_id IN (SELECT id FROM folder_tree)
-            ) as combined_files;
-        `, [real_portal_id]);
+        let total_files_count = 0;
+        let total_folders_count = 0;
 
-        const totalFoldersRes = await pool.query(`
-            SELECT COUNT(DISTINCT folder_id) as count 
-            FROM portal_folders 
-            WHERE portal_id = $1;
-        `, [real_portal_id]);
+        if (portalRow.root_folder_id) {
+            const countFilesRes = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT COUNT(DISTINCT nom_fichier) as count FROM documents WHERE folder_id IN (SELECT id FROM folder_tree);
+            `, [portalRow.root_folder_id]);
+            total_files_count = parseInt(countFilesRes.rows[0].count || 0, 10);
 
-        const total_files_count = parseInt(totalFilesRes.rows[0].count || 0, 10);
-        const total_folders_count = parseInt(totalFoldersRes.rows[0].count || 0, 10);
+            const countFoldersRes = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = $1
+                    UNION ALL
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT COUNT(*) - 1 as count FROM folder_tree;
+            `, [portalRow.root_folder_id]);
+            total_folders_count = parseInt(countFoldersRes.rows[0].count || 0, 10);
+            if (total_folders_count < 0) total_folders_count = 0;
+        } else {
+            const totalFilesRes = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT folder_id as id FROM portal_folders WHERE portal_id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT COUNT(DISTINCT filename) as count FROM (
+                    SELECT filename FROM portal_files WHERE portal_id = $1
+                    UNION
+                    SELECT nom_fichier FROM documents WHERE folder_id IN (SELECT id FROM folder_tree)
+                ) as combined_files;
+            `, [real_portal_id]);
+            total_files_count = parseInt(totalFilesRes.rows[0].count || 0, 10);
+
+            const totalFoldersRes = await pool.query(`
+                SELECT COUNT(DISTINCT folder_id) as count 
+                FROM portal_folders 
+                WHERE portal_id = $1;
+            `, [real_portal_id]);
+            total_folders_count = parseInt(totalFoldersRes.rows[0].count || 0, 10);
+        }
 
         const looseFiles = looseFilesRes.rows.map(row => ({
             filename: row.filename,
@@ -1942,7 +2062,10 @@ app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, r
         if (!isGlobalAuth && !isAuthorizedPortalUser) return res.redirect(`/portal/${slug}/login`);
 
         const rootCheck = await pool.query("SELECT folder_id FROM portal_folders WHERE portal_id = $1;", [real_portal_id]);
-        const allowedRoots = rootCheck.rows.map(r => r.folder_id);
+        let allowedRoots = rootCheck.rows.map(r => r.folder_id);
+        if (portalRow.root_folder_id && !allowedRoots.includes(portalRow.root_folder_id)) {
+            allowedRoots.push(portalRow.root_folder_id);
+        }
         const allFoldersRes = await pool.query("SELECT id, name, parent_id, creation_date FROM folders ORDER BY name;");
         const allFolders = allFoldersRes.rows;
         let currentRoot = null;
@@ -2037,23 +2160,44 @@ app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, r
 // routes gestion portails
 app.post('/add_portal', loginRequiredJson, async (req, res) => {
     try {
-        const { name, access = 'Public', folders, linked_folder_ids } = req.body;        
+        const { name, access = 'Public', folders, linked_folder_ids, root_folder_id } = req.body;        
         if (!name) return res.status(400).json({ status: "error", message: "Name is required" });
         const existRes = await pool.query("SELECT id FROM portals WHERE name = $1;", [name]);
         if (existRes.rows.length > 0) return res.status(400).json({ status: "error", message: "Portal with this name already exists" });
 
-        const insertRes = await pool.query(`
-            INSERT INTO portals (name, url, access, creation_date, last_sync)
-            VALUES ($1, '', $2, CURRENT_DATE, CURRENT_DATE) RETURNING id;
-        `, [name, access]);
-        
-        const portal_id = insertRes.rows[0].id;        
         const raw = JSON.parse(folders || linked_folder_ids || "[]");
         const chosenFolders = raw.map(item =>
             (item && typeof item === 'object')
                 ? { id: parseInt(item.id), size: item.size || 'standard' }
                 : { id: parseInt(item), size: 'standard' }
         );
+
+        if (root_folder_id && chosenFolders.length > 0) {
+            const checkFoldersRes = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT id, name FROM folders 
+                WHERE id = ANY($2::int[]) AND id NOT IN (SELECT id FROM folder_tree);
+            `, [parseInt(root_folder_id), chosenFolders.map(f => f.id)]);
+            
+            if (checkFoldersRes.rows.length > 0) {
+                return res.status(400).json({ 
+                    status: "error", 
+                    message: `⚠️ Cannot create portal: some of the selected folders (e.g. '${checkFoldersRes.rows[0].name}') are located outside of the selected Root Folder hierarchy.` 
+                });
+            }
+        }
+
+        const insertRes = await pool.query(`
+            INSERT INTO portals (name, url, access, creation_date, last_sync, root_folder_id)
+            VALUES ($1, '', $2, CURRENT_DATE, CURRENT_DATE, $3) RETURNING id;
+        `, [name, access, root_folder_id ? parseInt(root_folder_id) : null]);
+        
+        const portal_id = insertRes.rows[0].id;        
         for (const f of chosenFolders) {
             await pool.query("INSERT INTO portal_folders (portal_id, folder_id, display_size) VALUES ($1, $2, $3);", [portal_id, f.id, f.size]);
         }
@@ -2137,6 +2281,34 @@ app.post('/update_file_portal', loginRequiredJson, upload.none(), async (req, re
     try {
         const { filename, portal_id } = req.body;
         if (!filename) return res.status(400).json({ status: "error", message: "Required file name" });
+
+        // Check if portal has root_folder_id (Dossier Plafond)
+        const portalCheck = await pool.query("SELECT root_folder_id, name FROM portals WHERE id = $1;", [portal_id]);
+        if (portalCheck.rows.length > 0 && portalCheck.rows[0].root_folder_id) {
+            const root_id = portalCheck.rows[0].root_folder_id;
+            const portalName = portalCheck.rows[0].name;
+            const fileCheck = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT d.nom_fichier, f.name as folder_name 
+                FROM documents d
+                LEFT JOIN folders f ON f.id = d.folder_id
+                WHERE d.nom_fichier = $2 
+                  AND (d.folder_id IS NULL OR d.folder_id NOT IN (SELECT id FROM folder_tree));
+            `, [root_id, filename]);
+            
+            if (fileCheck.rows.length > 0) {
+                const folder_name = fileCheck.rows[0].folder_name || "Root";
+                return res.status(400).json({ 
+                    status: "error", 
+                    message: `⚠️ Cannot assign to portal: This file is in folder '${folder_name}' which is outside of the portal's Root Folder hierarchy (${portalName}).` 
+                });
+            }
+        }
 
         const exist = await pool.query("SELECT id FROM portal_files WHERE filename = $1 AND portal_id = $2;", [filename, portal_id]);
         if (exist.rows.length > 0) return res.json({ status: "success", message: "File already in portal" });
@@ -2746,13 +2918,67 @@ app.get('/my_favorites', loginRequiredJson, async (req, res) => {
 // relier portail à un dossier
 app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
-        const { portal_id, folders, folder_ids } = req.body;
+        const { portal_id, folders, folder_ids, root_folder_id } = req.body;
         const raw = JSON.parse(folders || folder_ids || "[]");
         const chosen = raw.map(item =>
             (item && typeof item === 'object')
                 ? { id: parseInt(item.id), size: item.size || 'standard' }
                 : { id: parseInt(item), size: 'standard' }
         );
+
+        if (root_folder_id) {
+            // Check if any explicitly linked folder is outside of root_folder_id's subtree
+            if (chosen.length > 0) {
+                const checkFoldersRes = await pool.query(`
+                    WITH RECURSIVE folder_tree AS (
+                        SELECT id FROM folders WHERE id = $1
+                        UNION
+                        SELECT f.id FROM folders f
+                        INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                    )
+                    SELECT id, name FROM folders 
+                    WHERE id = ANY($2::int[]) AND id NOT IN (SELECT id FROM folder_tree);
+                `, [parseInt(root_folder_id), chosen.map(f => f.id)]);
+                
+                if (checkFoldersRes.rows.length > 0) {
+                    return res.status(400).json({ 
+                        status: "error", 
+                        message: `⚠️ Cannot set this root folder: some of the selected folders (e.g. '${checkFoldersRes.rows[0].name}') are located outside of the selected Root Folder hierarchy. Please adjust your folder selection or root folder.` 
+                    });
+                }
+            }
+
+            // Check if any already linked files are outside of root_folder_id's subtree
+            const checkFilesRes = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT pf.filename, f.name as folder_name 
+                FROM portal_files pf
+                LEFT JOIN documents d ON d.nom_fichier = pf.filename
+                LEFT JOIN folders f ON f.id = d.folder_id
+                WHERE pf.portal_id = $2 
+                  AND (d.folder_id IS NULL OR d.folder_id NOT IN (SELECT id FROM folder_tree));
+            `, [parseInt(root_folder_id), portal_id]);
+
+            if (checkFilesRes.rows.length > 0) {
+                const offendingFile = checkFilesRes.rows[0].filename;
+                const offendingFolder = checkFilesRes.rows[0].folder_name || "Root";
+                return res.status(400).json({ 
+                    status: "error", 
+                    message: `⚠️ Cannot set this root folder: this portal already contains files located outside of this folder hierarchy (e.g. '${offendingFile}' in folder '${offendingFolder}'). Please remove these files from the portal first.` 
+                });
+            }
+        }
+        
+        await pool.query("UPDATE portals SET root_folder_id = $1 WHERE id = $2;", [
+            root_folder_id ? parseInt(root_folder_id) : null,
+            portal_id
+        ]);
+
         const existingRes = await pool.query("SELECT * FROM portal_folders WHERE portal_id = $1;", [portal_id]);
         const existingLayouts = new Map();
         existingRes.rows.forEach(row => {
@@ -2787,8 +3013,10 @@ app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none
 
 app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
     try {
+        const portalRes = await pool.query("SELECT root_folder_id FROM portals WHERE id = $1;", [req.params.portal_id]);
+        const root_folder_id = portalRes.rows.length > 0 ? portalRes.rows[0].root_folder_id : null;
         const result = await pool.query("SELECT folder_id, display_size FROM portal_folders WHERE portal_id = $1;", [req.params.portal_id]);
-        res.json({ status: "success", folders: result.rows });
+        res.json({ status: "success", folders: result.rows, root_folder_id: root_folder_id });
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
     }
@@ -2815,8 +3043,9 @@ app.post('/update_file_metadata', loginRequiredHtml, basicAdminRequired, async (
         else if (field === 'tags') { dbFieldDoc = 'tags'; dbFieldPortal = null; }
         else if (field === 'date_ajout') { dbFieldDoc = 'date_ajout'; dbFieldPortal = 'upload_date'; }
         else if (field === 'date_event') { dbFieldDoc = 'date_event'; dbFieldPortal = null; }
+        else if (field === 'metadata') { dbFieldDoc = 'metadata'; dbFieldPortal = null; }
         else { return res.status(400).json({ status: 'error', message: 'not editable' }); }
-        if (value.trim() === '') {
+        if (value && typeof value === 'string' && value.trim() === '') {
             value = null;
         }
         else if (field === 'date_ajout' || field === 'date_event') {
@@ -2831,6 +3060,27 @@ app.post('/update_file_metadata', loginRequiredHtml, basicAdminRequired, async (
             const tagsArray = value.split(',').map(t => t.trim()).filter(t => t.length > 0);
             await pool.query(`UPDATE documents SET tags = $1 WHERE nom_fichier = $2`, [JSON.stringify(tagsArray), original_filename]);
         } 
+        else if (field === 'metadata') {
+            let metadataObj = {};
+            try {
+                metadataObj = typeof value === 'string' ? JSON.parse(value) : value;
+            } catch (e) {
+                return res.status(400).json({ status: 'error', message: 'Invalid JSON for metadata' });
+            }
+
+            // Country/Region are mandatory for everyone except Super Admin (role 'admin'), who can bypass.
+            const isSuperAdmin = (req.session.user_role === 'admin');
+            if (!isSuperAdmin) {
+                if (!metadataObj.country || String(metadataObj.country).trim() === "") {
+                    return res.status(400).json({ status: 'error', message: "The 'Country' field is mandatory." });
+                }
+                if (!metadataObj.region || String(metadataObj.region).trim() === "") {
+                    return res.status(400).json({ status: 'error', message: "The 'Region' field is mandatory." });
+                }
+            }
+
+            await pool.query(`UPDATE documents SET metadata = $1 WHERE nom_fichier = $2`, [JSON.stringify(metadataObj), original_filename]);
+        }
         else {
             await pool.query(`UPDATE documents SET ${dbFieldDoc} = $1 WHERE nom_fichier = $2`, [value, original_filename]);
         }
@@ -3179,37 +3429,33 @@ app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => 
 });
 
 // ============================================
-
-// Route invisible appelée automatiquement par le Webhook de l'API Canto
 app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
-    // 1. On répond immédiatement "OK" à Canto 
+    // 1. On répond OK immédiatement
     res.status(200).send('Webhook bien reçu');
 
     try {
         const payload = req.body || {};
         const canto_id = payload.id;
-        const scheme = payload.scheme || 'image';
+        const scheme = (payload.scheme || 'image').toLowerCase(); 
         const nom_fichier = payload.displayname;
         
-        // Sécurité : On vérifie le token défini dans l'interface Canto
         if (payload.secure_token !== 'motdepasse') return;
         if (!canto_id || !nom_fichier) return;
+        console.log(`[Auto-Sync] Fichier détecté : ${nom_fichier} (Type: ${scheme})`);
 
-        console.log(`[Auto-Sync] Fichier détecté : ${nom_fichier}. Interrogation de l'API Canto...`);
-
-        // 2. On interroge Canto avec TON token (comme le fait canto_client.py)
+        // 2. Interrogation de l'API Canto
         const cantoDomain = (process.env.CANTO_DOMAIN || "").replace('https://', '').replace('http://', '').replace(/\/$/, '');
-        const cantoToken = process.env.CANTO_API_TOKEN; // Ton token issu d'Azure
+        const cantoToken = process.env.CANTO_API_TOKEN; 
 
         const detailResponse = await fetch(`https://${cantoDomain}/api/v1/${scheme}/${canto_id}`, {
             headers: { 
                 'Authorization': `Bearer ${cantoToken}`,
-                'User-Agent': 'App Canto Publishing', // Obligatoire
+                'User-Agent': 'App Canto Publishing', 
                 'Accept': 'application/json'
             }
         });
 
-        if (!detailResponse.ok) throw new Error(`Erreur API Canto (${detailResponse.status})`);
+        if (!detailResponse.ok) throw new Error(`Erreur API Canto (${detailResponse.status}) pour le fichier ${nom_fichier}`);
         const assetData = await detailResponse.json();
 
         // 3. Extraction du lien de téléchargement
@@ -3219,12 +3465,7 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
             return;
         }
 
-        // 4. Extraction des Tags, Description et Dossier
-        const description = assetData.description || "";
-        let tags = [];
-        if (assetData.smartTags) tags = tags.concat(assetData.smartTags);
-        if (assetData.tag) tags = tags.concat(typeof assetData.tag === 'string' ? assetData.tag.split(',') : assetData.tag);
-        
+        // 4. Dossiers
         let folder_id = null;
         if (assetData.relatedAlbums && assetData.relatedAlbums.length > 0) {
             const albumName = assetData.relatedAlbums[0].name;
@@ -3234,16 +3475,63 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
 
         console.log(`[Auto-Sync] Aspiration de : ${nom_fichier} en cours...`);
 
-        // 5. Téléchargement depuis Canto et transfert vers Azure
+        // 5. Téléchargement depuis Canto
         const fileResponse = await fetch(download_url);
-        if (!fileResponse.ok) throw new Error("Erreur téléchargement image");
+        if (!fileResponse.ok) throw new Error("Erreur téléchargement depuis Canto");
 
         const { Readable } = require('stream');
         const nodeStream = Readable.fromWeb(fileResponse.body);
+        let contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';        
+        const ext = nom_fichier.split('.').pop().toLowerCase();
+        
+        if (ext === 'pdf') contentType = 'application/pdf';
+        else if (['jpg', 'jpeg'].includes(ext)) contentType = 'image/jpeg';
+        else if (ext === 'png') contentType = 'image/png';
+        else if (ext === 'mp4') contentType = 'video/mp4';
+        else if (['ppt', 'pptx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        else if (['doc', 'docx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        else if (['xls', 'xlsx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
         const blockBlobClient = containerClient.getBlockBlobClient(nom_fichier);
-        await blockBlobClient.uploadStream(nodeStream, 4 * 1024 * 1024, 20);
+        await blockBlobClient.uploadStream(nodeStream, 4 * 1024 * 1024, 20, {
+            blobHTTPHeaders: { 
+                blobContentType: contentType,
+                blobContentDisposition: 'inline'
+            }
+        });
         const azureUrl = blockBlobClient.url;
+
+        // 5.1 Extraction Métadonnées Canto (Tags inclus)
+        let tags = [];
+        if (assetData.smartTags) tags = tags.concat(assetData.smartTags);
+        if (assetData.tag) tags = tags.concat(typeof assetData.tag === 'string' ? assetData.tag.split(',') : assetData.tag);
+        
+        const description = assetData.description || "";
+        const copyright = assetData.copyright || (assetData.additional && assetData.additional['Copyright']) || "";
+        const author = assetData.ownerName || assetData.uploadedBy || (assetData.additional && assetData.additional['Author']) || "Canto Sync";
+        const cooperative = assetData.additional && assetData.additional['Cooperative'] || "";
+        const country = assetData.country || (assetData.additional && assetData.additional['Country']) || "";
+        const project_name = assetData.additional && assetData.additional['Project Name'] || "";
+        const region = assetData.additional && assetData.additional['Region'] || "";
+        const wave = assetData.additional && assetData.additional['Wave'] || "";
+        const farmer_consent = assetData.additional && assetData.additional['Farmer Consent'] || "";
+        
+        const extractArray = (field) => {
+            if (!assetData.additional || !assetData.additional[field]) return [];
+            const val = assetData.additional[field];
+            return Array.isArray(val) ? val : [val];
+        };
+
+        const metadata = {
+            author, copyright, cooperative, country, project_name, region, wave, farmer_consent,
+            activity: extractArray('Activity'),
+            challenge: extractArray('Challenge'),
+            commodity: extractArray('Commodity'),
+            ecosystem_service: extractArray('Ecosystem Service'),
+            intervention_project_type: extractArray('Intervention / Projet Type').length > 0 
+                ? extractArray('Intervention / Projet Type') 
+                : extractArray('Intervention / Project Type')
+        };
 
         // 6. Enregistrement en BDD
         const date_ajout = new Date().toISOString().split('T')[0];
@@ -3251,17 +3539,20 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
             INSERT INTO documents (
                 nom_fichier, description, folder_id, is_exclusive, 
                 date_ajout, date_event, section, category, tags, 
-                lien_telechargement, thumbnail_url
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                lien_telechargement, thumbnail_url, metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (nom_fichier) DO NOTHING;
         `, [
             nom_fichier, description, folder_id, false, date_ajout, null, 
-            "General", "General", JSON.stringify(tags), azureUrl, null
+            "General", "General", JSON.stringify(tags), azureUrl, null, JSON.stringify(metadata)
         ]);
 
         // 7. Création de la miniature
-        generateAndUploadThumbnail(nom_fichier, containerClient, pool);
-        console.log(`[Auto-Sync] 🎉 Terminé ! Fichier ${nom_fichier} est en ligne avec ses métadonnées.`);
+        if (typeof generateAndUploadThumbnail === 'function') {
+            generateAndUploadThumbnail(nom_fichier, containerClient, pool);
+        }
+        
+        console.log(`[Auto-Sync] Terminé ! Fichier ${nom_fichier} est en ligne avec ses métadonnées.`);
 
     } catch (error) {
         console.error('[Auto-Sync] Erreur fatale:', error.message);

@@ -294,3 +294,96 @@ textarea { min-height: 100px; resize: vertical; }
   word-break: break-word; 
   line-height: 1.4
 }
+
+/* Custom styles for precision metadata */
+    .metadata-section-title {
+      margin-top: 25px;
+      margin-bottom: 15px;
+      color: #1e293b;
+      font-size: 16px;
+      font-weight: 700;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    @media (max-width: 600px) {
+      .metadata-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .meta-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .meta-form-group label {
+      font-weight: 600;
+      font-size: 13px;
+      color: #475569;
+    }
+    .meta-tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 5px;
+      min-height: 24px;
+    }
+    .meta-pill {
+      background-color: #f1f5f9;
+      color: #1e293b;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid #e2e8f0;
+      font-weight: 500;
+    }
+    .meta-pill i {
+      cursor: pointer;
+      color: #ef4444;
+    }
+    .meta-pill i:hover {
+      color: #b91c1c;
+    }
+    .collapsible-trigger {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 14px;
+      color: #1e293b;
+      margin-top: 15px;
+      margin-bottom: 10px;
+      transition: background 0.2s;
+    }
+    .collapsible-trigger:hover {
+      background: #f1f5f9;
+    }
+    .collapsible-content {
+      display: none;
+      padding: 15px;
+      border: 1px solid #e2e8f0;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      background: #fff;
+      margin-top: -10px;
+      margin-bottom: 15px;
+    }
+    .collapsible-content.open {
+      display: block;
+    }
