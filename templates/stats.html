@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Dashboard & Stats — PUR</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/x-icon">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8fafc;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white">
+          <i class="fas fa-chart-line text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 leading-none">Activity & Performance Dashboard</h1>
+          <p class="text-xs text-slate-500 mt-1">Real-time local analytics & speed auditing</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/index" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 bg-white rounded-lg hover:bg-slate-50">
+          <i class="fas fa-arrow-left mr-2"></i> Back to Gallery
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <!-- Card 1 -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">Total Logged Actions</p>
+          <h3 class="text-3xl font-extrabold text-slate-900 mt-1">{{ totalLogs }}</h3>
+        </div>
+        <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+          <i class="fas fa-list-check text-xl"></i>
+        </div>
+      </div>
+      <!-- Card 2 -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">Total File Uploads</p>
+          <h3 class="text-3xl font-extrabold text-teal-700 mt-1">{{ totalUploads }}</h3>
+        </div>
+        <div class="w-12 h-12 bg-teal-50 text-teal-700 rounded-xl flex items-center justify-center">
+          <i class="fas fa-cloud-upload-alt text-xl"></i>
+        </div>
+      </div>
+      <!-- Card 3 -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">Total Deletions</p>
+          <h3 class="text-3xl font-extrabold text-rose-600 mt-1">{{ totalDeletes }}</h3>
+        </div>
+        <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
+          <i class="fas fa-trash-alt text-xl"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance & Audience Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <!-- Card 4: Avg Page Load -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">Avg Page Load Time</p>
+          <h3 class="text-3xl font-extrabold text-indigo-600 mt-1">{% if avgPageLoad %}{{ avgPageLoad }} ms{% else %}—{% endif %}</h3>
+        </div>
+        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+          <i class="fas fa-gauge-high text-xl"></i>
+        </div>
+      </div>
+      <!-- Card 5: Avg Download Speed -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">Avg Download Speed</p>
+          <h3 class="text-3xl font-extrabold text-amber-600 mt-1">{% if avgDownloadSpeed != '0.00' %}{{ avgDownloadSpeed }} Mbps{% else %}—{% endif %}</h3>
+        </div>
+        <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+          <i class="fas fa-gauge text-xl"></i>
+        </div>
+      </div>
+      <!-- Card 6: Active Users Today -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">Active Users Today</p>
+          <h3 class="text-3xl font-extrabold text-violet-600 mt-1">{{ activeUsersToday }}</h3>
+        </div>
+        <div class="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center">
+          <i class="fas fa-user-check text-xl"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <!-- Main Line Chart -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h3 class="text-lg font-bold text-slate-900 mb-4"><i class="fas fa-chart-area text-slate-500 mr-2"></i> Activity Timeline (Last 7 Days)</h3>
+        <div class="h-64 relative">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+      <!-- Top Users -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+        <h3 class="text-lg font-bold text-slate-900 mb-4"><i class="fas fa-users-viewfinder text-slate-500 mr-2"></i> Most Active Users</h3>
+        <div class="space-y-4 flex-1 overflow-y-auto max-h-64">
+          {% for user in statsByUser %}
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3 overflow-hidden">
+                <div class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-700 font-semibold text-xs shrink-0">
+                  {{ user.username[0] | upper }}
+                </div>
+                <div class="truncate">
+                  <p class="text-sm font-bold text-slate-800 truncate" title="{{ user.username }}">{{ user.username }}</p>
+                </div>
+              </div>
+              <span class="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-800 rounded-full shrink-0">{{ user.count }} acts</span>
+            </div>
+          {% else %}
+            <p class="text-sm text-slate-400 text-center py-8">No user activity logged yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Load Speed Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-stopwatch text-slate-500 mr-2"></i> Page Load Speed & Hits Breakdown</h3>
+        <span class="text-xs font-semibold px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-full">Real-time Performance auditing</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-50 text-slate-500 border-b border-slate-200">
+              <th class="py-3 px-6 font-semibold">Page Path</th>
+              <th class="py-3 px-6 font-semibold text-center">Hits</th>
+              <th class="py-3 px-6 font-semibold text-right">Avg Load Time</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for page in pageLoadStats %}
+              <tr class="hover:bg-slate-50/50 transition-colors">
+                <td class="py-4 px-6 font-mono text-xs text-slate-600 font-semibold">{{ page.path }}</td>
+                <td class="py-4 px-6 text-center font-bold text-slate-800">{{ page.count }}</td>
+                <td class="py-4 px-6 text-right font-extrabold text-indigo-600">{{ page.avg_duration }} ms</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="3" class="text-center py-12 text-slate-400">
+                  <i class="fas fa-gauge-simple-high text-3xl mb-3 block"></i> No page load speed metrics recorded yet.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Audit Logs Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-receipt text-slate-500 mr-2"></i> Real-time Audit Logs (Last 100 Actions)</h3>
+        <span class="text-xs font-semibold px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full">Database Tracker Active</span>
+      </div>
+      <div class="overflow-x-auto max-h-96">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-50 text-slate-500 border-b border-slate-200">
+              <th class="py-3 px-6 font-semibold">Timestamp</th>
+              <th class="py-3 px-6 font-semibold">User</th>
+              <th class="py-3 px-6 font-semibold">Action</th>
+              <th class="py-3 px-6 font-semibold">Properties / Details</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for log in recentLogs %}
+              <tr class="hover:bg-slate-50/50 transition-colors">
+                <td class="py-4 px-6 font-medium text-slate-600 whitespace-nowrap">{{ log.formatted_date }}</td>
+                <td class="py-4 px-6 whitespace-nowrap">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                    <span class="font-semibold text-slate-800">{{ log.username }}</span>
+                  </div>
+                </td>
+                <td class="py-4 px-6 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold 
+                    {% if 'upload' in log.event_name or 'ajout' in log.event_name or 'file_uploaded' in log.event_name %} bg-emerald-50 text-emerald-700 border border-emerald-200
+                    {% elif 'delete' in log.event_name or 'suppr' in log.event_name or 'file_deleted' in log.event_name %} bg-rose-50 text-rose-700 border border-rose-200
+                    {% else %} bg-slate-100 text-slate-700 border border-slate-200
+                    {% endif %}">
+                    {{ log.event_name }}
+                  </span>
+                </td>
+                <td class="py-4 px-6 font-mono text-xs text-slate-500 max-w-xs truncate" title="{{ log.properties | dump }}">
+                  {{ log.properties | dump }}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4" class="text-center py-12 text-slate-400">
+                  <i class="fas fa-inbox text-3xl mb-3 block"></i> No activities tracked yet.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const rawTimelineData = {{ timelineData | safe }};
+    const labels = rawTimelineData.map(item => {
+        const [year, month, day] = item.day.split('-');
+        return `${day}/${month}`;
+    });
+    const counts = rawTimelineData.map(item => item.count);
+
+    const ctx = document.getElementById('timelineChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Actions Logged',
+                data: counts,
+                borderColor: '#0f766e', 
+                backgroundColor: 'rgba(15, 118, 110, 0.05)',
+                borderWidth: 3,
+                tension: 0.3,
+                fill: true,
+                pointBackgroundColor: '#0f766e',
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, color: '#64748b' },
+                    grid: { color: '#e2e8f0' }
+                },
+                x: {
+                    ticks: { color: '#64748b' },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+  </script>
+</body>
+</html>

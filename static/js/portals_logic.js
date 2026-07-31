@@ -422,6 +422,26 @@ document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () =>
     }));    
     const checkedRadio = document.querySelector('input[name="existing_portal_root_folder"]:checked');
     const root_folder_id = checkedRadio ? parseInt(checkedRadio.value) : "";
+    
+    // Double-check confirmation pop-ups
+    if (folders.length === 0 && !root_folder_id) {
+        if (!confirm("You haven't selected any folder or root folder to link to this portal. Are you sure you want to save this portal with no linked folders?")) {
+            return;
+        }
+    } else {
+        const portalName = document.getElementById('linkPortalNameText').textContent;
+        let msg = `Are you sure you want to save the following assignments for '${portalName}'?`;
+        if (root_folder_id) {
+            msg += `\n- Root Folder: Selected`;
+        }
+        if (folders.length > 0) {
+            msg += `\n- Folders to display: ${folders.length} selected`;
+        }
+        if (!confirm(msg)) {
+            return;
+        }
+    }
+
     const formData = new FormData();
     formData.append('portal_id', portalToLink_id);
     formData.append('folder_ids', JSON.stringify(folders)); 

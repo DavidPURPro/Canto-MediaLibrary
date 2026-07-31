@@ -35,6 +35,31 @@ else {
 }
 
 const app = express();
+
+// Custom performance middleware to measure and log page load times
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        // If it's a key page load (like /index, /stats, /portal, /upload, etc.) log it!
+        if (req.method === 'GET' && (req.path === '/index' || req.path === '/stats' || req.path.startsWith('/portal'))) {
+            const user = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
+            
+            if (insightsClient) {
+                insightsClient.trackEvent({
+                    name: "page_load",
+                    properties: {
+                        path: req.path,
+                        duration_ms: duration,
+                        utilisateur: user
+                    }
+                });
+            }
+        }
+    });
+    next();
+});
+
 const morgan = require('morgan');
 
 if (process.env.NODE_ENV === 'production') {
@@ -55,6 +80,39 @@ const pool = new Pool({
     max: 30, 
     idleTimeoutMillis: 30000, 
 });
+
+// Create the activity logs table automatically on startup
+pool.query(`
+    CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        event_name VARCHAR(100) NOT NULL,
+        username VARCHAR(100),
+        properties JSONB DEFAULT '{}'::jsonb,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+`).catch(err => console.error("Failed to create activity_logs table:", err));
+
+// Wrapper to automatically intercept and save all AppInsights events to our PostgreSQL table
+const originalTrackEvent = insightsClient && insightsClient.trackEvent;
+insightsClient = {
+    trackEvent: function(telemetry) {
+        if (originalTrackEvent) {
+            try { originalTrackEvent(telemetry); } catch (e) {}
+        } else {
+            console.log(`[Local Analytics] Event: ${telemetry.name}`, telemetry.properties);
+        }
+
+        const properties = telemetry.properties || {};
+        const username = properties.utilisateur || properties.user || properties.admin || "Visiteur";
+
+        pool.query(`
+            INSERT INTO activity_logs (event_name, username, properties)
+            VALUES ($1, $2, $3);
+        `, [telemetry.name, username, JSON.stringify(properties)])
+        .catch(err => console.error("Failed to save activity log to DB:", err.message));
+    }
+};
+
 const multer = require('multer');
 const sanitize = require('sanitize-filename');
 const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
@@ -634,12 +692,12 @@ app.get('/getAToken', async (req, res) => {
         req.session.user_role = role;
         req.session.is_admin = (role === 'admin');
         if (insightsClient) {
-            insightsClient.trackEvent({
-                name: "login_reussi",
-                properties: {
-                    utilisateur: email
-                }
-            });
+                insightsClient.trackEvent({
+                    name: "login_success",
+                    properties: {
+                        utilisateur: email
+                    }
+                });
         }
         const nextUrl = req.session.nextUrl || '/';
         delete req.session.nextUrl;
@@ -1200,7 +1258,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
             
             if (typeof insightsClient !== 'undefined' && insightsClient) {
                 insightsClient.trackEvent({
-                    name: "Fichier_upload",
+                    name: "file_uploaded",
                     properties: {
                         fichier: filename,
                         utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
@@ -1300,7 +1358,7 @@ app.post('/create_folder', loginRequiredJson, basicAdminRequired, upload.none(),
         const folder_id = result.rows[0].id;
         if (insightsClient) {
             insightsClient.trackEvent({
-                name: "Folder_Cree",
+                name: "folder_created",
                 properties: {
                     dossier_nom: name,
                     utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
@@ -1339,7 +1397,7 @@ app.post('/delete_folder', loginRequiredJson, basicAdminRequired, upload.none(),
         `, [folder_id]);
         const folderName = delRes.rows.length > 0 ? delRes.rows[0].name : "Dossier Inconnu";
         insightsClient.trackEvent({
-            name: "Folder_Supprime",
+            name: "folder_deleted",
             properties: {
                 dossier_nom: folderName,
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
@@ -1368,7 +1426,7 @@ app.post('/rename_folder', loginRequiredJson, basicAdminRequired, upload.none(),
         await pool.query("UPDATE folders SET name = $1 WHERE id = $2;", [cleanName, folder_id]);
         if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
-                name: "Folder_Renomme",
+                name: "folder_renamed",
                 properties: {
                     ancien_nom: ancienNom,
                     nouveau_nom: cleanName,
@@ -1838,7 +1896,7 @@ app.post('/bulk_delete', loginRequiredJson, adminRequired, upload.none(), async 
                 }
 
                 insightsClient.trackEvent({
-                    name: 'Fichier_Supprime',
+                    name: 'file_deleted',
                     properties: {
                         fichier: filename,
                         utilisateur: req.session.user_email || req.session.portal_user_email || 'Visiteur'
@@ -2489,7 +2547,7 @@ app.post('/remove_file_from_portal', loginRequiredJson, upload.none(), async (re
         await pool.query("DELETE FROM portal_files WHERE filename = $1 AND portal_id = $2;", [filename, portal_id]);
         await updatePortalStats(portal_id);
         insightsClient.trackEvent({
-            name: "Fichier_Supprime_from_portal",
+            name: "remove_file_from_portal",
             properties: {
                 fichier: filename,
                 utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
@@ -2593,7 +2651,7 @@ app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, re
             await pool.query("UPDATE portal_users SET last_login = NOW() WHERE id = $1;", [user.rows[0].id]);
             if (insightsClient) {
                 insightsClient.trackEvent({
-                    name: "login_portail_reussi",
+                    name: "portal_login_success",
                     properties: {
                         utilisateur: email,
                         portail: portal.name
@@ -2853,7 +2911,7 @@ app.post('/admin/add_user', loginRequiredJson, adminRequired, upload.none(), asy
         );
         if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
-                name: "Admin_Ajout_Utilisateur",
+                name: "admin_user_added",
                 properties: { email_cible: safeEmail, admin: req.session.user_email }
             });
         }
@@ -2892,7 +2950,7 @@ app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), 
         
         if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
-                name: "Admin_Suppression_Utilisateur",
+                name: "admin_user_deleted",
                 properties: { admin: req.session.user_email }
             });
         }
@@ -2908,10 +2966,34 @@ app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), 
 const https = require('https'); 
 app.get('/proxy_download', loginRequiredJson, (req, res) => {
     const fileUrl = req.query.url;
+    const filename = req.query.filename || "file";
     if (!fileUrl) return res.status(400).send("URL missing");
+    
+    const startTime = Date.now();
+    
     https.get(fileUrl, (response) => {
-        res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');        
+        res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+        
         response.pipe(res);
+        
+        res.on('finish', () => {
+            const duration = Date.now() - startTime;
+            const sizeBytes = parseInt(response.headers['content-length'] || 0, 10);
+            const speedMbps = sizeBytes > 0 && duration > 0 ? ((sizeBytes * 8) / (duration / 1000) / (1024 * 1024)).toFixed(2) : "0.00";
+            
+            if (insightsClient) {
+                insightsClient.trackEvent({
+                    name: "file_download",
+                    properties: {
+                        filename: filename,
+                        duration_ms: duration,
+                        size_bytes: sizeBytes,
+                        speed_mbps: speedMbps,
+                        utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                    }
+                });
+            }
+        });
     }).on('error', (err) => {
         console.error("Proxy download error:", err);
         res.status(500).send("Erreur de téléchargement du fichier.");
@@ -3754,6 +3836,70 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
         setTimeout(() => {
             processingFiles.delete(canto_id);
         }, 10000);
+    }
+});
+
+// route admins pour stats
+app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
+    try {
+        const recentLogsRes = await pool.query(`
+            SELECT id, event_name, username, properties, 
+                   to_char(timestamp, 'DD-MM-YYYY HH24:MI:SS') as formatted_date
+            FROM activity_logs 
+            ORDER BY timestamp DESC LIMIT 100;
+        `);
+
+        const statsByEventRes = await pool.query(`
+            SELECT event_name, COUNT(*) as count 
+            FROM activity_logs 
+            GROUP BY event_name 
+            ORDER BY count DESC;
+        `);
+
+        const statsByUserRes = await pool.query(`
+            SELECT username, COUNT(*) as count 
+            FROM activity_logs 
+            GROUP BY username 
+            ORDER BY count DESC LIMIT 10;
+        `);
+
+        const timelineRes = await pool.query(`
+            SELECT to_char(timestamp, 'YYYY-MM-DD') as day, COUNT(*) as count 
+            FROM activity_logs 
+            WHERE timestamp > NOW() - INTERVAL '7 days'
+            GROUP BY day 
+            ORDER BY day ASC;
+        `);
+
+        const totalLogsRes = await pool.query("SELECT COUNT(*) FROM activity_logs;");
+        const totalUploadsRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%upload%' OR event_name ILIKE '%ajout%';");
+        const totalDeletesRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%delete%' OR event_name ILIKE '%suppr%';");
+        const avgPageLoadRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'duration_ms' AS INTEGER))) as avg FROM activity_logs WHERE event_name = 'page_load';");
+        const avgDownloadSpeedRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'speed_mbps' AS NUMERIC)), 2) as avg FROM activity_logs WHERE event_name = 'file_download';");
+        const activeUsersTodayRes = await pool.query("SELECT COUNT(DISTINCT username) as count FROM activity_logs WHERE timestamp > CURRENT_DATE;");
+        const pageLoadStatsRes = await pool.query("SELECT properties->>'path' as path, COUNT(*) as count, ROUND(AVG(CAST(properties->>'duration_ms' AS INTEGER))) as avg_duration FROM activity_logs WHERE event_name = 'page_load' GROUP BY path ORDER BY count DESC;");
+
+        res.render('stats.html', {
+            recentLogs: recentLogsRes.rows,
+            statsByEvent: statsByEventRes.rows,
+            statsByUser: statsByUserRes.rows,
+            timelineData: JSON.stringify(timelineRes.rows),
+            totalLogs: totalLogsRes.rows[0].count || 0,
+            totalUploads: totalUploadsRes.rows[0].count || 0,
+            totalDeletes: totalDeletesRes.rows[0].count || 0,
+            avgPageLoad: avgPageLoadRes.rows[0].avg || 0,
+            avgDownloadSpeed: avgDownloadSpeedRes.rows[0].avg || "0.00",
+            activeUsersToday: activeUsersTodayRes.rows[0].count || 0,
+            pageLoadStats: pageLoadStatsRes.rows,
+            username: req.session.username,
+            user_email: req.session.user_email,
+            is_admin: req.session.is_admin,
+            user_role: req.session.user_role
+        });
+
+    } catch (error) {
+        console.error("Error loading stats page:", error);
+        res.status(500).send("Internal Server Error");
     }
 });
 
