@@ -7,7 +7,9 @@
   <link rel="icon" href="/static/favicon.svg" type="image/x-icon">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
   <style>
@@ -40,6 +42,7 @@
 
   <main class="max-w-7xl mx-auto px-6 py-8">
     
+    <!-- Metrics Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
       <!-- Card 1 -->
       <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -242,7 +245,7 @@
             datasets: [{
                 label: 'Actions Logged',
                 data: counts,
-                borderColor: '#0f766e', 
+                borderColor: '#0f766e', // teal-700
                 backgroundColor: 'rgba(15, 118, 110, 0.05)',
                 borderWidth: 3,
                 tension: 0.3,

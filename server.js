@@ -3839,9 +3839,10 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
     }
 });
 
-// route admins pour stats
-app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
+// Route d'administration pour les statistiques et logs d'audit locaux
+app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     try {
+        // 1. Get recent logs (last 100 actions)
         const recentLogsRes = await pool.query(`
             SELECT id, event_name, username, properties, 
                    to_char(timestamp, 'DD-MM-YYYY HH24:MI:SS') as formatted_date
@@ -3849,6 +3850,7 @@ app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
             ORDER BY timestamp DESC LIMIT 100;
         `);
 
+        // 2. Count actions by type
         const statsByEventRes = await pool.query(`
             SELECT event_name, COUNT(*) as count 
             FROM activity_logs 
@@ -3856,6 +3858,7 @@ app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
             ORDER BY count DESC;
         `);
 
+        // 3. Count actions by user
         const statsByUserRes = await pool.query(`
             SELECT username, COUNT(*) as count 
             FROM activity_logs 
@@ -3863,6 +3866,7 @@ app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
             ORDER BY count DESC LIMIT 10;
         `);
 
+        // 4. Timeline data (last 7 days activity)
         const timelineRes = await pool.query(`
             SELECT to_char(timestamp, 'YYYY-MM-DD') as day, COUNT(*) as count 
             FROM activity_logs 
@@ -3871,9 +3875,12 @@ app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
             ORDER BY day ASC;
         `);
 
+        // 5. Total counts of distinct actions
         const totalLogsRes = await pool.query("SELECT COUNT(*) FROM activity_logs;");
         const totalUploadsRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%upload%' OR event_name ILIKE '%ajout%';");
         const totalDeletesRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%delete%' OR event_name ILIKE '%suppr%';");
+
+        // 6. Performance & Site Speed metrics (dynamically captured)
         const avgPageLoadRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'duration_ms' AS INTEGER))) as avg FROM activity_logs WHERE event_name = 'page_load';");
         const avgDownloadSpeedRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'speed_mbps' AS NUMERIC)), 2) as avg FROM activity_logs WHERE event_name = 'file_download';");
         const activeUsersTodayRes = await pool.query("SELECT COUNT(DISTINCT username) as count FROM activity_logs WHERE timestamp > CURRENT_DATE;");
