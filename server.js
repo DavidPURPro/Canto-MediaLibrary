@@ -1239,10 +1239,14 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
 
         const doc = docResult.rows[0];
         const portalResult = await pool.query(`
-            SELECT portal_id FROM portal_files WHERE filename = $1 LIMIT 1;
+            SELECT pf.portal_id, p.name as portal_name 
+            FROM portal_files pf 
+            LEFT JOIN portals p ON pf.portal_id = p.id 
+            WHERE pf.filename = $1 LIMIT 1;
         `, [filename]);
         
         const portal_id = portalResult.rows.length > 0 ? portalResult.rows[0].portal_id : null;
+        const portal_name = portalResult.rows.length > 0 ? portalResult.rows[0].portal_name : null;
         const formatDate = (dateObj) => {
             if (!dateObj) return "";
             const d = new Date(dateObj);
@@ -1267,6 +1271,7 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
             date_event: formatDate(doc.date_event),
             folder_id: doc.folder_id,
             portal_id: portal_id,
+            portal_name: portal_name,
             section : doc.section || "",
             category : doc.category || "",
             metadata: doc.metadata || {}
@@ -1463,6 +1468,90 @@ app.post('/bulk_update_file_folder', loginRequiredJson, basicAdminRequired, uplo
     }
 });
 
+// ASSIGNATION EN MASSE DE FICHIERS À UN PORTAIL
+app.post('/bulk_update_file_portal', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
+    try {
+        const { portal_id, filenames } = req.body; 
+        const filesArray = JSON.parse(filenames || "[]");
+        if (filesArray.length === 0) {
+            return res.status(400).json({ status: "error", message: "No files selected" });
+        }
+        if (!portal_id || portal_id === "none") {
+            return res.status(400).json({ status: "error", message: "No portal selected" });
+        }
+
+        // Check if portal has root_folder_id (Dossier Plafond)
+        const portalCheck = await pool.query("SELECT root_folder_id, name FROM portals WHERE id = $1;", [portal_id]);
+        if (portalCheck.rows.length > 0 && portalCheck.rows[0].root_folder_id) {
+            const root_id = portalCheck.rows[0].root_folder_id;
+            const portalName = portalCheck.rows[0].name;
+            
+            const fileCheck = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id FROM folders WHERE id = $1
+                    UNION
+                    SELECT f.id FROM folders f
+                    INNER JOIN folder_tree ft ON f.parent_id = ft.id
+                )
+                SELECT d.nom_fichier, f.name as folder_name 
+                FROM documents d
+                LEFT JOIN folders f ON f.id = d.folder_id
+                WHERE d.nom_fichier = ANY($2::text[]) 
+                  AND (d.folder_id IS NULL OR d.folder_id NOT IN (SELECT id FROM folder_tree));
+            `, [root_id, filesArray]);
+            
+            if (fileCheck.rows.length > 0) {
+                const offendingFile = fileCheck.rows[0].nom_fichier;
+                const folder_name = fileCheck.rows[0].folder_name || "Root";
+                return res.status(400).json({ 
+                    status: "error", 
+                    message: `⚠️ Cannot assign files: File '${offendingFile}' is in folder '${folder_name}' which is outside of the portal's Root Folder hierarchy (${portalName}).` 
+                });
+            }
+        }
+
+        let assignedCount = 0;
+        for (const filename of filesArray) {
+            const exist = await pool.query("SELECT id FROM portal_files WHERE filename = $1 AND portal_id = $2;", [filename, portal_id]);
+            if (exist.rows.length === 0) {
+                const docRes = await pool.query(`
+                    SELECT nom_fichier, lien_telechargement, description, tags, date_ajout 
+                    FROM documents WHERE nom_fichier = $1;
+                `, [filename]);
+                if (docRes.rows.length > 0) {
+                    const doc = docRes.rows[0];
+                    const ext = require('path').extname(filename).toLowerCase();
+                    let file_type = "Other";
+                    if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) file_type = "Image";
+                    else if (['.mp4', '.mov', '.avi', '.wmv'].includes(ext)) file_type = "Video";
+                    else if (['.pdf'].includes(ext)) file_type = "PDF";
+                    else if (['.doc', '.docx'].includes(ext)) file_type = "Document";
+                    else if (['.xls', '.xlsx'].includes(ext)) file_type = "Spreadsheet";
+                    
+                    const blockBlobClient = containerClient.getBlockBlobClient(filename);
+                    const props = await blockBlobClient.getProperties();
+                    const size_bytes = props.contentLength || 0;
+
+                    await pool.query(`
+                        INSERT INTO portal_files (portal_id, filename, description, file_url, file_type, upload_date, size_bytes, size)
+                        VALUES ($1, $2, $3, $4, $5, COALESCE($6, CURRENT_DATE), $7, $8);
+                    `, [portal_id, filename, doc.description || "No description", doc.lien_telechargement, file_type, doc.date_ajout, size_bytes, formatBytes(size_bytes)]);
+                    assignedCount++;
+                }
+            }
+        }
+
+        await updatePortalStats(portal_id);
+        res.json({ 
+            status: "success", 
+            message: `${assignedCount} files have been successfully assigned to the portal.` 
+        });
+    } catch (error) {
+        console.error("Erreur bulk_update_file_portal:", error);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
 app.post('/remove_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const { filename, portal_id } = req.body;
@@ -1474,6 +1563,12 @@ app.post('/remove_file_portal', loginRequiredJson, upload.none(), async (req, re
         await pool.query(
             "DELETE FROM portal_files WHERE filename = $1 AND portal_id = $2;",
             [filename, portal_id]
+        );
+        
+        // Also remove the folder assignment from the documents table!
+        await pool.query(
+            "UPDATE documents SET folder_id = NULL WHERE nom_fichier = $1;",
+            [filename]
         );
         
         const countRes = await pool.query("SELECT COUNT(*) FROM portal_files WHERE portal_id = $1;", [portal_id]);
@@ -1937,11 +2032,24 @@ app.get('/portal/:portal_id', async (req, res) => {
         portalRow.display_last_sync = formatDate(portalRow.last_sync);
         portalRow.display_size = portalRow.size || '0 B';    
         const looseFilesRes = await pool.query(`
-            SELECT pf.*,d.folder_id,f.name AS folder_name
+            WITH RECURSIVE portal_allowed_folders AS (
+                SELECT id FROM folders WHERE id = (SELECT root_folder_id FROM portals WHERE id = $1)
+                
+                UNION
+                
+                SELECT folder_id as id FROM portal_folders WHERE portal_id = $1 AND (SELECT root_folder_id FROM portals WHERE id = $1) IS NULL
+                
+                UNION ALL
+                
+                SELECT f.id FROM folders f
+                INNER JOIN portal_allowed_folders paf ON f.parent_id = paf.id
+            )
+            SELECT pf.*, d.folder_id, f.name AS folder_name
             FROM portal_files pf
             LEFT JOIN documents d ON d.nom_fichier = pf.filename
             LEFT JOIN folders f ON f.id = d.folder_id
             WHERE pf.portal_id = $1 
+              AND (d.folder_id IS NULL OR d.folder_id NOT IN (SELECT id FROM portal_allowed_folders))
             ORDER BY pf.upload_date DESC NULLS LAST;
         `, [real_portal_id]);
 
@@ -2279,8 +2387,13 @@ app.get('/get_portals', loginRequiredJson, async (req, res) => {
 // assigner un fichier existant à un portail
 app.post('/update_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
     try {
-        const { filename, portal_id } = req.body;
+        const { filename, portal_id, folder_id } = req.body;
         if (!filename) return res.status(400).json({ status: "error", message: "Required file name" });
+
+        // If folder_id is provided, overwrite the file's folder assignment
+        if (folder_id && folder_id !== "none" && folder_id !== "") {
+            await pool.query("UPDATE documents SET folder_id = $1 WHERE nom_fichier = $2;", [parseInt(folder_id), filename]);
+        }
 
         // Check if portal has root_folder_id (Dossier Plafond)
         const portalCheck = await pool.query("SELECT root_folder_id, name FROM portals WHERE id = $1;", [portal_id]);
@@ -3428,24 +3541,73 @@ app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => 
     }
 });
 
+const processingFiles = new Set();
+let cachedCantoToken = null;
+let tokenExpirationTime = null;
+
+async function getCantoToken() {
+    if (
+        cachedCantoToken &&
+        tokenExpirationTime &&
+        Date.now() < tokenExpirationTime - 300000
+    ) {
+        return cachedCantoToken;
+    }
+    const cantoDomain = process.env.CANTO_DOMAIN || "";
+    
+    // Canto OAuth server is on canto.de (EU), canto.global (Global) or canto.com (US), using the compatible token endpoint for Canto API v1
+    const baseDomain = cantoDomain.includes("canto.de") ? "canto.de" : (cantoDomain.includes("canto.global") ? "canto.global" : "canto.com");
+    const tokenUrl = `https://oauth.${baseDomain}/oauth/api/oauth2/compatible/token`;
+    
+    const params = new URLSearchParams();
+    params.append("app_id", process.env.CANTO_APP_ID);
+    params.append("app_secret", process.env.CANTO_APP_SECRET);
+    params.append("grant_type", "client_credentials");
+    
+    const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params,
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Failed to generate token: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    cachedCantoToken = data.access_token;
+    tokenExpirationTime = Date.now() + data.expires_in * 1000;
+    
+    return cachedCantoToken;
+}
+
 // ============================================
 app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
-    // 1. On répond OK immédiatement
+    // 1. repond OK
     res.status(200).send('Webhook bien reçu');
 
-    try {
-        const payload = req.body || {};
-        const canto_id = payload.id;
-        const scheme = (payload.scheme || 'image').toLowerCase(); 
-        const nom_fichier = payload.displayname;
-        
-        if (payload.secure_token !== 'motdepasse') return;
-        if (!canto_id || !nom_fichier) return;
-        console.log(`[Auto-Sync] Fichier détecté : ${nom_fichier} (Type: ${scheme})`);
+    const payload = req.body || {};
+    const canto_id = payload.id;
+    const nom_fichier = payload.displayname;
 
-        // 2. Interrogation de l'API Canto
+    if (payload.secure_token !== 'motdepasse') return;
+    if (!canto_id || !nom_fichier) return;
+
+    if (processingFiles.has(canto_id)) {
+        console.log(`[Auto-Sync] Doublon ignoré pour : ${nom_fichier}`);
+        return; 
+    }
+    processingFiles.add(canto_id);
+
+    try {
+        const scheme = (payload.scheme || 'image').toLowerCase(); 
+        console.log(`[Auto-Sync] Fichier détecté : ${nom_fichier} (Type: ${scheme})`);
         const cantoDomain = (process.env.CANTO_DOMAIN || "").replace('https://', '').replace('http://', '').replace(/\/$/, '');
-        const cantoToken = process.env.CANTO_API_TOKEN; 
+        const cantoToken = await getCantoToken();
+        console.log(`[DEBUG] Token généré (10 premiers char) : ${cantoToken.substring(0, 10)}...`);
+        console.log(`[DEBUG] URL appelée : https://${cantoDomain}/api/v1/${scheme}/${canto_id}`);
 
         const detailResponse = await fetch(`https://${cantoDomain}/api/v1/${scheme}/${canto_id}`, {
             headers: { 
@@ -3455,10 +3617,15 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
             }
         });
 
-        if (!detailResponse.ok) throw new Error(`Erreur API Canto (${detailResponse.status}) pour le fichier ${nom_fichier}`);
+        if (!detailResponse.ok) {
+            const errorDetail = await detailResponse.text();
+            console.error(`[DEBUG FATAL] Canto a refusé l'accès. Raison : ${errorDetail}`);
+            throw new Error(`Erreur API Canto (${detailResponse.status}) pour le fichier ${nom_fichier} - Motif: ${errorDetail}`);
+        }
+
         const assetData = await detailResponse.json();
 
-        // 3. Extraction du lien de téléchargement
+        // 3. extraction lien téléchargement
         const download_url = (assetData.url && assetData.url.directUrlOriginal) ? assetData.url.directUrlOriginal : (assetData.url && assetData.url.download);
         if (!download_url) {
             console.log(`[Auto-Sync] Pas de lien direct pour ${nom_fichier}.`);
@@ -3475,22 +3642,30 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
 
         console.log(`[Auto-Sync] Aspiration de : ${nom_fichier} en cours...`);
 
-        // 5. Téléchargement depuis Canto
+        // 5. download depuis Canto
         const fileResponse = await fetch(download_url);
         if (!fileResponse.ok) throw new Error("Erreur téléchargement depuis Canto");
-
         const { Readable } = require('stream');
         const nodeStream = Readable.fromWeb(fileResponse.body);
-        let contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';        
+        
         const ext = nom_fichier.split('.').pop().toLowerCase();
         
-        if (ext === 'pdf') contentType = 'application/pdf';
-        else if (['jpg', 'jpeg'].includes(ext)) contentType = 'image/jpeg';
-        else if (ext === 'png') contentType = 'image/png';
-        else if (ext === 'mp4') contentType = 'video/mp4';
-        else if (['ppt', 'pptx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-        else if (['doc', 'docx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        else if (['xls', 'xlsx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        const mimeTypes = {
+            'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 
+            'webp': 'image/webp', 'svg': 'image/svg+xml', 'bmp': 'image/bmp', 'ico': 'image/x-icon', 
+            'tiff': 'image/tiff', 'tif': 'image/tiff', 'heic': 'image/heic', 'heif': 'image/heif', 
+            'raw': 'image/x-panasonic-raw', 'cr2': 'image/x-canon-cr2', 'nef': 'image/x-nikon-nef', 'arw': 'image/x-sony-arw', 'dng': 'image/x-adobe-dng',
+            'mp4': 'video/mp4', 'mov': 'video/quicktime', 'avi': 'video/x-msvideo', 'wmv': 'video/x-ms-wmv', 
+            'flv': 'video/x-flv', 'mkv': 'video/x-matroska', 'webm': 'video/webm', 'm4v': 'video/x-m4v',
+            'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg', 'm4a': 'audio/mp4', 'flac': 'audio/flac', 'aac': 'audio/aac',
+            'pdf': 'application/pdf', 'txt': 'text/plain', 'csv': 'text/csv', 'rtf': 'application/rtf',
+            'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt': 'application/vnd.ms-powerpoint', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'zip': 'application/zip', 'rar': 'application/vnd.rar', '7z': 'application/x-7z-compressed', 'tar': 'application/x-tar', 'gz': 'application/gzip'
+        };
+
+        const contentType = mimeTypes[ext] || fileResponse.headers.get('content-type') || 'application/octet-stream';
 
         const blockBlobClient = containerClient.getBlockBlobClient(nom_fichier);
         await blockBlobClient.uploadStream(nodeStream, 4 * 1024 * 1024, 20, {
@@ -3501,7 +3676,7 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
         });
         const azureUrl = blockBlobClient.url;
 
-        // 5.1 Extraction Métadonnées Canto (Tags inclus)
+        // 5.1 extraction metadonnées Canto 
         let tags = [];
         if (assetData.smartTags) tags = tags.concat(assetData.smartTags);
         if (assetData.tag) tags = tags.concat(typeof assetData.tag === 'string' ? assetData.tag.split(',') : assetData.tag);
@@ -3533,8 +3708,27 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
                 : extractArray('Intervention / Project Type')
         };
 
-        // 6. Enregistrement en BDD
-        const date_ajout = new Date().toISOString().split('T')[0];
+        // 6. enregistrement en BDD
+        let rawDate = assetData.time || new Date(); 
+        let date_ajout;
+        try {
+            if (typeof rawDate === 'string' && /^\d{8,17}$/.test(rawDate)) {
+                const year = rawDate.slice(0, 4);
+                const month = rawDate.slice(4, 6);
+                const day = rawDate.slice(6, 8);
+                date_ajout = `${year}-${month}-${day}`;
+                
+                if (isNaN(new Date(date_ajout).getTime())) {
+                    date_ajout = new Date().toISOString().split('T')[0];
+                }
+            } 
+            else {
+                date_ajout = new Date(rawDate).toISOString().split('T')[0];
+            }
+        } catch (e) {
+            console.error("[Auto-Sync] Error parsing Canto date, falling back to current date:", e.message);
+            date_ajout = new Date().toISOString().split('T')[0];
+        }
         await pool.query(`
             INSERT INTO documents (
                 nom_fichier, description, folder_id, is_exclusive, 
@@ -3547,7 +3741,7 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
             "General", "General", JSON.stringify(tags), azureUrl, null, JSON.stringify(metadata)
         ]);
 
-        // 7. Création de la miniature
+        // 7. creation de la miniature
         if (typeof generateAndUploadThumbnail === 'function') {
             generateAndUploadThumbnail(nom_fichier, containerClient, pool);
         }
@@ -3556,6 +3750,10 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
 
     } catch (error) {
         console.error('[Auto-Sync] Erreur fatale:', error.message);
+    } finally {
+        setTimeout(() => {
+            processingFiles.delete(canto_id);
+        }, 10000);
     }
 });
 

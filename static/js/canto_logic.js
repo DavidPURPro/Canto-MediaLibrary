@@ -5,6 +5,7 @@ const canManageFolders = isAdmin || isBasicAdmin;
 const canEditFiles = isAdmin || isBasicAdmin;
 
 let currentFileMetadata = {};
+let currentModalPortalId = null;
 
 const dropdownFieldsConfig = {
     // Standard fields
@@ -708,6 +709,7 @@ function lazyLoadImages() {
 function showFileModal(item) {
   currentModalFilename = item.getAttribute('data-filename');
   const filename = currentModalFilename;
+  sessionStorage.setItem('lastOpenFilename', filename);
   const link = item.getAttribute('data-link');
   const ext = getFileExtension(filename); 
   const folderNameFromCard = item.getAttribute('data-folder-name') || 'None';
@@ -770,7 +772,36 @@ function showFileModal(item) {
       if (modalSection) modalSection.textContent = data.section || "—";
       if (modalCategory) modalCategory.textContent = data.category || "—";
 
+      // Update portal display from file_details response!
+      const currentPortalNameSpan = document.getElementById('currentPortalName');
+      const currentPortalFolderNameSpan = document.getElementById('currentPortalFolderName');
+      const btnRemovePortal = document.getElementById('removeFromPortalBtn');
+      
+      // Hide the assignment workflow inputs by default when opening
+      const folderGroup = document.getElementById('modalPortalFolderGroup');
+      const saveBtn = document.getElementById('confirmAssignPortalBtn');
+      if (folderGroup) folderGroup.style.display = 'none';
+      if (saveBtn) saveBtn.style.display = 'none';
+      
+      // Load Portals list into select dropdown
+      loadPortalsForSelect();
+
+      if (data.portal_id && data.portal_name) {
+          if (currentPortalNameSpan) currentPortalNameSpan.textContent = data.portal_name;
+          
+          // Look up current folder name
+          const folderObj = globalFoldersList.find(gf => gf.id == data.folder_id);
+          if (currentPortalFolderNameSpan) currentPortalFolderNameSpan.textContent = folderObj ? folderObj.name : '—';
+          
+          if (btnRemovePortal) btnRemovePortal.style.display = 'inline-block';
+      } else {
+          if (currentPortalNameSpan) currentPortalNameSpan.textContent = 'None';
+          if (currentPortalFolderNameSpan) currentPortalFolderNameSpan.textContent = 'None';
+          if (btnRemovePortal) btnRemovePortal.style.display = 'none';
+      }
+
       currentFileMetadata = data.metadata || {};
+      currentModalPortalId = data.portal_id;
       
       const metaKeys = ['copyright', 'cooperative', 'country', 'farmer_consent', 'project_name', 'region', 'wave', 'author', 'activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'];
       metaKeys.forEach(key => {
@@ -987,6 +1018,7 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
 }
 
 function closeFileModal() {
+  sessionStorage.removeItem('lastOpenFilename');
   fileModal.classList.remove('active');
   document.body.style.overflow = '';
   const videos = modalPreview.querySelectorAll('video');
@@ -1844,6 +1876,25 @@ document.addEventListener('DOMContentLoaded', function() {
   
   window.addEventListener('load', handleSidebarOnResize);
   window.addEventListener('resize', handleSidebarOnResize);
+
+  // Restore previously opened file details modal after refresh (robust polling approach)
+  const lastOpen = sessionStorage.getItem('lastOpenFilename');
+  if (lastOpen) {
+      let attempts = 0;
+      const interval = setInterval(() => {
+          attempts++;
+          const safeFilename = lastOpen.replace(/"/g, '\\"');
+          const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"], .file-card[data-filename="${safeFilename}"]`);
+          if (card) {
+              clearInterval(interval);
+              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              card.click();
+          } else if (attempts > 100) { // Max 10 seconds (100 * 100ms)
+              clearInterval(interval);
+              sessionStorage.removeItem('lastOpenFilename');
+          }
+      }, 100);
+  }
 });
 
 function setProfileButtonColor() {
@@ -1897,69 +1948,132 @@ function enforceNonAdminLock() {
   });
 }
 
-function loadPortalsForModal(currentPortalId) {
-  fetch('/get_all_portals')
-    .then(response => response.json())
-    .then(data => {
-      if (currentPortalId) {
-        const currentPortal = data.portals.find(p => p.id == currentPortalId);
-        document.getElementById('currentPortalName').textContent = currentPortal 
-            ? currentPortal.name 
-            : "Unknown";
-      }
-       else {
-        document.getElementById('currentPortalName').textContent = "None";
-      }
-      const portalList = document.getElementById('portalList');
-      if (!portalList) return; 
-
-      portalList.innerHTML = '';
-      if(data.portals && data.portals.length > 0) {
-          data.portals.forEach(portal => {
-              const btn = document.createElement('button');
-              btn.className = 'modern-btn secondary-btn';
-              btn.style.width = '100%';
-              btn.style.marginBottom = '6px';
-              btn.style.justifyContent = 'flex-start';
-              btn.innerHTML = `<i class="fas fa-globe"></i> ${portal.name}`;
-              
-              btn.onclick = () => addFileToPortal(portal.id, portal.name);
-              portalList.appendChild(btn);
-          });
-      } 
-      else {
-          portalList.innerHTML = '<span style="font-size:12px; color:var(--gray-500);">No portal found</span>';
-      }
-    })
-    .catch(err => {
-        console.error("Erreur chargement portails:", err);
-    });
-
+function loadPortalsForSelect() {
+    const portalSelect = document.getElementById('modalPortalSelect');
+    if (!portalSelect) return;
+    portalSelect.innerHTML = '<option value="">-- Select a Portal --</option>';
+    fetch('/get_all_portals')
+        .then(res => res.json())
+        .then(data => {
+            if (data.portals) {
+                data.portals.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    portalSelect.appendChild(opt);
+                });
+            }
+        })
+        .catch(err => console.error("Error loading portals:", err));
 }
 
-function addFileToPortal(portalId, portalName) {
-  if (!currentModalFilename) return;
-
-  const formData = new FormData();
-  formData.append('filename', currentModalFilename);
-  formData.append('portal_id', portalId);
-  
-  fetch('/update_file_portal', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      document.getElementById('currentPortalName').textContent = portalName;
-      if (typeof loadPortalsForModal === "function") loadPortalsForModal(portalId);
-      if (typeof updatePortalStats === "function") updatePortalStats(portalId);
-    } else {
-      alert('Error adding to portal: ' + data.message);
+// Step 2: Dynamically load folders for the chosen portal
+document.addEventListener('change', function(e) {
+    if (e.target && e.target.id === 'modalPortalSelect') {
+        const portalId = e.target.value;
+        const folderGroup = document.getElementById('modalPortalFolderGroup');
+        const folderSelect = document.getElementById('modalPortalFolderSelect');
+        const saveBtn = document.getElementById('confirmAssignPortalBtn');
+        
+        if (!portalId) {
+            if (folderGroup) folderGroup.style.display = 'none';
+            if (saveBtn) saveBtn.style.display = 'none';
+            return;
+        }
+        
+        if (folderSelect) {
+            folderSelect.innerHTML = '<option value="">-- Select Folder --</option>';
+            fetch(`/portal_folders/${portalId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.folders && data.folders.length > 0) {
+                        data.folders.forEach(f => {
+                            const opt = document.createElement('option');
+                            opt.value = f.folder_id;
+                            const folderObj = globalFoldersList.find(gf => gf.id == f.folder_id);
+                            opt.textContent = folderObj ? folderObj.name : `Folder #${f.folder_id}`;
+                            folderSelect.appendChild(opt);
+                        });
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = "";
+                        opt.textContent = "No folders linked to this portal";
+                        folderSelect.appendChild(opt);
+                    }
+                    if (folderGroup) folderGroup.style.display = 'block';
+                    if (saveBtn) saveBtn.style.display = 'inline-block';
+                })
+                .catch(err => console.error("Error loading portal folders:", err));
+        }
     }
-  })
-  .catch(error => console.error('Error:', error));
-}
+});
+
+// Step 3: Save assignment and update folder_id on documents
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'confirmAssignPortalBtn') {
+        if (!currentModalFilename) return;
+        const portalId = document.getElementById('modalPortalSelect').value;
+        const folderId = document.getElementById('modalPortalFolderSelect').value;
+        const portalNameSelect = document.getElementById('modalPortalSelect');
+        const portalName = portalNameSelect.options[portalNameSelect.selectedIndex].text;
+        
+        const folderNameSelect = document.getElementById('modalPortalFolderSelect');
+        const folderName = folderId ? folderNameSelect.options[folderNameSelect.selectedIndex].text : "None";
+        
+        if (!portalId) return;
+        
+        const msg = `You are about to share 1 file on the portal '${portalName}' (Folder: '${folderName}'). This file will be immediately visible to the client. Confirm?`;
+        if (!confirm(msg)) return;
+        
+        const saveBtn = document.getElementById('confirmAssignPortalBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const formData = new FormData();
+        formData.append('filename', currentModalFilename);
+        formData.append('portal_id', portalId);
+        formData.append('folder_id', folderId);
+        
+        fetch('/update_file_portal', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentModalPortalId = portalId;
+                    document.getElementById('currentPortalName').textContent = portalName;
+                    document.getElementById('currentPortalFolderName').textContent = folderName;
+                    
+                    // Update standard folder display
+                    const folderNameSpan = document.getElementById('currentFolderName');
+                    if (folderNameSpan) folderNameSpan.textContent = folderName;
+                    
+                    // Show/hide buttons
+                    document.getElementById('removeFromPortalBtn').style.display = 'inline-block';
+                    saveBtn.style.display = 'none';
+                    document.getElementById('modalPortalFolderGroup').style.display = 'none';
+                    document.getElementById('modalPortalSelect').value = '';
+                    
+                    // Update search card and layout
+                    const safeFilename = currentModalFilename.replace(/"/g, '\\"');
+                    const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"]`);
+                    if (card) {
+                        card.setAttribute('data-portal-name', portalName);
+                        card.setAttribute('data-folder-name', folderName);
+                    }
+                    alert('File successfully assigned to portal and folder.');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Connection error.');
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Assignment';
+            });
+    }
+});
 
 function checkFileInPortal(filename, portalId) {
   return fetch(`/get_portal_files/${portalId}`)
@@ -1980,7 +2094,7 @@ document.addEventListener('click', function(e) {
             alert("You don't have permission to perform this action. Only administrators can modify portals.");
             return;
         }
-        if (confirm("Voulez-vous vraiment retirer ce fichier du portail ?")) {
+        if (confirm("Are you sure you want to remove this file from the portal?")) {
             removeFileFromPortal();
         }
     }
@@ -1990,6 +2104,7 @@ function removeFileFromPortal() {
   if (!currentModalFilename) return;
   const params = new URLSearchParams();
   params.append('filename', currentModalFilename);
+  params.append('portal_id', currentModalPortalId);
   
   fetch('/remove_file_portal', { 
       method: 'POST', 
@@ -2000,16 +2115,22 @@ function removeFileFromPortal() {
   .then(data => {
       if (data.status === 'success') {
           document.getElementById('currentPortalName').textContent = 'None';
-          const btnAddPortal = document.getElementById('addToPortalBtn');
+          const folderNameSpan = document.getElementById('currentPortalFolderName');
+          if (folderNameSpan) folderNameSpan.textContent = 'None';
+          const standardFolderSpan = document.getElementById('currentFolderName');
+          if (standardFolderSpan) standardFolderSpan.textContent = 'None';
+
           const btnRemovePortal = document.getElementById('removeFromPortalBtn');
-          if (btnAddPortal) btnAddPortal.textContent = 'Assign to Portal';
           if (btnRemovePortal) btnRemovePortal.style.display = 'none';
 
           const safeFilename = currentModalFilename.replace(/"/g, '\\"');
           const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"]`);
-          if (card) card.setAttribute('data-portal-name', 'None');
+          if (card) {
+              card.setAttribute('data-portal-name', 'None');
+              card.setAttribute('data-folder-name', 'None');
+          }
           
-          alert('Fichier retiré du portail avec succès.');
+          alert('File successfully removed from the portal and folder.');
       } else {
           alert('Erreur : ' + data.message);
       }
@@ -2137,6 +2258,9 @@ function addFileToPortal(targetPortalId, portalName) {
         return;
     }
     
+    const msg = `You are about to share 1 file on the portal '${portalName}'. This file will be immediately visible to the client. Confirm?`;
+    if (!confirm(msg)) return;
+
     const formData = new FormData();
     formData.append('filename', currentModalFilename);
     formData.append('portal_id', targetPortalId);
@@ -2145,8 +2269,14 @@ function addFileToPortal(targetPortalId, portalName) {
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
+            currentModalPortalId = targetPortalId;
             const currentPortalSpan = document.getElementById('currentPortalName');
             if (currentPortalSpan) currentPortalSpan.textContent = portalName;
+
+            const btnAddPortal = document.getElementById('addToPortalBtn');
+            const btnRemovePortal = document.getElementById('removeFromPortalBtn');
+            if (btnAddPortal) btnAddPortal.textContent = 'Change Portal';
+            if (btnRemovePortal) btnRemovePortal.style.display = 'block';
 
             const portalList = document.getElementById('portalList');
             if (portalList) portalList.style.display = 'none';
@@ -2662,6 +2792,81 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         });
     }
 
+    // logique selection en masse pour assigner fichier a portail
+    const bulkPortalBtn = document.getElementById('bulkPortalBtn');
+    const bulkPortalModal = document.getElementById('bulkPortalModal');
+    const bulkPortalSelect = document.getElementById('bulkPortalSelect');
+    const confirmBulkPortalBtn = document.getElementById('confirmBulkPortalBtn');
+
+    if (bulkPortalBtn) {
+        bulkPortalBtn.addEventListener('click', () => {
+            if (selectedFiles.length === 0) return;
+            if (bulkPortalSelect) {
+                bulkPortalSelect.innerHTML = '<option value="none">-- Select a Portal --</option>';
+                fetch('/get_all_portals')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.portals) {
+                            data.portals.forEach(portal => {
+                                const opt = document.createElement('option');
+                                opt.value = portal.id;
+                                opt.textContent = portal.name;
+                                bulkPortalSelect.appendChild(opt);
+                            });
+                        }
+                    });
+            }
+            if (bulkPortalModal) bulkPortalModal.classList.add('active');
+        });
+    }
+
+    if (confirmBulkPortalBtn) {
+        confirmBulkPortalBtn.addEventListener('click', () => {
+            if (selectedFiles.length === 0) return;
+            const portalId = bulkPortalSelect.value;
+            if (portalId === 'none') {
+                alert('Please select a portal first.');
+                return;
+            }
+            const portalName = bulkPortalSelect.options[bulkPortalSelect.selectedIndex].text;
+            const filenamesArray = selectedFiles.map(f => f.filename);
+
+            const msg = `You are about to share ${filenamesArray.length} files on the portal '${portalName}'. These files will be immediately visible to the client. Confirm?`;
+            if (!confirm(msg)) return;
+
+            confirmBulkPortalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assigning...';
+            confirmBulkPortalBtn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('portal_id', portalId);
+            formData.append('filenames', JSON.stringify(filenamesArray));
+
+            fetch('/bulk_update_file_portal', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    if (bulkPortalModal) bulkPortalModal.classList.remove('active');
+                    alert(data.message || `${filenamesArray.length} items assigned to portal.`);
+                    document.getElementById('bulkCancelBtn').click();
+                    location.reload();
+                } else {
+                    alert("Error: " + data.message);
+                }
+            })
+            .catch(err => {
+                console.error("Erreur lors de l'assignation en masse au portail :", err);
+                alert("Connection error.");
+            })
+            .finally(() => {
+                confirmBulkPortalBtn.innerHTML = 'Assign to selection';
+                confirmBulkPortalBtn.disabled = false;
+            });
+        });
+    }
+
     // logique selection en masse pour retirer fichier d'un folder
     const bulkRemoveFolderBtn = document.getElementById('bulkRemoveFolderBtn');
     if (bulkRemoveFolderBtn) {
@@ -2975,10 +3180,12 @@ document.addEventListener('dblclick', function(e) {
             }
             inputElement.appendChild(option);
         });
-    } else if (isTextarea) {
+    } 
+    else if (isTextarea) {
         inputElement = document.createElement('textarea');
         inputElement.value = currentValue;
-    } else {
+    } 
+    else {
         inputElement = document.createElement('input');
         inputElement.type = 'text';
         inputElement.value = currentValue;
@@ -3003,9 +3210,7 @@ document.addEventListener('dblclick', function(e) {
     inputElement.focus();
     
     const saveEdit = async () => {
-        let newValue = inputElement.value.trim();        
-        
-        // Default empty Section or Category to "General"
+        let newValue = inputElement.value.trim();                
         if ((field === 'section' || field === 'category') && !newValue) {
             newValue = "General";
         }
@@ -3024,7 +3229,8 @@ document.addEventListener('dblclick', function(e) {
             currentFileMetadata[metaKey] = newValue;
             params.append('field', 'metadata');
             params.append('value', JSON.stringify(currentFileMetadata));
-        } else {
+        } 
+        else {
             params.append('field', field);
             params.append('value', newValue);
         }
@@ -3040,10 +3246,12 @@ document.addEventListener('dblclick', function(e) {
             if (data.status === 'success') {
                 if (isMeta) {
                     renderMetaFieldDisplay(target, metaKey, newValue);
-                } else {
+                } 
+                else {
                     if (field === 'tags') {
                         target.innerHTML = `<span style="color:#10b981; font-weight:bold; font-size:12px;">✓ Updated tags (Reload to view)</span>`;
-                    } else {
+                    } 
+                    else {
                         target.textContent = newValue || '—';
                     }
                     
@@ -3069,7 +3277,8 @@ document.addEventListener('dblclick', function(e) {
                 target.style.backgroundColor = '#dcfce7';
                 setTimeout(() => { target.style.backgroundColor = ''; }, 1000);
 
-            } else {
+            } 
+            else {
                 alert("Error: " + data.message);
                 target.innerHTML = originalHTML;
             }
@@ -3234,4 +3443,4 @@ async function shareFolder(folderId, folderName) {
         errorMsg.textContent = 'Network error — please try again.';
         errorDiv.style.display = 'block';
     }
-}
+}   

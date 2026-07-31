@@ -19,6 +19,29 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
 
   <style>
+    /* ── Modal Download Button styling override ── */
+    #modalDownloadBtn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        padding: 10px 20px !important;
+        border-radius: 30px !important;
+        background: #16677c !important;
+        color: #ffffff !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        text-decoration: none !important;
+        transition: all 0.2s ease !important;
+        border: none !important;
+        cursor: pointer !important;
+        box-sizing: border-box !important;
+    }
+    #modalDownloadBtn:hover {
+        background: #0d4555 !important;
+        transform: translateY(-1px) !important;
+    }
+
     /* ── AI Search toggle ── */
     .ai-search-toggle {
       display: flex;
@@ -456,13 +479,32 @@
           {% endif %}
         </div> <div class="portal-selector" id="portalSelector">
           <h4><i class="fas fa-globe"></i> Portal Assignment</h4>
-          <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
-          {% if is_admin or user_role == 'basic_admin' %}
-          <div class="action-group">
-            <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
-            <button class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none;">Remove</button>
+          <div class="current-status" style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px;">
+            <div><strong>Current Portal:</strong> <span id="currentPortalName">None</span></div>
+            <div><strong>Current Folder:</strong> <span id="currentPortalFolderName">None</span></div>
           </div>
-          <div class="portal-list" id="portalList" style="display: none;"></div>
+          
+          {% if is_admin or user_role == 'basic_admin' %}
+          <div class="action-group" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Step 1: Portal Dropdown -->
+            <div class="form-group" style="margin-bottom: 5px;">
+              <select id="modalPortalSelect" class="modern-input" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
+                <option value="">-- Select a Portal --</option>
+              </select>
+            </div>
+            
+            <!-- Step 2: Dynamically loaded Folder Dropdown -->
+            <div class="form-group" id="modalPortalFolderGroup" style="display: none; margin-bottom: 5px;">
+              <select id="modalPortalFolderSelect" class="modern-input" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; box-sizing: border-box;">
+                <option value="">-- Select Folder --</option>
+              </select>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 5px;">
+              <button class="modern-btn primary-btn" id="confirmAssignPortalBtn" style="padding: 6px 12px; font-size: 13px; display: none; background: #16677c; color: white; border: none; border-radius: 6px; cursor: pointer;">Save Assignment</button>
+              <button class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none; padding: 6px 12px; font-size: 13px;">Remove</button>
+            </div>
+          </div>
           {% endif %}
         </div>
 
@@ -517,6 +559,10 @@
               <i class="fas fa-folder-plus"></i> Move To Folder
             </button>
 
+            <button id="bulkPortalBtn" class="modern-btn secondary-btn bulk-btn" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;">
+              <i class="fas fa-globe"></i> Assign to Portal
+            </button>
+
             <button id="bulkDeleteBtn" class="modern-btn danger-btn bulk-btn">
               <i class="fas fa-trash"></i> Delete
             </button>
@@ -554,6 +600,26 @@
         <div class="confirm-buttons" style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
             <button class="confirm-btn cancel" onclick="document.getElementById('bulkFolderModal').classList.remove('active')">Cancel</button>
             <button class="confirm-btn proceed" id="confirmBulkFolderBtn" style="background: #8b5cf6; color: white; opacity: 1;">Apply to selection</button>
+        </div>
+    </div>
+  </div>
+
+  <div class="confirm-modal" id="bulkPortalModal">
+    <div class="confirm-content" style="text-align: left; max-width: 450px; padding: 30px;">
+        <h3 style="margin-top: 0; color: #1e293b; font-size: 20px;">
+            <i class="fas fa-globe" style="color: #1e40af; margin-right: 8px;"></i> Assign to Portal
+        </h3>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Choose a client portal for the selected files.</p>
+        
+        <div class="form-group">
+            <select id="bulkPortalSelect" style="width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 14px; background-color: #f8fafc; cursor: pointer; color: #334155;">
+                <option value="none">-- Select a Portal --</option>
+            </select>
+        </div>
+        
+        <div class="confirm-buttons" style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="confirm-btn cancel" onclick="document.getElementById('bulkPortalModal').classList.remove('active')">Cancel</button>
+            <button class="confirm-btn proceed" id="confirmBulkPortalBtn" style="background: #1e40af; color: white; opacity: 1;">Assign to selection</button>
         </div>
     </div>
   </div>
@@ -739,7 +805,7 @@
         });
     }
   </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b89e8598986f70',t:'MTc4NDExNjk1Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b89e8598986f70',t:'MTc4NDExNjk1Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1bfa49068a6dd09',t:'MTc4NDE5MDYwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1e8d9f54e35f4ff',t:'MTc4NDYyMjcwOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
 </body>
 </html>

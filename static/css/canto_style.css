@@ -113,7 +113,6 @@ header h1 {
   text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-/* ========== BOUTONS MODERNES AMÉLIORÉS ========== */
 .controls {
   display: flex;
   gap: 10px;
@@ -278,7 +277,6 @@ header h1 {
   transform: translateX(2px);
 }
 
-/* ========== BOUTONS DOSSIERS MODERNISÉS ========== */
 .add-main-folder-btn {
   background: var(--primary);
   color: var(--white);
@@ -1376,6 +1374,18 @@ body.list-view .gallery-item .item-footer {
 .sort-dropdown:hover .sort-btn, 
 .filter-dropdown:hover .filter-btn { 
   background-color: var(--primary-light);
+}
+
+#modalDownloadBtn {
+    text-decoration: none;
+    color: var(--white);
+    box-sizing: border-box;
+}
+
+#modalDownloadBtn:hover,
+#modalDownloadBtn:focus {
+    text-decoration: none;
+    color: var(--white);
 }
 
 /* ========== ANIMATIONS ADDITIONNELLES ========== */

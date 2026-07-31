@@ -160,37 +160,6 @@ function setupModals() {
         if (e.target.classList.contains('modern-modal-overlay')) closeModal();
     });
 
-    if (portalForm) {
-        portalForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const submitBtn = this.querySelector('.btn-primary-confirm');
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Creating...';
-            submitBtn.disabled = true;
-
-            const portalData = {
-                name: document.getElementById('portalName').value.trim(),
-                access: document.getElementById('portalAccess').value || 'Public'
-            };
-
-            fetch('/add_portal', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(portalData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                }
-            });
-        });
-    }
-
     if (confirmDeleteBtn) {
         confirmDeleteBtn.addEventListener('click', () => {
             if (!portalToDeleteId) return;
@@ -482,15 +451,14 @@ document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () =>
     });
 });
 
-// Allow unchecking radio buttons on click
 document.addEventListener('click', (e) => {
     const radio = e.target.closest('input[type="radio"]');
     if (radio && (radio.name === 'new_portal_root_folder' || radio.name === 'existing_portal_root_folder')) {
         if (radio.dataset.wasChecked === 'true') {
             radio.checked = false;
             radio.dataset.wasChecked = 'false';
-        } else {
-            // Reset all other radios in the same group
+        } 
+        else {
             document.querySelectorAll(`input[name="${radio.name}"]`).forEach(r => {
                 r.dataset.wasChecked = 'false';
             });
