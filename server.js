@@ -92,7 +92,7 @@ pool.query(`
     );
 `).catch(err => console.error("Failed to create activity_logs table:", err));
 
-// Wrapper to automatically intercept and save all AppInsights events to our PostgreSQL table
+// wrapper to automatically intercept and save all appinsight events to the database
 const originalTrackEvent = insightsClient && insightsClient.trackEvent;
 insightsClient = {
     trackEvent: function(telemetry) {
@@ -132,7 +132,6 @@ const AzureStreamStorage = {
             const bufferSize = 4 * 1024 * 1024; 
             const maxBuffers = 20;
 
-            // Correction du Content-Type pour les extensions mal reconnues par certains navigateurs
             const MIME_OVERRIDES = {
                 '.jfif': 'image/jpeg',
                 '.jpe':  'image/jpeg',
