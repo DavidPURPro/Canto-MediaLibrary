@@ -1,3 +1,5 @@
+<!-- Page principale du siteweb -->
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -628,7 +630,7 @@
     </div>
   </div>
 
-  <!-- Modale de lien de partage -->
+  <!-- modale de lien de partage -->
   <div class="confirm-modal" id="shareModal">
     <div class="confirm-content" style="max-width:500px; padding:36px; text-align:left;">
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
@@ -641,7 +643,7 @@
         </div>
       </div>
 
-      <!-- État : génération en cours -->
+      <!-- etat : génération en cours -->
       <div id="shareLoading" style="display:none; text-align:center; padding:32px 0;">
         <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#16677c;"></i>
         <p style="color:#64748b;margin-top:12px;font-size:14px;">Generating link…</p>
@@ -737,16 +739,16 @@
                 const dateA = parseDate(a.date_ajout);
                 const dateB = parseDate(b.date_ajout);
                 
-                // Si une date n'est pas renseignée, elle est systématiquement poussée au fond (valeur la plus basse possible)
+                // si une date pas renseignée, poussée au fond (valeur la plus basse possible)
                 if (sortParams === 'date_desc') {
                     if (!dateA) return 1;  // 'a' n'a pas de date -> va après 'b'
                     if (!dateB) return -1; // 'b' n'a pas de date -> va après 'a'
-                    return dateB - dateA;  // Plus récent en premier
+                    return dateB - dateA;  // plus récent en premier
                 }
                 if (sortParams === 'date_asc') {
-                    if (!dateA) return 1;  // Même traitement pour isoler au fond
+                    if (!dateA) return 1; 
                     if (!dateB) return -1;
-                    return dateA - dateB;  // Plus ancien en premier
+                    return dateA - dateB;  // plus ancien en premier
                 }
                 return 0;
             });
@@ -761,7 +763,7 @@
         return originalFetch(url, options);
     };
 
-    // Forcer l'ouverture automatique de l'arborescence
+    // forcer l'ouverture automatique de l'arborescence
     window.addEventListener('load', () => {
         const targetFolderId = document.body.getAttribute('data-folder-id');
         if (!targetFolderId) return;

@@ -1,3 +1,5 @@
+// Fichier pour Serveur commande a lancer dans terminal : npx @dotenvx/dotenvx run -- node server.js
+// tous les modules npm utilises dans le fichier (express, pg, azure blob, msal etc)
 const { CryptoProvider } = require('@azure/msal-node');
 const cryptoProvider = new CryptoProvider();
 // require('dotenv').config();
@@ -13,6 +15,8 @@ const fs = require('fs');
 const os = require('os');
 const { pipeline } = require('stream/promises');
 
+// appinsights = monitoring azure permet de tracker les evenements (login, upload, etc)
+// si pas de connection string en env -> on simule juste avec un console.log (mode dev local)
 let insightsClient;
 if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
     appInsights.setup()
@@ -34,6 +38,7 @@ else {
     console.log("Application Insights : DÉSACTIVÉ (Mode Local - Événements simulés dans la console)");
 }
 
+// creation de l'app express, tout le reste du fichier tourne autour de cet objet
 const app = express();
 
 // Custom performance middleware to measure and log page load times
@@ -60,6 +65,7 @@ app.use((req, res, next) => {
     next();
 });
 
+// morgan = logs http, verbeux en dev pour debug, plus compact en prod
 const morgan = require('morgan');
 
 if (process.env.NODE_ENV === 'production') {
@@ -69,6 +75,8 @@ else {
     app.use(morgan('dev')); 
 }
 
+// pool de connexion postgres, reutilisee partout dans le fichier via pool.query(...)
+// max 30 connexions simultanees, ssl obligatoire (config azure)
 const PORT = process.env.PORT || 3000;
 const pool = new Pool({
     user: process.env.POSTGRES_USER,
@@ -92,6 +100,8 @@ pool.query(`
     );
 `).catch(err => console.error("Failed to create activity_logs table:", err));
 
+// on wrap trackEvent pour sauvegarder CHAQUE event insights dans la table activity_logs
+// comme ca meme en mode local (sans azure) on garde une trace en bdd, utilisee dans /stats
 // wrapper to automatically intercept and save all appinsight events to the database
 const originalTrackEvent = insightsClient && insightsClient.trackEvent;
 insightsClient = {
@@ -113,10 +123,13 @@ insightsClient = {
     }
 };
 
+// multer = gere l'upload de fichiers, sanitize-filename = nettoie les noms pourris
 const multer = require('multer');
 const sanitize = require('sanitize-filename');
 const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
 const containerClient = blobServiceClient.getContainerClient(process.env.AZURE_STORAGE_CONTAINER);
+// storage custom pour multer : au lieu d'ecrire sur disque, on stream direct vers azure blob
+// verifie aussi que le nom de fichier existe pas deja en bdd avant d'uploader (evite doublons)
 const AzureStreamStorage = {
     _handleFile: async function (req, file, cb) {
         try {
@@ -132,6 +145,7 @@ const AzureStreamStorage = {
             const bufferSize = 4 * 1024 * 1024; 
             const maxBuffers = 20;
 
+            // override du mime type pour certaines extensions ou le navigateur/azure devine mal (raw photo, tiff etc)
             const MIME_OVERRIDES = {
                 '.jfif': 'image/jpeg',
                 '.jpe':  'image/jpeg',
@@ -172,6 +186,7 @@ const AzureStreamStorage = {
     _removeFile: function (req, file, cb) { cb(null); }
 };
 
+// filtre les extensions interdites a l'upload (vide pour l'instant, rien de bloque)
 // eviter certains extension
 const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -183,6 +198,7 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 };
 
+// uploadStream = pour les vrais fichiers (va sur azure), upload = juste pour parser les form-data classiques
 const uploadStream = multer({ storage: AzureStreamStorage, fileFilter: fileFilter });
 const upload = multer();
 
@@ -192,6 +208,7 @@ const { Client } = require('@microsoft/microsoft-graph-client');
 require('isomorphic-fetch');
 const crypto = require('crypto');
 
+// config msal pour l'appli (envoi de mail via graph api, cf sendEmail plus bas)
 const msalConfig = {
     auth: {
         clientId: process.env.AZURE_AD_CLIENT_ID,
@@ -200,16 +217,20 @@ const msalConfig = {
 
     }
 };
+// cca = client confidentiel msal, utilise pour s'authentifier en tant qu'appli (pas un user) - sert pour l'envoi de mail
 const cca = new msal.ConfidentialClientApplication(msalConfig);
 
+// nunjucks = moteur de template (genre jinja2 mais en js), tous les .html rendus avec res.render()
 const env = nunjucks.configure('templates', {
     autoescape: true,
     express: app,
     watch: true 
 });
 
+// session express, cookie httpOnly, dure 7 jours, se renouvelle a chaque requete (rolling: true)
 const session = require('express-session');
 
+// rate limiter contre le bruteforce sur les logins
 const rateLimit = require('express-rate-limit');
 
 app.use(express.json());
@@ -277,8 +298,10 @@ const authMsalConfig = {
         authority: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}`
     }
 };
+// pca = client public msal, utilise pour le vrai login des users (flow oauth pkce, cf /start_auth et /getAToken)
 const pca = new msal.PublicClientApplication(authMsalConfig);
 
+// quelques helpers/filtres perso ajoutes a nunjucks pour les templates (url_for, max, min, format date fr)
 env.addGlobal('url_for', function(type, kwargs) {
     if (type === 'static') {
         return '/static/' + kwargs.filename;
@@ -313,6 +336,7 @@ env.addFilter('date', function(dateObj) {
     return `${day}/${month}/${year} ${hours}:${minutes}`;
 });
 
+// envoie un mail via microsoft graph api (utilise pour reset password portail)
 async function sendEmail(toEmail, subject, body) {
     try {
         const tokenResponse = await cca.acquireTokenByClientCredential({
@@ -339,6 +363,7 @@ async function sendEmail(toEmail, subject, body) {
     }
 }
 
+// verif si un user a le droit d'acceder a un portail (email existe + mdp ok si fourni)
 async function checkPortalAccess(email, portalId, password = null) {
     const res = await pool.query(
         "SELECT id, password FROM portal_users WHERE LOWER(email) = LOWER($1) AND portal_id = $2;",
@@ -351,6 +376,7 @@ async function checkPortalAccess(email, portalId, password = null) {
     return true;
 }
 
+// recup un dossier + tous ses sous-dossiers en recursif (utilise pour les arbres de dossiers)
 // recup uniquement le dossier root et ses descendants — jamais les parents/frères
 async function getFolderSubtree(rootFolderId) {
     if (!rootFolderId) return [];
@@ -371,6 +397,7 @@ async function getFolderSubtree(rootFolderId) {
     return result.rows;
 }
 
+// route qui renvoie l'arbre complet des dossiers d'un portail (format json, pour l'affichage en front)
 app.get('/portal/:portal_id/tree', loginRequiredHtml, async (req, res) => {
     try {
         const identifier = req.params.portal_id;
@@ -397,13 +424,18 @@ app.get('/portal/:portal_id/tree', loginRequiredHtml, async (req, res) => {
     }
 });
 
+// sert les fichiers statiques (css/js/images) du dossier /static
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 
+// route racine, redirige direct vers /index si l'user est log
 app.get('/', loginRequiredHtml, (req, res) => {
     res.redirect('/index');
 });
 
+// genere une miniature (thumbnail) pour les formats un peu exotiques (psd, tiff, raw photo etc)
+// pour les fichiers 'data' (srt, kml, txt) on met juste une icone generique, pas de vraie miniature
+// telecharge le fichier en local temp -> resize avec gm/imagemagick -> reupload sur azure -> nettoie le temp
 async function generateAndUploadThumbnail(filename, containerClient, pool) {
     const ext = path.extname(filename).toLowerCase();
 
@@ -467,6 +499,9 @@ async function generateAndUploadThumbnail(filename, containerClient, pool) {
     }
 }
 
+// !! doublon de la route '/' plus haut (ligne ~403), express prend toujours la 1ere donc celle-ci
+// sert jamais en vrai. a nettoyer un jour si quelqu'un a le courage.
+// affiche la liste des fichiers avec pagination + filtre par type + tri
 app.get('/', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const sort = req.query.sort || 'date_desc';
@@ -530,6 +565,7 @@ app.get('/', async (req, res) => {
     }
 });
 
+// page principale de la mediatheque (vue 'canto', avec dossiers/galerie)
 app.get('/index', loginRequiredHtml, (req, res) => {
     res.render('page_canto.html', {
         username: req.session.username,
@@ -539,6 +575,8 @@ app.get('/index', loginRequiredHtml, (req, res) => {
     });
 });
 
+// va chercher les groupes azure ad de l'user (via graph api) pour savoir son role
+// admin > basic_admin (moderateur) > uploader > viewer par defaut si aucun groupe connu
 async function getUserRole(accessToken) {
     const adminGroupId = process.env.ADMIN_GROUP_ID;
     const moderatorGroupId = process.env.MODERATOR_GROUP_ID; 
@@ -559,6 +597,7 @@ async function getUserRole(accessToken) {
     }
 }
 
+// middleware -> laisse passer que les admins/basic_admin/uploader, sinon 403 (ou redirect si page html)
 // admins et uploaders
 function uploadAccessRequired(req, res, next) {
     const role = req.session.user_role;
@@ -572,6 +611,9 @@ function uploadAccessRequired(req, res, next) {
 }
 
 
+// middleware principal de protection des pages html
+// cas particulier /portal/* : un employe pur.co connecte au site principal passe direct,
+// sinon on regarde si y'a une session portail valide, sinon redirect vers le login du portail
 function loginRequiredHtml(req, res, next) {
     if (req.path.startsWith('/portal/')) {
       // employé de pur connecté au site principal ?
@@ -595,11 +637,13 @@ function loginRequiredHtml(req, res, next) {
     next();
 }
 
+// meme chose que loginRequiredHtml mais pour les routes json (renvoie juste une 401 direct)
 function loginRequiredJson(req, res, next) {
     if (!req.session.user_email) return res.status(401).json({ error: "Unauthorized" });
     next();
 }
 
+// middleware -> reserve aux super admin (role admin)
 function adminRequired(req, res, next) {
     if (!req.session || !req.session.is_admin) {
         if (req.method === 'GET' && !req.headers.accept?.includes('application/json')) {
@@ -610,6 +654,7 @@ function adminRequired(req, res, next) {
     next();
 }
 
+// middleware -> admin ou basic_admin (moderateur) uniquement
 function basicAdminRequired(req, res, next) {
     const role = req.session.user_role;
     if (role !== 'admin' && role !== 'basic_admin') {
@@ -621,6 +666,7 @@ function basicAdminRequired(req, res, next) {
     next();
 }
 
+// middleware -> admin, basic_admin ou uploader (sert pour les actions d'upload/edition basique)
 function uploaderOrAdminRequired(req, res, next) {
     const role = req.session.user_role;
     if (role !== 'admin' && role !== 'basic_admin' && role !== 'uploader') {
@@ -629,6 +675,7 @@ function uploaderOrAdminRequired(req, res, next) {
     next();
 }
 
+// === AUTHENTIFICATION MICROSOFT ENTRA ID (MSAL) ===
 // routes authentification msal entra id 
 app.get('/login', (req, res) => {
     if (req.session.user_email) return res.redirect('/');
@@ -636,6 +683,7 @@ app.get('/login', (req, res) => {
 });
 
 // ROUTES : AUTHENTIFICATION ENTRA ID (MSAL)
+// demarre le flow oauth pkce vers azure ad, redirige vers la page login microsoft
 app.get('/start_auth', async (req, res) => {
     req.session.nextUrl = req.query.next || '/';
     
@@ -659,6 +707,8 @@ app.get('/start_auth', async (req, res) => {
     }
 });
 
+// callback apres le login microsoft, recupere le token + verifie le domaine mail autorise (@pur.co)
+// puis va chercher le role de l'user et remplit la session
 app.get('/getAToken', async (req, res) => {
     try {
         const tokenRequest = {
@@ -709,6 +759,7 @@ app.get('/getAToken', async (req, res) => {
     }
 });
 
+// deconnexion : detruit la session + redirige aussi vers le logout azure ad (sinon microsoft garde l'user log)
 app.get('/logout', (req, res) => {
     const userEmailToLog = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
     req.session.destroy((err) => {
@@ -735,11 +786,14 @@ function formatBytes(bytes) {
     return bytes + "Bytes";
 }
 
+// genere un slug propre pour l'url d'un portail (ex: 'mon-portail-12')
 function generateSlug(name, id) {
     const safeName = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     return `${safeName}-${id}`;
 }
 
+// recalcule le nb de fichiers/dossiers d'un portail et met a jour la table portals
+// gere 2 cas : portail avec root_folder_id (dossier plafond) ou portail 'a l'ancienne' avec portal_folders
 async function updatePortalStats(portal_id) {
     try {
         const countResult = await pool.query(`
@@ -776,6 +830,7 @@ async function updatePortalStats(portal_id) {
     }
 }
 
+// === ROUTES API DOSSIERS ===
 // routes API
 app.get('/get_folders', loginRequiredJson, async (req, res) => {
     try {
@@ -793,6 +848,7 @@ app.get('/get_folders', loginRequiredJson, async (req, res) => {
     }
 });
 
+// reordonne les dossiers (drag and drop dans le front), fait dans une transaction pour eviter les etats incoherents
 app.post('/update_folder_order', loginRequiredJson, basicAdminRequired, express.json(), async (req, res) => {
     try {
         const { folder_order } = req.body; 
@@ -819,11 +875,15 @@ app.post('/update_folder_order', loginRequiredJson, basicAdminRequired, express.
     }
 });
 
+// === RECHERCHE PAR IA (gemini) ===
+// petit cache maison en memoire pour pas rappeler gemini a chaque frappe clavier (ttl 1h, max 200 entrees)
 // recherche par ia
 const aiSearchCache = new Map();
 const AI_CACHE_MAX_SIZE = 200;
 const AI_CACHE_TTL_MS = 1000 * 60 * 60; 
 
+// demande a gemini des termes lies a la recherche (ex: pays -> villes/regions du pays)
+// sert a elargir la recherche sans que l'user tape tout lui meme. si pas de cle api -> desactive silencieusement
 async function expandSearchTermsWithAI(query) {
     const cacheKey = query.toLowerCase().trim();
     const cached = aiSearchCache.get(cacheKey);
@@ -893,6 +953,7 @@ Respond ONLY with a valid JSON object in this exact format, without any markdown
     }
 }
 
+// route appelee par le front pour recup les termes ia (juste un wrapper json autour de la fonction au dessus)
 app.get('/ai_expand_search', loginRequiredJson, async (req, res) => {
     const query = (req.query.q || '').trim();
     if (!query) return res.json({ terms: [] });
@@ -900,6 +961,9 @@ app.get('/ai_expand_search', loginRequiredJson, async (req, res) => {
     res.json({ terms });
 });
 
+// LA grosse recherche de fichiers : nom, description, tags, section, categorie
+// si mode ia active, on ajoute les termes gemini en mode 'OR' plutot que 'AND' (plus permissif)
+// renvoie aussi les dossiers qui matchent le nom (avec le chemin complet genre 'Parent > Enfant')
 app.get('/search_file', loginRequiredJson, async (req, res) => {
     try {
         const filename = req.query.filename;
@@ -1103,6 +1167,7 @@ app.get('/search_file', loginRequiredJson, async (req, res) => {
     }
 });
 
+// transforme une liste plate de dossiers en arbre imbrique (pour affichage front)
 function buildFolderHierarchy(folders) {
     const folderMap = new Map();
     folders.forEach(f => folderMap.set(f.id, { ...f, subfolders: [] }));
@@ -1118,6 +1183,7 @@ function buildFolderHierarchy(folders) {
     return rootFolders;
 }
 
+// page d'upload (formulaire)
 app.get('/upload', loginRequiredHtml, uploadAccessRequired, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, name, parent_id FROM folders ORDER BY name;");
@@ -1135,6 +1201,11 @@ app.get('/upload', loginRequiredHtml, uploadAccessRequired, async (req, res) => 
     }
 });
 
+// route d'upload, en 2 etapes :
+// 1) middleware multer qui stream chaque fichier direct vers azure (voir AzureStreamStorage plus haut)
+//    -> gere les erreurs d'extension interdite et de fichier deja existant
+// 2) une fois les fichiers sur azure, on boucle dessus pour enregistrer les metadonnees en bdd
+//    (country/region obligatoires sauf pour le super admin), puis on lance la generation de thumbnail
 app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) => {
     uploadStream.array("files")(req, res, function (err) {
         if (err) {
@@ -1276,6 +1347,7 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
     }
 });
 
+// route detail fichier (utilisee pour remplir la modale au clic sur un fichier)
 // route détails fichier (Modal)
 app.get('/file_details', loginRequiredJson, async (req, res) => {
     try {
@@ -1340,6 +1412,7 @@ app.get('/file_details', loginRequiredJson, async (req, res) => {
     }
 });
 
+// === ROUTES GESTION DES DOSSIERS ===
 // routes gestion folders
 app.post('/create_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
@@ -1441,6 +1514,8 @@ app.post('/rename_folder', loginRequiredJson, basicAdminRequired, upload.none(),
     }
 });
 
+// assigne un fichier existant a un dossier
+// gere aussi le cas ou le fichier est encore dans portal_files (pas encore dans documents) -> on le migre
 app.post('/update_file_folder', async (req, res) => {
     try {
         const filename = req.body?.filename || req.query?.filename;
@@ -1477,6 +1552,8 @@ app.post('/update_file_folder', async (req, res) => {
 });
 
 
+// fait l'inverse de update_file_folder : sort un fichier de la table documents et le remet dans portal_files
+// (genre 'retirer du site principal, remettre a la racine du portail')
 app.post('/r_file_folder', async (req, res) => {
     try {
         const filename = req.body?.filename || req.query?.filename;
@@ -1537,7 +1614,7 @@ app.post('/bulk_update_file_portal', loginRequiredJson, basicAdminRequired, uplo
             return res.status(400).json({ status: "error", message: "No portal selected" });
         }
 
-        // Check if portal has root_folder_id (Dossier Plafond)
+        // check if portal has root_folder_id (Dossier Plafond)
         const portalCheck = await pool.query("SELECT root_folder_id, name FROM portals WHERE id = $1;", [portal_id]);
         if (portalCheck.rows.length > 0 && portalCheck.rows[0].root_folder_id) {
             const root_id = portalCheck.rows[0].root_folder_id;
@@ -1609,6 +1686,8 @@ app.post('/bulk_update_file_portal', loginRequiredJson, basicAdminRequired, uplo
     }
 });
 
+// retire un fichier d'un portail EN GARDANT son dossier (contrairement a remove_file_from_portal plus bas)
+// recalcule les stats du portail apres met files=0 si plus rien dedans
 app.post('/remove_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const { filename, portal_id } = req.body;
@@ -1662,6 +1741,7 @@ app.post('/remove_file_portal', loginRequiredJson, upload.none(), async (req, re
     }
 });
 
+// synchro les tailles des fichiers
 app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, filename FROM portal_files;");
@@ -1703,6 +1783,7 @@ app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
     }
 });
 
+// === ROUTES SUPPRESSION / SYNCHRO FICHIERS ===
 // routes suppr et syncro
 // retier un fichier de son dossier
 app.post('/remove_file_from_folder', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
@@ -1734,6 +1815,7 @@ app.post('/remove_file_from_folder', loginRequiredJson, basicAdminRequired, uplo
 
 
 // Synchroniser (vérifier) le dossier actuel d'un fichier
+// verifie dans quel dossier est actuellement un fichier (utilise apres un drag&drop par ex)
 app.post('/sync_file_folder', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const filename = req.body.filename;
@@ -1814,6 +1896,8 @@ app.post('/assign_file_folder', loginRequiredJson, basicAdminRequired, upload.no
     }
 });
 
+// suppr definitive d'un fichier : azure + bdd principale + portails + favoris
+// necessite une checkbox de confirmation cote front (confirmation === 'on')
 // suppr définitivement un fichier (Azure + bdd)
 app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -1864,6 +1948,8 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
     }
 });
 
+// meme chose que /delete mais pour plusieurs fichiers d'un coup, continue meme si un fichier plante
+// (renvoie un statut 'partial' avec la liste des echecs si besoin)
 // suppression en masse de fichiers
 app.post('/bulk_delete', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -1917,6 +2003,7 @@ app.post('/bulk_delete', loginRequiredJson, adminRequired, upload.none(), async 
         res.status(500).json({ status: 'error', message: error.message });
     }
 });
+// toggle le flag 'exclusif' d'un fichier (reserve a certains portails ou pas)
 app.post('/update_exclusive', loginRequiredJson, uploaderOrAdminRequired, upload.none(), async (req, res) => {
     const role = req.session.user_role;
     if (role !== 'admin' && role != 'basic_admin' && role !== 'uploader') {
@@ -1947,6 +2034,7 @@ app.post('/update_exclusive', loginRequiredJson, uploaderOrAdminRequired, upload
     }
 });
 
+// === GESTION DES PAGES PORTAILS ===
 // gestion pages portails
 // liste de tous les portails
 app.get('/portals', loginRequiredHtml, async (req, res) => {
@@ -1997,6 +2085,7 @@ app.get('/portals', loginRequiredHtml, async (req, res) => {
     }
 });
 
+// version courte de /portals, juste id+nom (pour remplir des selects/dropdown)
 app.get('/get_all_portals', loginRequiredJson, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, name FROM portals ORDER BY name ASC;");
@@ -2011,6 +2100,7 @@ app.get('/get_all_portals', loginRequiredJson, async (req, res) => {
     }
 });
 
+// recup un portail par son id classique OU par son slug ('mon-portail-12')
 async function getPortalInfo(identifier) {
     // chercher avec id classique ou le slug ("puratos-30")
     const res = await pool.query("SELECT id, name, slug FROM portals WHERE id::text = $1 OR slug = $1 LIMIT 1;", [identifier]);
@@ -2189,6 +2279,7 @@ app.get('/portal/:portal_id', async (req, res) => {
     }
 });
 
+// modifie la taille/position des cartes dossiers dans la mise en page d'un portail (drag&drop admin)
 // modif taille des folders dans portails 
 app.post('/portal/:portal_id/layout', adminRequired, upload.none(), async (req, res) => {
     try {
@@ -2209,6 +2300,9 @@ app.post('/portal/:portal_id/layout', adminRequired, upload.none(), async (req, 
     }
 });
 
+// vue 'sandbox' : affiche un sous-dossier d'un portail comme si c'etait sa propre mini page
+// calcule les dossiers autorises en remontant les parents depuis le dossier demande
+// et en redescendant tous les descendants, verifie que l'user a bien le droit d'y acceder
 // sandbox (vue)
 app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, res) => {
     const identifier = req.params.portal_id; 
@@ -2323,6 +2417,7 @@ app.get('/portal/:portal_id/folder/:folder_id', loginRequiredHtml, async (req, r
 });
 
 // routes gestion portails
+// creation d'un nouveau portail, avec dossiers lies + generation du slug/url a la fin
 app.post('/add_portal', loginRequiredJson, async (req, res) => {
     try {
         const { name, access = 'Public', folders, linked_folder_ids, root_folder_id } = req.body;        
@@ -2379,6 +2474,7 @@ app.post('/add_portal', loginRequiredJson, async (req, res) => {
     }
 });
 
+// modif basique des infos d'un portail (nom, url, access...)
 // modifier un portail 
 app.post('/update_portal/:portal_id', loginRequiredJson, upload.none(), async (req, res) => {
     try {
@@ -2398,6 +2494,7 @@ app.post('/update_portal/:portal_id', loginRequiredJson, upload.none(), async (r
     }
 });
 
+// suppr un portail (et ses portal_files associes)
 // suppr un portail
 app.post('/delete_portal/:portal_id', loginRequiredJson, upload.none(), async (req, res) => {
     try {
@@ -2442,17 +2539,19 @@ app.get('/get_portals', loginRequiredJson, async (req, res) => {
 });
 
 // assigner un fichier existant à un portail
+// lie un fichier deja existant a un portail (cree l'entree portal_files a partir de documents)
+// verifie que le fichier est bien dans la hierarchie du root_folder_id si le portail en a un
 app.post('/update_file_portal', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const { filename, portal_id, folder_id } = req.body;
         if (!filename) return res.status(400).json({ status: "error", message: "Required file name" });
 
-        // If folder_id is provided, overwrite the file's folder assignment
+        // if folder_id is provided, overwrite the file's folder assignment
         if (folder_id && folder_id !== "none" && folder_id !== "") {
             await pool.query("UPDATE documents SET folder_id = $1 WHERE nom_fichier = $2;", [parseInt(folder_id), filename]);
         }
 
-        // Check if portal has root_folder_id (Dossier Plafond)
+        // check if portal has root_folder_id (Dossier Plafond)
         const portalCheck = await pool.query("SELECT root_folder_id, name FROM portals WHERE id = $1;", [portal_id]);
         if (portalCheck.rows.length > 0 && portalCheck.rows[0].root_folder_id) {
             const root_id = portalCheck.rows[0].root_folder_id;
@@ -2538,6 +2637,8 @@ app.get('/portal/:portal_id/stats', loginRequiredJson, async (req, res) => {
     }
 });
 
+// retire carrement un fichier de la table portal_files (contrairement a remove_file_portal plus haut
+// qui garde le dossier, ici on vire juste le lien portail-fichier)
 app.post('/remove_file_from_portal', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         const { filename, portal_id } = req.body;
@@ -2558,46 +2659,7 @@ app.post('/remove_file_from_portal', loginRequiredJson, upload.none(), async (re
     }
 });
 
-// synchro les tailles des fichiers
-app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT id, filename FROM portal_files;");
-        const files = result.rows;
-        let updatedCount = 0;
-
-        for (let file of files) {
-            const blockBlobClient = containerClient.getBlockBlobClient(file.filename);
-            let sizeBytes = 0;
-            
-            try {
-                const props = await blockBlobClient.getProperties();
-                sizeBytes = props.contentLength;
-            } catch (azureErr) {
-                console.error(`Impossible de lire la taille pour ${file.filename}`);
-            }
-            const sizeDisplay = formatBytes(sizeBytes); 
-
-            await pool.query(
-                "UPDATE portal_files SET size_bytes = $1, size = $2 WHERE id = $3;",
-                [sizeBytes, sizeDisplay, file.id]
-            );
-            updatedCount++;
-        }
-        const portalsRes = await pool.query("SELECT id FROM portals;");
-        for (let portal of portalsRes.rows) {
-            await updatePortalStats(portal.id);
-        }
-
-        res.json({
-            status: "success", 
-            message: `Updated sizes for ${updatedCount} files`
-        });
-    } catch (error) {
-        console.error("Erreur update_portal_files_sizes:", error);
-        res.status(500).json({ status: "error", message: error.message });
-    }
-});
-
+// === LOGIN / RESET MOT DE PASSE PORTAIL ===
 // login au portail
 app.get('/portal/:portal_id/login', async (req, res) => {
     try {
@@ -2620,6 +2682,7 @@ app.get('/portal/:portal_id/login', async (req, res) => {
     }
 });
 
+// traitement du login portail + gestion demande de reset mdp (meme formulaire, 2 boutons)
 app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, res) => {
     try {
         const identifier = req.params.portal_id;
@@ -2688,6 +2751,7 @@ app.get('/portal/:portal_id/reset_password/:token', async (req, res) => {
     res.render('portal_reset_password.html', { portal_id: slug, token, email: result.rows[0].email });
 });
 
+// traite le nouveau mot de passe apres clic sur le lien recu par mail
 app.post('/portal/:portal_id/reset_password/:token', upload.none(), async (req, res) => {
     const identifier = req.params.portal_id;
     const { token } = req.params;
@@ -2708,6 +2772,7 @@ app.post('/portal/:portal_id/reset_password/:token', upload.none(), async (req, 
     res.redirect(`/portal/${slug}/login`);
 });
 
+// affiche le formulaire 'mot de passe oublie' pour un portail
 app.get('/portal/:portal_id/request_reset', async (req, res) => {
     try {
         const identifier = req.params.portal_id;
@@ -2727,6 +2792,7 @@ app.get('/portal/:portal_id/request_reset', async (req, res) => {
     }
 });
 
+// genere un token de reset (valide 24h) et envoie le mail avec le lien
 app.post('/portal/:portal_id/request_reset', loginLimiter, upload.none(), async (req, res) => {
     const identifier = req.params.portal_id;
     const email = req.body.email ? req.body.email.toLowerCase().trim() : '';
@@ -2798,6 +2864,7 @@ app.get('/logout_portal', (req, res) => {
     res.redirect(pId ? `/portal/${pId}/login` : '/');
 });
 
+// logout cote portail seulement (garde la session pur.co si l'user en a une, sinon detruit tout)
 app.post('/portal/:portal_id/logout', (req, res) => {
     const portal_id = req.params.portal_id;
     const userEmailToLog = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
@@ -2837,6 +2904,7 @@ app.post('/portal/:portal_id/logout', (req, res) => {
     });
 });
 
+// recup juste le slug d'un portail a partir de son id (utilise cote front pour generer des liens)
 app.get("/get_portal_slug/:portal_id", async (req, res) => {
     try {
         const result = await pool.query("SELECT slug FROM portals WHERE id = $1;", [req.params.portal_id]);
@@ -2849,6 +2917,7 @@ app.get("/get_portal_slug/:portal_id", async (req, res) => {
     }
 });
 
+// construit l'url complete de connexion d'un portail (protocole + host + slug)
 app.get('/get_portal_url/:portal_id', loginRequiredJson, async (req, res) => {
     try {
         const portal_id = req.params.portal_id;
@@ -2868,6 +2937,7 @@ app.get('/get_portal_url/:portal_id', loginRequiredJson, async (req, res) => {
     }
 });
 
+// page admin qui liste tous les users portails (pour gerer les acces)
 app.get('/admin/users', loginRequiredHtml, adminRequired, async (req, res) => {
     try {
         const usersResult = await pool.query(`
@@ -2889,6 +2959,7 @@ app.get('/admin/users', loginRequiredHtml, adminRequired, async (req, res) => {
     }
 });
 
+// cree un acces portail pour un nouvel user (mdp hashe avec bcrypt)
 // nouvelle user pour un portail
 app.post('/admin/add_user', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -2921,6 +2992,7 @@ app.post('/admin/add_user', loginRequiredJson, adminRequired, upload.none(), asy
     }
 });
 
+// change le mdp d'un user portail existant
 // modifi mdp d'un user deja présent
 app.post('/admin/update_password', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -2939,6 +3011,7 @@ app.post('/admin/update_password', loginRequiredJson, adminRequired, upload.none
     }
 });
 
+// revoque l'acces d'un user portail (suppr direct, pas de soft delete)
 // suppr utilisateur
 app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -2960,8 +3033,10 @@ app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), 
     }
 });
 
+// route proxy pour le telechargement (evite les soucis cors quand on telecharge direct depuis azure)
+// en profite pour calculer la vitesse de dl et logger l'event (utilise dans /stats)
 
-// ROUTE PROXY POUR LE TÉLÉCHARGEMENT ZIP 
+// ROUTE PROXY POUR LE TELECHARGEMENT ZIP 
 const https = require('https'); 
 app.get('/proxy_download', loginRequiredJson, (req, res) => {
     const fileUrl = req.query.url;
@@ -2999,6 +3074,7 @@ app.get('/proxy_download', loginRequiredJson, (req, res) => {
     });
 });
 
+// renvoie les sections/categories uniques presentes en bdd pour remplir les filtres du front
 // recup les sections et catégories uniques pour les filtres
 app.get('/get_filters_data', loginRequiredJson, async (req, res) => {
     try {
@@ -3013,6 +3089,8 @@ app.get('/get_filters_data', loginRequiredJson, async (req, res) => {
     }
 });
 
+// export d'un dossier complet en zip avec l'arborescence (genere la liste, le vrai zip doit
+// se faire cote front ou ailleurs, ici on fournit juste les fichiers + leur chemin relatif)
 // EXPORT COMPLET D'UN DOSSIER EN ZIP (AVEC ARBORESCENCE)
 app.get('/api/export_folder_zip/:folder_id', loginRequiredJson, async (req, res) => {
     try {
@@ -3026,6 +3104,7 @@ app.get('/api/export_folder_zip/:folder_id', loginRequiredJson, async (req, res)
         const descendants = [];
         const paths = new Map(); 
 
+        // func recursive qui construit le chemin complet de chaque sous-dossier (genre 'Parent/Enfant/PetitEnfant')
         function getDescendants(parentId, currentPath) {
             const children = folders.filter(f => f.parent_id === parentId);
             children.forEach(c => {
@@ -3056,6 +3135,7 @@ app.get('/api/export_folder_zip/:folder_id', loginRequiredJson, async (req, res)
         res.status(500).json({ status: "error", message: error.message });
     }
 });
+// FAVORIS
 
 // ajout ou retire un favori
 app.post('/toggle_favorite', loginRequiredJson, upload.none(), async (req, res) => {
@@ -3109,6 +3189,9 @@ app.get('/my_favorites', loginRequiredJson, async (req, res) => {
     }
 });
 
+// relie un portail a une liste de dossiers (defini le contenu visible du portail)
+// verifie que les dossiers choisis restent bien dans la hierarchie du root_folder_id si defini
+// garde les anciennes tailles/positions d'affichage si le dossier etait deja lie avant (existingLayouts)
 // relier portail à un dossier
 app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none(), async (req, res) => {
     try {
@@ -3121,7 +3204,7 @@ app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none
         );
 
         if (root_folder_id) {
-            // Check if any explicitly linked folder is outside of root_folder_id's subtree
+            // check if any explicitly linked folder is outside of root_folder_id's subtree
             if (chosen.length > 0) {
                 const checkFoldersRes = await pool.query(`
                     WITH RECURSIVE folder_tree AS (
@@ -3142,7 +3225,7 @@ app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none
                 }
             }
 
-            // Check if any already linked files are outside of root_folder_id's subtree
+            // check if any already linked files are outside of root_folder_id's subtree
             const checkFilesRes = await pool.query(`
                 WITH RECURSIVE folder_tree AS (
                     SELECT id FROM folders WHERE id = $1
@@ -3205,6 +3288,7 @@ app.post('/link_portal_to_folder', loginRequiredJson, adminRequired, upload.none
     }
 });
 
+// liste des dossiers lies a un portail + son root_folder_id (utilise pour pre-remplir le formulaire admin)
 app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
     try {
         const portalRes = await pool.query("SELECT root_folder_id FROM portals WHERE id = $1;", [req.params.portal_id]);
@@ -3216,6 +3300,9 @@ app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
     }
 });
 
+// edition inline d'un champ metadata depuis la galerie (double clic sur une cellule genre)
+// mapping field front -> colonne bdd (documents + portal_files si applicable)
+// cas particulier 'metadata' (jsonb) : country/region obligatoires sauf pour le super admin
 app.post('/update_file_metadata', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     try {
         let { original_filename, field, value } = req.body;
@@ -3262,7 +3349,7 @@ app.post('/update_file_metadata', loginRequiredHtml, basicAdminRequired, async (
                 return res.status(400).json({ status: 'error', message: 'Invalid JSON for metadata' });
             }
 
-            // Country/Region are mandatory for everyone except Super Admin (role 'admin'), who can bypass.
+            // Country/Region are mandatory for everyone except Super Admin (role 'admin') who can bypass
             const isSuperAdmin = (req.session.user_role === 'admin');
             if (!isSuperAdmin) {
                 if (!metadataObj.country || String(metadataObj.country).trim() === "") {
@@ -3289,9 +3376,11 @@ app.post('/update_file_metadata', loginRequiredHtml, basicAdminRequired, async (
         res.status(500).json({ status: 'error', message: 'Error' });
     }
 });
+// === LIENS DE PARTAGE GROUPES ===
 
-// ── Liens de partage groupés ─────────────────────────────────────────────────
+// liens de partage groupés
 
+// cree un lien de partage public (token aleatoire) pour une liste de fichiers, expire au bout de 30 jours
 app.post('/create_share_link', loginRequiredJson, upload.none(), async (req, res) => {
     try {
         let filenames;
@@ -3348,7 +3437,7 @@ app.get('/s/:token', async (req, res) => {
                 <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f4f7;margin:0;}
                 .box{text-align:center;padding:48px;background:white;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.1);}
                 h2{color:#f59e0b;margin-bottom:12px;}p{color:#64748b;}</style></head>
-                <body><div class="box"><h2>⏰ Link expired</h2><p>This share link expired on ${new Date(row.expires_at).toLocaleDateString()}.</p></div></body></html>`);
+                <body><div class="box"><h2> Link expired</h2><p>This share link expired on ${new Date(row.expires_at).toLocaleDateString()}.</p></div></body></html>`);
         }
 
         const filenames = row.filenames;
@@ -3502,9 +3591,11 @@ app.get('/s/:token', async (req, res) => {
         </a>
       </div>
     </div>
+  // js cote client de la page de partage publique (pas de framework, juste du vanilla js)
   </div>
 
   <script>
+    // ouvre la modale de preview et remplit tout (titre, desc, dates, tags, media selon l'extension)
     function openModal(el) {
       const url = el.getAttribute('data-url');
       const name = el.getAttribute('data-name');
@@ -3561,6 +3652,7 @@ app.get('/s/:token', async (req, res) => {
       document.body.style.overflow = 'hidden';
     }
 
+    // ferme la modale et vide le contenu media (evite qu'une video continue de jouer en fond)
     function closeModal() {
       const modal = document.getElementById('mediaModal');
       modal.classList.remove('active');
@@ -3582,6 +3674,7 @@ app.get('/s/:token', async (req, res) => {
     }
 });
 
+// meme principe que create_share_link mais pour un dossier entier (recupere tous les fichiers en recursif)
 // partage dossier entier
 app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => {
     try {
@@ -3589,6 +3682,7 @@ app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => 
         const foldersRes = await pool.query("SELECT id, parent_id FROM folders");
         const folders = foldersRes.rows;
         const descendants = [];
+        // func recursive qui liste tous les ids de sous-dossiers d'un dossier donne
         function getDescendants(parentId) {
             const children = folders.filter(f => f.parent_id === parentId);
             children.forEach(c => {
@@ -3621,11 +3715,14 @@ app.post('/api/share_folder/:folder_id', loginRequiredJson, async (req, res) => 
         res.status(500).json({ status: "error", message: error.message });
     }
 });
+// processingFiles = set anti-doublon (canto peut envoyer le meme webhook plusieurs fois),
+// cachedCantoToken = cache le token oauth canto pour pas le regenerer a chaque webhook
 
 const processingFiles = new Set();
 let cachedCantoToken = null;
 let tokenExpirationTime = null;
 
+// recup (ou regenere si expire) le token oauth canto, cache en memoire avec 5min de marge de securite
 async function getCantoToken() {
     if (
         cachedCantoToken &&
@@ -3664,6 +3761,14 @@ async function getCantoToken() {
     return cachedCantoToken;
 }
 
+// webhook appele par canto a chaque nouvel asset publie
+// IMPORTANT : on repond 200 tout de suite (canto retry sinon), le vrai boulot se fait apres en async
+// 1. verif secu basique (secret_token) + anti-doublon avec processingFiles
+// 2. va chercher le detail de l'asset sur l'api canto
+// 3-4. recupere le lien de download + tente de matcher le dossier via le nom de l'album canto
+// 5. telecharge le fichier depuis canto et le reupload sur azure
+// 5.1-6. extrait toutes les metadonnees canto (tags, pays, region, activite etc) et insert en bdd
+// 7. lance la generation de thumbnail comme un upload normal
 // ============================================
 app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
     // 1. repond OK
@@ -3838,7 +3943,7 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
     }
 });
 
-// Route d'administration pour les statistiques et logs d'audit locaux
+// Route admin pour les stats et logs d'audit locaux
 app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     try {
         // 1. Get recent logs (last 100 actions)
@@ -3912,6 +4017,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
 // ============================================
 
 
+// demarrage du serveur
 app.listen(PORT, () => {
     console.log(`serv Node.js démarré sur http://localhost:${PORT}`);
 });

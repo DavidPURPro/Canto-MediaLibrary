@@ -1,3 +1,4 @@
+// logique frontend du portail client cote visiteur (affichage des dossiers, des fichiers et téléchargement)
 document.addEventListener('DOMContentLoaded', function() {
   const portalId = document.body.getAttribute('data-portal-id');
   const portalEmail = document.body.getAttribute('data-portal-email');
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
       });
 
+  // setup des listeners d'evenements d'ouverture, fermeture, etc.
   function setupEventListeners() {
     const modalFavBtn = document.getElementById('modalFavoriteBtn');
     if (modalFavBtn) {
@@ -223,6 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // effectue la recherche en direct de dossiers et fichiers sur le portail
   function searchFiles() {
     const rawSearchTerm = searchInput.value.toLowerCase().trim();
     const searchWords = rawSearchTerm.split(/\s+/).filter(w => w.length > 0);
@@ -270,6 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // ouvre le modal de details d'un fichier du portail client
   function showFileModal(card) {
     const filename = card.getAttribute('data-filename');
     const fileType = card.getAttribute('data-filetype');
@@ -401,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fileModal.classList.add('active');
   }
 
+  // ferme le modal de details de fichier
   function closeFileModal() {
     fileModal.classList.remove('active');
     currentModalFilename = null;
@@ -1012,6 +1017,7 @@ function removeTitleButton(block) {
     if (btn) btn.remove();
 }
  
+  // sauvegarde la disposition de la grille bento du portail en bdd
   async function saveLayout() {
     const items = Array.from(grid.querySelectorAll('.epic-folder-block')).map((b, i) => ({
       folder_id: parseInt(b.dataset.folderId, 10),
@@ -1033,7 +1039,8 @@ function removeTitleButton(block) {
       const data = await res.json();
       if (data.status === 'success') {
         window.location.reload();          // recharge = Jinja réapplique col_span/row_span depuis la BDD
-      } else {
+      } 
+      else {
         alert('Erreur: ' + (data.message || 'sauvegarde impossible'));
         saveBtn.innerHTML = original;
       }

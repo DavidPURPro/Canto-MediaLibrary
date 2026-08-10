@@ -1,11 +1,15 @@
+// Logique pour Page de connexion 
+// genere des petites bulles animees bleues en arriere plan sur le login
 document.addEventListener('DOMContentLoaded', function() {
     const particlesContainer = document.getElementById('particles');
     const particleCount = 30;
     
+    // charge les premieres bulles au demarrage de la page
     for (let i = 0; i < particleCount; i++) {
         createParticle(true);
     }
     
+    // cree et anime une bulle de taille, couleur et vitesse random
     function createParticle(initialLoad = false) {
         const particle = document.createElement('div');
         particle.classList.add('particle');
@@ -17,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const posX = Math.random() * 100;
         particle.style.left = `${posX}vw`;
         
+        // nuances de bleu pour le theme
         const blueShades = [
             'rgba(30, 139, 195, 0.7)',  
             'rgba(52, 152, 219, 0.7)',   
@@ -41,12 +46,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const delayValue = parseFloat(particle.style.animationDelay);
         const timeUntilEnd = (duration + delayValue) * 1000;
 
+        // clean la bulle une fois son anim finie et en recree une autre
         setTimeout(() => {
             particle.remove();
             createParticle(false);
         }, timeUntilEnd);
     }
     
+    // petit effet d'enfoncement quand on clique sur login
     const loginBtn = document.getElementById('loginButton');
     if (loginBtn) {
         loginBtn.addEventListener('click', function(e) {

@@ -1,3 +1,4 @@
+// Logique pour la page de connexion à un portail (sans passer par la connexion principale)
 document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('particles-container');
     const particleCount = 50;

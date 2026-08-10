@@ -1,3 +1,4 @@
+// gestion des portails clients cote admin (creation, delete, et link des folders)
 document.addEventListener('DOMContentLoaded', () => {
     setProfileButtonColor();
     initHeaderBubbles();
@@ -6,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModals();
 });
 
+// colorie le bouton de profil en fonction du role
 function setProfileButtonColor() {
   const profileBtn = document.getElementById('profileBtn');
   if (profileBtn) {
@@ -50,6 +52,7 @@ function setProfileButtonColor() {
   }
 }
 
+// petit effet d'apparition decalee ( staggered reveal ) pour les cards
 function initStaggeredReveal() {
     const cards = document.querySelectorAll('.portal-card-modern');
     const observer = new IntersectionObserver((entries) => {
@@ -133,6 +136,7 @@ function setupEventListeners() {
 
 let portalToDeleteId = null;
 
+// setup des modals ( ouvrir et fermer au clic )
 function setupModals() {
     const addPortalBtn = document.getElementById('addPortalBtn');
     const addModal = document.getElementById('addPortalModal');
@@ -338,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(err => console.error("Erreur de chargement des dossiers :", err));
 });
 
+// submit du formulaire de creation de portail
 document.getElementById('portalForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
     const submitBtn = this.querySelector('.btn-primary-confirm');
@@ -378,6 +383,7 @@ document.getElementById('portalForm')?.addEventListener('submit', function(e) {
 });
 
 let portalToLink_id = null;
+// ouvre le modal de liaison rapide de dossier pour un portail
 window.prepareLinkFolder = function(portalId, portalName) {
     portalToLink_id = portalId;
     document.getElementById('linkPortalNameText').textContent = portalName;

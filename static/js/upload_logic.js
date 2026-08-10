@@ -1,3 +1,4 @@
+// logique frontend de la page d'upload (gestion du drag&drop, des metadata et de l'envoi ajax)
 // Role management matching canto_logic.js
 const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
 const userRole = document.body.getAttribute('data-user-role');
@@ -20,6 +21,7 @@ let fileMetaArrays = {
     intervention_project_type: []
 };
 
+// ajoute un tag de metadata globale
 window.addGlobalMetaTag = function(key, selectElement) {
     const val = selectElement.value;
     if (!val) return;
@@ -30,6 +32,7 @@ window.addGlobalMetaTag = function(key, selectElement) {
     selectElement.selectedIndex = 0;
 };
 
+// ajoute un tag de metadata individuelle
 window.addFileMetaTag = function(key, selectElement) {
     const val = selectElement.value;
     if (!val) return;
@@ -408,6 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // extrait a la volee les fichiers d'un zip charge
     async function extractZipFile(zipFile) {
         loadingSpinner.style.display = "block";
         sendBtn.disabled = true;
@@ -442,6 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // gere la reception et la pre-validation des fichiers
     async function handleFiles(newFiles) {
         const warningDiv = document.getElementById("warning");
         let duplicateDetected = false;
@@ -505,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderFileList();
     }
 
+    // ouvre le modal pour edit les details d'un fichier
     function openFileDetailsModal(index) {
         if (index >= 0 && index < filesToUpload.length) {
             currentFileIndex = index;
@@ -634,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // render la liste des fichiers en attente d'upload
     function renderFileList() {
         fileList.innerHTML = "";
 

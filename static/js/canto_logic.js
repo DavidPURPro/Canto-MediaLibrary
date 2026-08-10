@@ -1,3 +1,4 @@
+// Logique pour la page principale
 const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
 const userRole = document.body.getAttribute('data-user-role');
 const isBasicAdmin = userRole === 'basic_admin';
@@ -34,11 +35,13 @@ const dropdownFieldsConfig = {
     'intervention_project_type': ["Agroforestry", "Animal", "Awareness-raising", "Certified Carbon", "Cocoa", "Coffee", "Conservation", "Livelihood", "Marine", "Reforestation", "Regenerative Agriculture"]
 };
 
+// helper pour mettre la premiere lettre en majuscule
 function capitalizeFirstLetter(string) {
     if (!string) return '';
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+// render l'affichage d'un champ de precision dans le modal ( badges si multi, tiret si vide )
 function renderMetaFieldDisplay(element, key, val) {
     if (!element) return;
     element.innerHTML = '';
@@ -145,6 +148,7 @@ function formatDateForDisplay(dateString) {
 }
 
 // dossiers
+// recup les dossiers depuis la bdd et les charge dans la sidebar
 function loadFolders(folderIdToRestore = null) {
   fetch('/get_folders')
     .then(response => response.json())
@@ -366,6 +370,7 @@ function renderFolder(folder, parentElement) {
 }
 
 // envoyer le nouvel ordre au serveur
+// save le nouvel ordre des dossiers dans la bdd apres un drag and drop
 function saveFolderOrder(container) {
     const folders = container.querySelectorAll(':scope > .folder');
     const orderData = [];
@@ -420,6 +425,7 @@ function showFolderInput(parentElement, parentId = null) {
   input.focus();
 }
 
+// requete ajax pour creer un nouveau dossier en bdd
 function createFolder(name, parentId = null) {
   const formData = new FormData();
   formData.append('name', name);
@@ -440,6 +446,7 @@ function createFolder(name, parentId = null) {
   .catch(error => console.error('Error creating folder:', error));
 }
 
+// suppr un dossier de la bdd
 function deleteFolder(folderId) {
   const formData = new FormData();
   formData.append('folder_id', folderId);
@@ -470,6 +477,7 @@ function deleteFolder(folderId) {
 }
 
 // fonction rename dossier double clic
+// renomme un dossier existant en bdd
 function renameFolder(element, folderId) {
     if (element.querySelector('input')) return;
     const currentName = element.textContent.trim();    
@@ -560,6 +568,7 @@ function createBubble(container) {
   }, (duration + delay) * 1000);
 }
 
+// filtre et affiche uniquement les fichiers d'un dossier
 function filterFilesByFolder(folderId) {
   // récupérer tous les fichiers dans ce dossier et ses sous dossiers
   fetch(`/get_files_in_folder/${folderId}`)
@@ -580,6 +589,7 @@ function filterFilesByFolder(folderId) {
     });
 }
 
+// change le dossier parent d'un fichier en bdd
 function updateFileFolder(filename, folderId) {
   // On utilise URLSearchParams au lieu de FormData pour que le serveur Node.js puisse le lire nativement
   const params = new URLSearchParams();
@@ -705,7 +715,7 @@ function lazyLoadImages() {
   });
 }
 
-// modal
+// charge les details d'un fichier et ouvre le modal de la galerie
 function showFileModal(item) {
   currentModalFilename = item.getAttribute('data-filename');
   const filename = currentModalFilename;
@@ -772,29 +782,30 @@ function showFileModal(item) {
       if (modalSection) modalSection.textContent = data.section || "—";
       if (modalCategory) modalCategory.textContent = data.category || "—";
 
-      // Update portal display from file_details response!
+      // update portal display from file_details response!
       const currentPortalNameSpan = document.getElementById('currentPortalName');
       const currentPortalFolderNameSpan = document.getElementById('currentPortalFolderName');
       const btnRemovePortal = document.getElementById('removeFromPortalBtn');
       
-      // Hide the assignment workflow inputs by default when opening
+      // hide the assignment workflow inputs by default when opening
       const folderGroup = document.getElementById('modalPortalFolderGroup');
       const saveBtn = document.getElementById('confirmAssignPortalBtn');
       if (folderGroup) folderGroup.style.display = 'none';
       if (saveBtn) saveBtn.style.display = 'none';
       
-      // Load Portals list into select dropdown
+      // load Portals list into select dropdown
       loadPortalsForSelect();
 
       if (data.portal_id && data.portal_name) {
           if (currentPortalNameSpan) currentPortalNameSpan.textContent = data.portal_name;
           
-          // Look up current folder name
+          // look up current folder name
           const folderObj = globalFoldersList.find(gf => gf.id == data.folder_id);
           if (currentPortalFolderNameSpan) currentPortalFolderNameSpan.textContent = folderObj ? folderObj.name : '—';
           
           if (btnRemovePortal) btnRemovePortal.style.display = 'inline-block';
-      } else {
+      } 
+      else {
           if (currentPortalNameSpan) currentPortalNameSpan.textContent = 'None';
           if (currentPortalFolderNameSpan) currentPortalFolderNameSpan.textContent = 'None';
           if (btnRemovePortal) btnRemovePortal.style.display = 'none';
@@ -866,7 +877,8 @@ function showFileModal(item) {
       previewContent = `<iframe src="${link}" width="100%" height="100%" style="border:none;"></iframe>`;
   } else if (['.docx', '.pptx'].includes(ext)) {
       previewContent = `<iframe src="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(link)}" width="100%" height="100%" style="border:none;"></iframe>`;
-  } else {
+  } 
+  else {
       previewContent = `<div class="file-preview" style="width: 100%; height: 100%; min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; background: #f8fafc; border-radius: 12px;">
           <img src="/static/No_preview.png" alt="No preview available" style="width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0;" />
           <div style="font-weight: 800; color: #1e293b; font-size: 28px; position: absolute; bottom: 20px; background: rgba(255,255,255,0.9); padding: 8px 24px; border-radius: 12px; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">${ext.toUpperCase()}</div>
@@ -981,23 +993,23 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
     return parts.join(' / ');
   };
 
-  // Gérer le clic sur la checkbox
+  // gere le clic sur la checkbox
   const checkbox = folderHeader.querySelector('.select-folder-checkbox');
   checkbox.addEventListener('change', function(e) {
     e.stopPropagation();
     if (this.checked) {
-      // Décocher toutes les autres checkboxes
+      // décocher toutes les autres checkboxes
       document.querySelectorAll('#folderTree .select-folder-checkbox').forEach(cb => {
         if (cb !== this) cb.checked = false;
       });
-      // Assigner le fichier à ce dossier
+      // assigner le fichier à ce dossier
       updateFileFolder(currentModalFilename, folder.id);
       document.getElementById('currentFolderName').textContent = buildFolderPath(folder);
     }
   });
   
   folderHeader.addEventListener('click', function(e) {
-    // Si on a cliqué sur la checkbox, ne pas faire le toggle (déjà géré par l'événement change)
+    // si on a cliqué sur la checkbox, ne pas faire le toggle (deja géré par l'événement change)
     if (e.target.closest('.select-folder-checkbox')) return;
 
     folderElement.classList.toggle('active');
@@ -1017,6 +1029,7 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
   parentElement.appendChild(folderElement);
 }
 
+// ferme le modal de details de fichier + reset les players video/audio
 function closeFileModal() {
   sessionStorage.removeItem('lastOpenFilename');
   fileModal.classList.remove('active');
@@ -1051,7 +1064,8 @@ function filterAndDisplayWithFilter(filterValue) {
     } else if (filterValue === 'others') {
       const allExts = [].concat(...Object.values(fileTypeMap));
       show = !allExts.includes(ext);
-    } else {
+    } 
+    else {
       show = fileTypeMap[filterValue]?.includes(ext) || false;
     }
     item.style.display = show ? "block" : "none";
@@ -1069,7 +1083,7 @@ const doneTypingInterval = 400;
 let currentSearchQuery = ""; 
 let __searchRequestToken = 0;
 
-// ── Toggle recherche IA ──────────────────────────────────────────────────────
+// Toggle recherche IA
 let aiSearchEnabled = false;
 const aiToggleBtn = document.getElementById('aiSearchToggle');
 const aiHintBox = document.getElementById('aiSearchHint');
@@ -1082,7 +1096,7 @@ if (aiToggleBtn) {
             aiHintBox.style.display = 'none';
             aiHintBox.innerHTML = '';
         }
-        // Relancer la recherche courante avec/sans IA si une requête est en cours
+        // relance la recherche courante avec/sans IA si requête est en cours
         const query = searchInput ? searchInput.value.trim() : '';
         if (query.length > 0) {
             executeGlobalSearch(query, 1);
@@ -1107,6 +1121,7 @@ if (searchInput) {
 
 
 let currentFolderFilter = null;
+// effectue la recherche globale de fichiers avec pagination, filtres et tris
 function executeGlobalSearch(query, page = 1) {
     const __myToken = ++__searchRequestToken;
     gallery.innerHTML = `
@@ -1123,7 +1138,7 @@ function executeGlobalSearch(query, page = 1) {
         .then(response => response.json())
         .then(data => {
             if (__myToken !== __searchRequestToken) return;
-            gallery.innerHTML = ''; // Nettoyage initial de la galerie
+            gallery.innerHTML = ''; // nettoyage initial de la galerie
             if (aiToggleBtn) aiToggleBtn.classList.remove('loading');
             if (aiSearchEnabled && data.ai_terms && data.ai_terms.length > 0) {
                 aiHintBox.style.display = 'flex';
@@ -1367,7 +1382,6 @@ if (modalFavBtn) {
 }
 
 // slug
-
 document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEach(button => {
     button.addEventListener('click', (e) => {
         currentGlobalFilter = e.currentTarget.getAttribute('data-filter');
@@ -1939,6 +1953,7 @@ function setProfileButtonColor() {
   }
 }
 
+// masque tous les boutons d'admin si l'user connecté n'a pas les droits requis
 function enforceNonAdminLock() {
   const adminButtons = document.querySelectorAll('.add-main-folder-btn, .add-folder-btn, .delete-folder-btn, #addToPortalBtn, #addToFolderBtn, #removeFromFolderBtn');
   adminButtons.forEach(button => {
@@ -1948,6 +1963,7 @@ function enforceNonAdminLock() {
   });
 }
 
+// charge la liste des portails clients dans le select d'assignation du modal
 function loadPortalsForSelect() {
     const portalSelect = document.getElementById('modalPortalSelect');
     if (!portalSelect) return;
@@ -2100,6 +2116,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// retire un fichier de son portail d'assignation
 function removeFileFromPortal() {
   if (!currentModalFilename) return;
   const params = new URLSearchParams();
