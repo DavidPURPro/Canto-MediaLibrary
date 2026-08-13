@@ -76,6 +76,191 @@ function renderMetaFieldDisplay(element, key, val) {
     }
 }
 
+// Affiche immédiatement les tags dans le modal, y compris après une modification.
+function renderModalTags(element, tags) {
+    if (!element) return;
+
+    const tagList = Array.isArray(tags)
+        ? tags.map(tag => String(tag).trim()).filter(Boolean)
+        : [];
+
+    element.innerHTML = '';
+    if (tagList.length === 0) {
+        element.innerHTML = "<span class='modal-tag'>No tags</span>";
+        return;
+    }
+
+    tagList.forEach(tagText => {
+        const tagSpan = document.createElement('span');
+        tagSpan.className = 'modal-tag';
+        tagSpan.textContent = tagText;
+        tagSpan.style.cursor = 'pointer';
+        tagSpan.style.transition = 'opacity 0.2s';
+        tagSpan.onmouseover = () => { tagSpan.style.opacity = '0.7'; };
+        tagSpan.onmouseout = () => { tagSpan.style.opacity = '1'; };
+        tagSpan.addEventListener('click', () => {
+            const currentFileModal = document.getElementById('fileModal');
+            if (currentFileModal) {
+                currentFileModal.classList.remove('active');
+                document.body.style.overflow = 'auto';
+            }
+
+            const currentSearchInput = document.getElementById('searchInput');
+            if (currentSearchInput) {
+                currentSearchInput.value = tagText;
+                currentSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        element.appendChild(tagSpan);
+    });
+}
+
+let activeModalImageZoomCleanup = null;
+
+function clearModalImageZoom() {
+    if (typeof activeModalImageZoomCleanup === 'function') {
+        activeModalImageZoomCleanup();
+        activeModalImageZoomCleanup = null;
+    }
+}
+
+function setupModalImageZoom(image) {
+    clearModalImageZoom();
+    if (!image) return;
+
+    const zoomFactor = 2.5;
+    const zoomSquare = document.createElement('div');
+    zoomSquare.setAttribute('aria-hidden', 'true');
+    Object.assign(zoomSquare.style, {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '180px',
+        height: '180px',
+        display: 'block',
+        visibility: 'hidden',
+        opacity: '0',
+        zIndex: '10000',
+        pointerEvents: 'none',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        border: '2px solid rgba(255, 255, 255, 0.95)',
+        borderRadius: '14px',
+        backgroundColor: '#ffffff',
+        backgroundRepeat: 'no-repeat',
+        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.28), 0 3px 10px rgba(15, 23, 42, 0.18)',
+        transition: 'opacity 120ms ease, visibility 120ms ease',
+        willChange: 'transform, background-position',
+        transform: 'translate3d(-9999px, -9999px, 0)'
+    });
+    document.body.appendChild(zoomSquare);
+
+    const previousCursor = image.style.cursor;
+    image.style.cursor = 'crosshair';
+
+    let latestPointer = null;
+    let animationFrame = null;
+    let hideTimer = null;
+    let isVisible = false;
+
+    const showZoom = () => {
+        if (isVisible) return;
+        isVisible = true;
+        clearTimeout(hideTimer);
+        zoomSquare.style.visibility = 'visible';
+        requestAnimationFrame(() => {
+            if (isVisible) zoomSquare.style.opacity = '1';
+        });
+    };
+
+    const hideZoom = () => {
+        isVisible = false;
+        zoomSquare.style.opacity = '0';
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+            if (!isVisible) zoomSquare.style.visibility = 'hidden';
+        }, 130);
+    };
+
+    const updateZoom = () => {
+        animationFrame = null;
+        if (!latestPointer || !image.isConnected) return;
+
+        const imageRect = image.getBoundingClientRect();
+        if (imageRect.width <= 0 || imageRect.height <= 0) {
+            hideZoom();
+            return;
+        }
+
+        const cursorX = Math.min(Math.max(latestPointer.clientX - imageRect.left, 0), imageRect.width);
+        const cursorY = Math.min(Math.max(latestPointer.clientY - imageRect.top, 0), imageRect.height);
+        const preferredSize = window.innerWidth < 640 ? 140 : 180;
+        const zoomSize = Math.min(preferredSize, window.innerWidth - 24, window.innerHeight - 24);
+        if (zoomSize < 80) {
+            hideZoom();
+            return;
+        }
+
+        const backgroundWidth = imageRect.width * zoomFactor;
+        const backgroundHeight = imageRect.height * zoomFactor;
+        const centeredPositionX = (zoomSize / 2) - (cursorX * zoomFactor);
+        const centeredPositionY = (zoomSize / 2) - (cursorY * zoomFactor);
+        const backgroundPositionX = Math.max(Math.min(0, zoomSize - backgroundWidth), Math.min(0, centeredPositionX));
+        const backgroundPositionY = Math.max(Math.min(0, zoomSize - backgroundHeight), Math.min(0, centeredPositionY));
+
+        zoomSquare.style.width = `${zoomSize}px`;
+        zoomSquare.style.height = `${zoomSize}px`;
+        zoomSquare.style.backgroundImage = `url(${JSON.stringify(image.currentSrc || image.src)})`;
+        zoomSquare.style.backgroundSize = `${backgroundWidth}px ${backgroundHeight}px`;
+        zoomSquare.style.backgroundPosition = `${backgroundPositionX}px ${backgroundPositionY}px`;
+
+        const gap = 18;
+        const viewportPadding = 12;
+        let squareLeft = latestPointer.clientX + gap;
+        if (squareLeft + zoomSize > window.innerWidth - viewportPadding) {
+            squareLeft = latestPointer.clientX - zoomSize - gap;
+        }
+        squareLeft = Math.max(viewportPadding, Math.min(squareLeft, window.innerWidth - zoomSize - viewportPadding));
+
+        let squareTop = latestPointer.clientY - (zoomSize / 2);
+        squareTop = Math.max(viewportPadding, Math.min(squareTop, window.innerHeight - zoomSize - viewportPadding));
+
+        zoomSquare.style.transform = `translate3d(${squareLeft}px, ${squareTop}px, 0)`;
+    };
+
+    const scheduleZoomUpdate = event => {
+        if (event.pointerType && event.pointerType !== 'mouse') return;
+        latestPointer = { clientX: event.clientX, clientY: event.clientY };
+        showZoom();
+        if (animationFrame === null) {
+            animationFrame = requestAnimationFrame(updateZoom);
+        }
+    };
+
+    const handleImageError = () => clearModalImageZoom();
+    const handleViewportChange = () => hideZoom();
+
+    image.addEventListener('pointerenter', scheduleZoomUpdate);
+    image.addEventListener('pointermove', scheduleZoomUpdate);
+    image.addEventListener('pointerleave', hideZoom);
+    image.addEventListener('error', handleImageError);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    activeModalImageZoomCleanup = () => {
+        if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+        clearTimeout(hideTimer);
+        image.removeEventListener('pointerenter', scheduleZoomUpdate);
+        image.removeEventListener('pointermove', scheduleZoomUpdate);
+        image.removeEventListener('pointerleave', hideZoom);
+        image.removeEventListener('error', handleImageError);
+        window.removeEventListener('resize', handleViewportChange);
+        window.removeEventListener('scroll', handleViewportChange, true);
+        image.style.cursor = previousCursor;
+        zoomSquare.remove();
+    };
+}
+
 let isListView = false;
 let isSortedByDate = false;
 let isAuthenticated = false;
@@ -819,6 +1004,8 @@ function showFileModal(item) {
           let idSuffix = capitalizeFirstLetter(key);
           if (key === 'intervention_project_type') idSuffix = 'Intervention';
           if (key === 'ecosystem_service') idSuffix = 'EcosystemService';
+          if (key === 'farmer_consent') idSuffix = 'FarmerConsent';
+          if (key === 'project_name') idSuffix = 'ProjectName';
           
           const element = document.getElementById(`modalMeta${idSuffix}`);
           if (element) {
@@ -827,35 +1014,7 @@ function showFileModal(item) {
           }
       });
 
-      if (modalTags) {
-          modalTags.innerHTML = ''; 
-          if (data.tags && data.tags.length > 0) {
-              data.tags.forEach(tag => {
-                  const tagText = tag.trim();
-                  const tagSpan = document.createElement('span');
-                  tagSpan.className = 'modal-tag';
-                  tagSpan.textContent = tagText;
-                  tagSpan.style.cursor = 'pointer';
-                  tagSpan.style.transition = 'opacity 0.2s';
-                  tagSpan.onmouseover = () => { tagSpan.style.opacity = '0.7'; };
-                  tagSpan.onmouseout = () => { tagSpan.style.opacity = '1'; };
-                  tagSpan.addEventListener('click', () => {
-                      if (fileModal) {
-                          fileModal.classList.remove('active');
-                          document.body.style.overflow = 'auto'; 
-                      }
-                      const searchInput = document.getElementById('searchInput');
-                      if (searchInput) {
-                          searchInput.value = tagText;
-                          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                      }
-                  });
-                  modalTags.appendChild(tagSpan);
-              });
-          } else {
-              modalTags.innerHTML = "<span class='modal-tag'>No tags</span>";
-          }
-      }      
+      renderModalTags(modalTags, data.tags);
       
       if (typeof updateFolderButtons === 'function') updateFolderButtons(!!data.folder_id);
       if (typeof loadFoldersForModal === 'function') loadFoldersForModal(data.folder_id);
@@ -868,7 +1027,7 @@ function showFileModal(item) {
   const EXTRA_IMAGE_EXTS = ['.jfif', '.jpe', '.bmp', '.tif', '.tiff', '.avif', '.heif', '.dng', '.cr2', '.nef', '.arw'];
   let previewContent = '';
   if (fileTypeMap.images.includes(ext) || EXTRA_IMAGE_EXTS.includes(ext)) {
-      previewContent = `<img src="${link}" alt="${filename}" style="max-width:100%; max-height:80vh; object-fit:contain;" onerror="this.outerHTML='<div style=\\'width:100%;height:100%;min-height:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#f8fafc;border-radius:12px;\\'><img src=\\'/static/No_preview.png\\' alt=\\'No preview\\' style=\\'width:100%;height:100%;object-fit:contain;position:absolute;top:0;left:0;\\'/><div style=\\'font-weight:800;color:#1e293b;font-size:28px;position:absolute;bottom:20px;background:rgba(255,255,255,0.9);padding:8px 24px;border-radius:12px;z-index:2;box-shadow:0 4px 12px rgba(0,0,0,0.15);\\'>${ext.slice(1).toUpperCase()}</div></div>'" />`;
+      previewContent = `<img src="${link}" alt="${filename}" data-modal-zoom="true" style="max-width:100%; max-height:80vh; object-fit:contain;" onerror="this.outerHTML='<div style=\\'width:100%;height:100%;min-height:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#f8fafc;border-radius:12px;\\'><img src=\\'/static/No_preview.png\\' alt=\\'No preview\\' style=\\'width:100%;height:100%;object-fit:contain;position:absolute;top:0;left:0;\\'/><div style=\\'font-weight:800;color:#1e293b;font-size:28px;position:absolute;bottom:20px;background:rgba(255,255,255,0.9);padding:8px 24px;border-radius:12px;z-index:2;box-shadow:0 4px 12px rgba(0,0,0,0.15);\\'>${ext.slice(1).toUpperCase()}</div></div>'" />`;
   } else if (fileTypeMap.videos.includes(ext)) {
       previewContent = `<video controls autoplay style="width:100%; max-height:80vh;"><source src="${link}" type="video/${ext.slice(1)}"></video>`;
   } else if (fileTypeMap.audio.includes(ext)) {
@@ -885,7 +1044,12 @@ function showFileModal(item) {
       </div>`;
   }
   
-  if (modalPreview) modalPreview.innerHTML = previewContent;  
+  clearModalImageZoom();
+  if (modalPreview) {
+      modalPreview.innerHTML = previewContent;
+      const zoomableImage = modalPreview.querySelector('img[data-modal-zoom="true"]');
+      if (zoomableImage) setupModalImageZoom(zoomableImage);
+  }
   if (fileModal) {
       fileModal.classList.add('active');
       document.body.style.overflow = 'hidden';
@@ -1032,6 +1196,7 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
 // ferme le modal de details de fichier + reset les players video/audio
 function closeFileModal() {
   sessionStorage.removeItem('lastOpenFilename');
+  clearModalImageZoom();
   fileModal.classList.remove('active');
   document.body.style.overflow = '';
   const videos = modalPreview.querySelectorAll('video');
@@ -3265,8 +3430,18 @@ document.addEventListener('dblclick', function(e) {
                     renderMetaFieldDisplay(target, metaKey, newValue);
                 } 
                 else {
+                    let updatedTags = null;
                     if (field === 'tags') {
-                        target.innerHTML = `<span style="color:#10b981; font-weight:bold; font-size:12px;">✓ Updated tags (Reload to view)</span>`;
+                        updatedTags = newValue
+                            .split(',')
+                            .map(tag => tag.trim())
+                            .filter(Boolean);
+
+                        const tagsElement = document.createElement('div');
+                        tagsElement.className = 'modal-tags';
+                        tagsElement.id = 'modalTags';
+                        target.replaceChildren(tagsElement);
+                        renderModalTags(tagsElement, updatedTags);
                     } 
                     else {
                         target.textContent = newValue || '—';
@@ -3287,6 +3462,9 @@ document.addEventListener('dblclick', function(e) {
                             card.setAttribute('data-description', newValue);
                             const descElem = card.querySelector('.file-description');
                             if (descElem) descElem.textContent = newValue;
+                        }
+                        else if (field === 'tags' && updatedTags) {
+                            card.setAttribute('data-tags', updatedTags.join(', ').toLowerCase());
                         }
                     }
                 }

@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msg = document.getElementById("msg");
     const fileList = document.getElementById("fileList");
     const loadingSpinner = document.getElementById("loadingSpinner");
-    const MAX_FILES = 7;
+    const MAX_FILES = 35;
     let filesToUpload = [];
     let fileDetails = {};
     const modal = document.getElementById("fileDetailsModal");
@@ -799,10 +799,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const formData = new FormData();
-        const url = `/upload`;
-        filesToSend.forEach((file) => {
+        loadingSpinner.style.display = "block";
+        sendBtn.disabled = true;
+        msg.className = "message";
+        
+        let successCount = 0;
+        let errors = [];
+        const uploadedFileNames = [];
+
+        for (let i = 0; i < filesToSend.length; i++) {
+            const file = filesToSend[i];
+            msg.textContent = `Uploading file ${i + 1} of ${filesToSend.length}: ${file.name}...`;
+
+            const formData = new FormData();
             formData.append("files", file);
+            
             const details = fileDetails[file.name] || {};
             const finalDesc = details.description || gDesc;
             const finalSection = details.section || gSection || "General";
@@ -815,8 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (details.tags && details.tags.length > 0) {
                 finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
-            } 
-            else {
+            } else {
                 finalTags = gTagsArray;
             }
             
@@ -853,41 +863,44 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             
             formData.append("metadata", JSON.stringify(finalMetadata));
-        });
 
-        try {
-            loadingSpinner.style.display = "block";
-            sendBtn.disabled = true;
-            msg.className = "message";
-            msg.textContent = "Sending...";
-            const response = await fetch(url, {
-                method: "POST",
-                body: formData
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server error: ${response.status}`);
+            try {
+                const response = await fetch('/upload', {
+                    method: "POST",
+                    body: formData
+                });
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.status === "success") {
+                    successCount++;
+                    uploadedFileNames.push(file.name);
+                } else {
+                    throw new Error(result.message || "Upload failed");
+                }
+            } catch (err) {
+                console.error(`Error uploading ${file.name}:`, err);
+                errors.push(`${file.name}: ${err.message}`);
             }
-            const result = await response.json();
-            if (result.status === "success") {
-                filesToUpload = [];
-                fileDetails = {};
-                renderFileList();
-                msg.className = "message success";
-                msg.innerHTML = '<i class="fas fa-check-circle"></i> Upload successful!';
-                setTimeout(() => { window.location.href = '/'; }, 1500);
-            } 
-            else {
-                throw new Error(result.message || "Upload failed");
-            }
-            
-        } catch (error) {
-            console.error("Erreur d'upload:", error);
+        }
+
+        loadingSpinner.style.display = "none";
+        
+        if (errors.length === 0) {
+            filesToUpload = [];
+            fileDetails = {};
+            renderFileList();
+            msg.className = "message success";
+            msg.innerHTML = '<i class="fas fa-check-circle"></i> All files uploaded successfully!';
+            setTimeout(() => { window.location.href = '/'; }, 1500);
+        } 
+        else {
             msg.className = "message error";
-            msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> Error: ${error.message || "An error occurred"}`;
-        } finally {
-            loadingSpinner.style.display = "none";
-            if(filesToUpload.slice(0, MAX_FILES).length > 0) sendBtn.disabled = false;
+            msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> Uploaded ${successCount} of ${filesToSend.length} files. Errors:<br>${errors.join('<br>')}`;
+            // Supprimer uniquement les fichiers qui ont été uploadés avec succès de la file d'attente
+            filesToUpload = filesToUpload.filter(file => !uploadedFileNames.includes(file.name));
+            renderFileList();
         }
     });
 });
