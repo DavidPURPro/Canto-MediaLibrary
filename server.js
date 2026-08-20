@@ -36,30 +36,6 @@ else {
 
 const app = express();
 
-// custom middleware pour track la perf et la vitesse de chargement des pages
-app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-        const duration = Date.now() - start;
-        // log uniquement les pages cles pour eviter le bruit
-        if (req.method === 'GET' && (req.path === '/index' || req.path === '/stats' || req.path.startsWith('/portal'))) {
-            const user = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
-            
-            if (insightsClient) {
-                insightsClient.trackEvent({
-                    name: "page_load",
-                    properties: {
-                        path: req.path,
-                        duration_ms: duration,
-                        utilisateur: user
-                    }
-                });
-            }
-        }
-    });
-    next();
-});
-
 const morgan = require('morgan');
 
 if (process.env.NODE_ENV === 'production') {
@@ -105,7 +81,15 @@ insightsClient = {
         }
 
         const properties = telemetry.properties || {};
-        const username = properties.utilisateur || properties.user || properties.admin || "Visiteur";
+        const username = properties.utilisateur || properties.user || properties.admin || null;
+
+        // Never turn a missing authenticated identity into a fake user.
+        // Public/system telemetry can still reach Application Insights, but is not
+        // mixed with authenticated activity in the local audit table.
+        if (!username) {
+            console.warn(`[Audit] Event "${telemetry.name}" not saved: no authenticated user.`);
+            return;
+        }
 
         pool.query(`
             INSERT INTO activity_logs (event_name, username, properties)
@@ -225,6 +209,41 @@ app.use(session({
     rolling: true,
     cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
+
+
+// Keep the authenticated identity captured at the beginning of the request.
+// This survives asynchronous work and session destruction during logout.
+function getAuditUser(req) {
+    return req.auditUser || req.session?.user_email || req.session?.portal_user_email || null;
+}
+
+// Page telemetry must run after express-session so the user is already known.
+app.use((req, res, next) => {
+    const start = Date.now();
+    req.auditUser = req.session?.user_email || req.session?.portal_user_email || null;
+
+    res.on('finish', () => {
+        if (req.method !== 'GET' ||
+            (req.path !== '/index' && req.path !== '/stats' && !req.path.startsWith('/portal'))) {
+            return;
+        }
+
+        const user = getAuditUser(req);
+        // Portal login/reset pages are public and must not appear as user activity.
+        if (!user) return;
+
+        insightsClient.trackEvent({
+            name: "page_load",
+            properties: {
+                path: req.path,
+                duration_ms: Date.now() - start,
+                user: user
+            }
+        });
+    });
+
+    next();
+});
 
 // bouclier anti-brute force pour les connexions
 const loginLimiter = rateLimit({
@@ -698,7 +717,7 @@ app.get('/getAToken', async (req, res) => {
                 insightsClient.trackEvent({
                     name: "login_success",
                     properties: {
-                        utilisateur: email
+                        user: email
                     }
                 });
         }
@@ -715,12 +734,12 @@ app.get('/getAToken', async (req, res) => {
 
 // deco du site et redirection azure ad
 app.get('/logout', (req, res) => {
-    const userEmailToLog = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
+    const userEmailToLog = getAuditUser(req);
     req.session.destroy((err) => {
         insightsClient.trackEvent({
             name: "logout",
             properties: {
-                utilisateur: userEmailToLog 
+                user: userEmailToLog 
             }
         });
         const domaine = process.env.WEBSITE_HOSTNAME ? `https://${process.env.WEBSITE_HOSTNAME}` : `${req.protocol}://${req.get('host')}`;
@@ -1267,8 +1286,8 @@ app.post('/upload', loginRequiredJson, uploadAccessRequired, (req, res, next) =>
                 insightsClient.trackEvent({
                     name: "file_uploaded",
                     properties: {
-                        fichier: filename,
-                        utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                        file: filename,
+                        user: getAuditUser(req)
                     }
                 });
             }
@@ -1393,8 +1412,8 @@ app.post('/create_folder', loginRequiredJson, basicAdminRequired, upload.none(),
             insightsClient.trackEvent({
                 name: "folder_created",
                 properties: {
-                    dossier_nom: name,
-                    utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                    folder_name: name,
+                    user: getAuditUser(req)
                 }
             });
         }
@@ -1432,8 +1451,8 @@ app.post('/delete_folder', loginRequiredJson, basicAdminRequired, upload.none(),
         insightsClient.trackEvent({
             name: "folder_deleted",
             properties: {
-                dossier_nom: folderName,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                folder_name: folderName,
+                user: getAuditUser(req)
             }
         });
         res.json({ status: "success" });
@@ -1464,7 +1483,7 @@ app.post('/rename_folder', loginRequiredJson, basicAdminRequired, upload.none(),
                     ancien_nom: ancienNom,
                     nouveau_nom: cleanName,
                     dossier_id: folder_id,
-                    admin: req.session.user_email
+                    admin: getAuditUser(req)
                 }
             });
         }
@@ -1680,15 +1699,15 @@ app.post('/remove_file_portal', loginRequiredJson, upload.none(), async (req, re
         insightsClient.trackEvent({
             name: "remove_file_from_folder",
             properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                file: filename,
+                user: getAuditUser(req)
             }
         });
         insightsClient.trackEvent({
             name: "remove_file_portal",
             properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                file: filename,
+                user: getAuditUser(req)
             }
         });
         res.json({ status: "success" });
@@ -1756,8 +1775,8 @@ app.post('/remove_file_from_folder', loginRequiredJson, basicAdminRequired, uplo
         insightsClient.trackEvent({
             name: "remove_file_from_folder",
             properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                file: filename,
+                user: getAuditUser(req)
             }
         });
         res.json({ status: "success" });
@@ -1832,10 +1851,10 @@ app.post('/assign_file_folder', loginRequiredJson, basicAdminRequired, upload.no
 
         if (result.rowCount > 0) {
             insightsClient.trackEvent({
-            name: "fichier_reassigner_avec_succes",
+            name: "file_reassigned_successfully",
             properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                file: filename,
+                user: getAuditUser(req)
             }
         });
             res.json({ status: "success", message: "File successfully reassigned",
@@ -1887,10 +1906,10 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
             await updatePortalStats(portal_id);
         }
         insightsClient.trackEvent({
-            name: "Fichier_Supprime",
+            name: "File_deleted",
             properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                file: filename,
+                user: getAuditUser(req)
             }
         });
         res.json({ status: "success", message: `File ${filename} successfully deleted` });
@@ -1934,8 +1953,8 @@ app.post('/bulk_delete', loginRequiredJson, adminRequired, upload.none(), async 
                 insightsClient.trackEvent({
                     name: 'file_deleted',
                     properties: {
-                        fichier: filename,
-                        utilisateur: req.session.user_email || req.session.portal_user_email || 'Visiteur'
+                        file: filename,
+                        user: getAuditUser(req)
                     }
                 });
             } catch (err) {
@@ -2445,10 +2464,10 @@ app.post('/delete_portal/:portal_id', loginRequiredJson, upload.none(), async (r
         
         if (delRes.rows.length > 0) {
             insightsClient.trackEvent({
-            name: "portal deleted",
+            name: "portal_deleted",
             properties: {
-                portail_nom: delRes.rows[0].name,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                portal_name: delRes.rows[0].name,
+                user: getAuditUser(req)
             }
         });
             res.json({ status: "success", message: `Portal '${delRes.rows[0].name}' deleted successfully` });
@@ -2587,8 +2606,8 @@ app.post('/remove_file_from_portal', loginRequiredJson, upload.none(), async (re
         insightsClient.trackEvent({
             name: "remove_file_from_portal",
             properties: {
-                fichier: filename,
-                utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                file: filename,
+                user: getAuditUser(req)
             }
         });
         res.json({ status: "success" });
@@ -2692,8 +2711,8 @@ app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, re
                 insightsClient.trackEvent({
                     name: "portal_login_success",
                     properties: {
-                        utilisateur: email,
-                        portail: portal.name
+                        user: email,
+                        portal: portal.name
                     }
                 });
 
@@ -2840,7 +2859,7 @@ app.get('/logout_portal', (req, res) => {
 
 app.post('/portal/:portal_id/logout', (req, res) => {
     const portal_id = req.params.portal_id;
-    const userEmailToLog = req.session?.user_email || req.session?.portal_user_email || "Visiteur";
+    const userEmailToLog = getAuditUser(req);
     if (req.session.user_email) {
         delete req.session.portal_user_id;
         delete req.session.portal_user_email;
@@ -2850,8 +2869,8 @@ app.post('/portal/:portal_id/logout', (req, res) => {
                 insightsClient.trackEvent({
                     name: "logout_from_portal",
                     properties: {
-                        portail: portal_id,
-                        utilisateur: userEmailToLog 
+                        portal: portal_id,
+                        user: userEmailToLog 
                     }
                 });
             }
@@ -2868,8 +2887,8 @@ app.post('/portal/:portal_id/logout', (req, res) => {
             insightsClient.trackEvent({
                 name: "logout_from_portal",
                 properties: {
-                    portail: portal_id,
-                    utilisateur: userEmailToLog 
+                    portal: portal_id,
+                    user: userEmailToLog 
                 }
             });
         }
@@ -2952,7 +2971,7 @@ app.post('/admin/add_user', loginRequiredJson, adminRequired, upload.none(), asy
         if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
                 name: "admin_user_added",
-                properties: { email_cible: safeEmail, admin: req.session.user_email }
+                properties: { email_cible: safeEmail, admin: getAuditUser(req) }
             });
         }
         res.json({ status: "success", message: "user created successfully" });
@@ -2991,7 +3010,7 @@ app.post('/admin/delete_user', loginRequiredJson, adminRequired, upload.none(), 
         if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
                 name: "admin_user_deleted",
-                properties: { admin: req.session.user_email }
+                properties: { admin: getAuditUser(req) }
             });
         }
         res.json({ status: "success", message: "User access has been revoked" });
@@ -3030,7 +3049,7 @@ app.get('/proxy_download', loginRequiredJson, (req, res) => {
                         duration_ms: duration,
                         size_bytes: sizeBytes,
                         speed_mbps: speedMbps,
-                        utilisateur: req.session.user_email || req.session.portal_user_email || "Visiteur"
+                        user: getAuditUser(req)
                     }
                 });
             }
@@ -3885,19 +3904,59 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
     }
 });
 
-// Route d'administration pour les statistiques et logs d'audit locaux
+// route admin pour les stats et logs d'audit locaux
 // secret dashboard pour monitorer la perf et les logs d'audit
 app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     try {
-        // 1. Get recent logs (last 100 actions)
+        // filterable and paginated audit logs
+        const selectedEvent = typeof req.query.event === 'string' ? req.query.event.trim().slice(0, 100) : '';
+        const selectedUser = typeof req.query.user === 'string' ? req.query.user.trim().slice(0, 100) : '';
+        const requestedLogPage = Math.max(1, parseInt(req.query.log_page, 10) || 1);
+        const logsPerPage = 100;
+        const logConditions = [];
+        const logFilterParams = [];
+
+        if (selectedEvent) {
+            logFilterParams.push(selectedEvent);
+            logConditions.push(`event_name = $${logFilterParams.length}`);
+        }
+        if (selectedUser) {
+            logFilterParams.push(selectedUser);
+            logConditions.push(`username = $${logFilterParams.length}`);
+        }
+
+        const logWhereClause = logConditions.length > 0
+            ? `WHERE ${logConditions.join(' AND ')}`
+            : '';
+
+        const filteredLogsCountRes = await pool.query(
+            `SELECT COUNT(*) FROM activity_logs ${logWhereClause};`,
+            logFilterParams
+        );
+        const filteredLogsCount = parseInt(filteredLogsCountRes.rows[0].count || 0, 10);
+        const totalLogPages = Math.max(1, Math.ceil(filteredLogsCount / logsPerPage));
+        const currentLogPage = Math.min(requestedLogPage, totalLogPages);
+        const logOffset = (currentLogPage - 1) * logsPerPage;
+        const logQueryParams = [...logFilterParams, logsPerPage, logOffset];
+
         const recentLogsRes = await pool.query(`
-            SELECT id, event_name, username, properties, 
+            SELECT id, event_name, username, properties,
                    to_char(timestamp, 'DD-MM-YYYY HH24:MI:SS') as formatted_date
-            FROM activity_logs 
-            ORDER BY timestamp DESC LIMIT 100;
+            FROM activity_logs
+            ${logWhereClause}
+            ORDER BY timestamp DESC
+            LIMIT $${logQueryParams.length - 1} OFFSET $${logQueryParams.length};
+        `, logQueryParams);
+
+        const allLogUsersRes = await pool.query(`
+            SELECT username, COUNT(*) AS count
+            FROM activity_logs
+            WHERE username IS NOT NULL AND BTRIM(username) <> ''
+            GROUP BY username
+            ORDER BY LOWER(username) ASC;
         `);
 
-        // 2. Count actions by type
+        // count actions by type
         const statsByEventRes = await pool.query(`
             SELECT event_name, COUNT(*) as count 
             FROM activity_logs 
@@ -3905,7 +3964,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY count DESC;
         `);
 
-        // 3. Count actions by user
+        // count actions by user
         const statsByUserRes = await pool.query(`
             SELECT username, COUNT(*) as count 
             FROM activity_logs 
@@ -3913,7 +3972,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY count DESC LIMIT 10;
         `);
 
-        // 4. Timeline data (last 7 days activity)
+        // timeline data (last 7 days activity)
         const timelineRes = await pool.query(`
             SELECT to_char(timestamp, 'YYYY-MM-DD') as day, COUNT(*) as count 
             FROM activity_logs 
@@ -3922,12 +3981,12 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY day ASC;
         `);
 
-        // 5. Total counts of distinct actions
+        // total counts of distinct actions
         const totalLogsRes = await pool.query("SELECT COUNT(*) FROM activity_logs;");
         const totalUploadsRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%upload%' OR event_name ILIKE '%ajout%';");
         const totalDeletesRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%delete%' OR event_name ILIKE '%suppr%';");
 
-        // 6. Performance & Site Speed metrics (dynamically captured)
+        // performance and site speed metrics (dynamically captured)
         const avgPageLoadRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'duration_ms' AS INTEGER))) as avg FROM activity_logs WHERE event_name = 'page_load';");
         const avgDownloadSpeedRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'speed_mbps' AS NUMERIC)), 2) as avg FROM activity_logs WHERE event_name = 'file_download';");
         const activeUsersTodayRes = await pool.query("SELECT COUNT(DISTINCT username) as count FROM activity_logs WHERE timestamp > CURRENT_DATE;");
@@ -3937,6 +3996,16 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             recentLogs: recentLogsRes.rows,
             statsByEvent: statsByEventRes.rows,
             statsByUser: statsByUserRes.rows,
+            allLogUsers: allLogUsersRes.rows,
+            selectedEvent: selectedEvent,
+            selectedUser: selectedUser,
+            filteredLogsCount: filteredLogsCount,
+            currentLogPage: currentLogPage,
+            totalLogPages: totalLogPages,
+            hasPreviousLogPage: currentLogPage > 1,
+            hasNextLogPage: currentLogPage < totalLogPages,
+            previousLogPage: Math.max(1, currentLogPage - 1),
+            nextLogPage: Math.min(totalLogPages, currentLogPage + 1),
             timelineData: JSON.stringify(timelineRes.rows),
             totalLogs: totalLogsRes.rows[0].count || 0,
             totalUploads: totalUploadsRes.rows[0].count || 0,
