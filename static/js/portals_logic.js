@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (checklistNew) checklistNew.appendChild(createTreeNode(f, 'new_f'));
                         if (checklistExisting) checklistExisting.appendChild(createTreeNode(f, 'exist_f'));
                         
-                        // Populate root trees
+                        // populate root trees
                         if (rootTreeContainer) rootTreeContainer.appendChild(createRootFolderTreeNode(f, 'new_f_root', 'new_portal_root_folder'));
                         if (existRootTreeContainer) existRootTreeContainer.appendChild(createRootFolderTreeNode(f, 'exist_f_root', 'existing_portal_root_folder'));
                     }
@@ -392,8 +392,9 @@ window.prepareLinkFolder = function(portalId, portalName) {
     fetch(`/portal_folders/${portalId}`)
         .then(res => res.json())
         .then(data => {
+
             if (data.status === 'success') {
-                // Reset all existing root folder radio buttons
+                // reset all existing root folder radio buttons
                 document.querySelectorAll('input[name="existing_portal_root_folder"]').forEach(r => {
                     r.checked = false;
                     r.dataset.wasChecked = 'false';
@@ -429,12 +430,13 @@ document.getElementById('confirmLinkFolderBtn')?.addEventListener('click', () =>
     const checkedRadio = document.querySelector('input[name="existing_portal_root_folder"]:checked');
     const root_folder_id = checkedRadio ? parseInt(checkedRadio.value) : "";
     
-    // Double-check confirmation pop-ups
+    // double-check confirmation pop-ups
     if (folders.length === 0 && !root_folder_id) {
         if (!confirm("You haven't selected any folder or root folder to link to this portal. Are you sure you want to save this portal with no linked folders?")) {
             return;
         }
-    } else {
+    } 
+    else {
         const portalName = document.getElementById('linkPortalNameText').textContent;
         let msg = `Are you sure you want to save the following assignments for '${portalName}'?`;
         if (root_folder_id) {

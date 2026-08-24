@@ -1,6 +1,5 @@
-/* ==========================================================================
-   SIDEBAR
-   ========================================================================== */
+/* 
+   SIDEBAR  */
 .sidebar {
   width: 260px;
   background: #ffffff;
@@ -21,7 +20,7 @@
 
 .sidebar.active { transform: translateX(0); }
 
-/* ── Toggle tab ── */
+/* Toggle tab */
 .sidebar-toggle {
   position: fixed;
   left: 0;
@@ -49,7 +48,7 @@
   left: 260px;
 }
 
-/* ── Add folder button ── */
+/* add folder button */
 .add-main-folder-btn {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
@@ -82,11 +81,11 @@
 .add-main-folder-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(22,103,124,0.35); }
 .add-main-folder-btn:hover::after { left: 150%; }
 
-/* ── Folder container ── */
+/* Folder container */
 .folders-container { margin-top: 4px; padding-bottom: 100px; }
 .folders-container > .folder { margin-bottom: 3px; }
 
-/* ── Folder node ── */
+/* Folder node */
 .folder { padding: 2px 0; cursor: pointer; position: relative; }
 
 .folder-icon {
@@ -134,7 +133,7 @@
   color: var(--gray-800);
 }
 
-/* ── Sub-folders ── */
+/* Subfolders  */
 .subfolders {
   padding-left: 16px;
   display: none;
@@ -149,7 +148,7 @@
 }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ── Add/delete folder action buttons ── */
+/* Add/delete folder action buttons */
 .folder-actions-wrapper {
   position: relative !important;
   display: flex !important;
@@ -242,7 +241,7 @@
 }
 .folder-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
 
-/* ── Mobile ── */
+/* Mobile */
 @media (max-width: 992px) {
   .sidebar {
     top: 0 !important;

@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const posX = Math.random() * 100;
         particle.style.left = `${posX}vw`;
         
-        // nuances de bleu pour le theme
         const blueShades = [
             'rgba(30, 139, 195, 0.7)',  
             'rgba(52, 152, 219, 0.7)',   
@@ -38,7 +37,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (initialLoad) {
             const negativeDelay = -(Math.random() * duration);
             particle.style.animationDelay = `${negativeDelay}s`;
-        } else {
+        } 
+        else {
             particle.style.animationDelay = '0s';
         }
         

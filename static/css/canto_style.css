@@ -1560,7 +1560,7 @@ body.list-view .gallery-item .item-footer {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #94a3b8; /* gray-400 */
+    color: #94a3b8;
     font-size: 16px;
     margin-right: 5px;
     transition: color 0.2s ease, transform 0.2s ease;
@@ -1569,7 +1569,7 @@ body.list-view .gallery-item .item-footer {
 }
 
 .discrete-stats-link:hover {
-    color: #16677c !important; /* matches primary teal */
+    color: #16677c !important; 
     transform: scale(1.15);
 }
 

@@ -148,7 +148,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (portalList.style.display === 'none' || portalList.innerHTML === '') {
               loadPortalsForModal(); 
               portalList.style.display = 'block';
-          } else {
+          } 
+          
+          else {
               portalList.style.display = 'none';
           }
       });
@@ -157,12 +159,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnAddFolder = document.getElementById('addToFolderBtn');
     if (btnAddFolder) {
       btnAddFolder.addEventListener('click', function() {
+
           const folderTree = document.getElementById('folderTree');
-          if (folderTree.style.display === 'none' || folderTree.innerHTML === '') {
+           if (folderTree.style.display === 'none' || folderTree.innerHTML === '') {
               loadFoldersForModal(); 
               folderTree.style.display = 'block';
-          } else {
+          } 
+          else {
               folderTree.style.display = 'none';
+
           }
       });
     }
@@ -256,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if(filesCount) filesCount.textContent = `${visibleCount} items`;
     
-    // Gestion des en-têtes de tri par date (si activé)
+    // gestion en-têtes de tri par date (si activé)
     document.querySelectorAll('.files-grid').forEach(grid => {
         let hasVisibleCards = false;
         let currentHeader = null; 
@@ -289,9 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.getElementById('modalTitle').textContent = filename;
     document.getElementById('modalDescription').textContent = card.getAttribute('data-description') || 'No description available.';
-    document.getElementById('currentFolderName').textContent = folderName;
-    
-    // CORRECTION ICI : On lit le nom du portail proprement sans crasher
+    document.getElementById('currentFolderName').textContent = folderName;    
     const portalNameElem = document.querySelector('header h1');
     const currentPortalSpan = document.getElementById('currentPortalName');
     let currentPortalName = 'None';
@@ -636,7 +639,7 @@ document.addEventListener('DOMContentLoaded', function() {
 initAboutModal();
 
 
-  // LOGIQUE DE SELECTION MULTIPLE (PORTAILS)
+  // LOGIQUE DE SELECTION MULTIPLE ENFIN (PORTAILS) 
   let selectedFiles = [];
   document.addEventListener('click', function(e) {
       const checkbox = e.target.closest('.select-checkbox');
@@ -1038,7 +1041,7 @@ function removeTitleButton(block) {
       const res = await fetch('/portal/' + slug + '/layout', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.status === 'success') {
-        window.location.reload();          // recharge = Jinja réapplique col_span/row_span depuis la BDD
+        window.location.reload();         
       } 
       else {
         alert('Erreur: ' + (data.message || 'sauvegarde impossible'));

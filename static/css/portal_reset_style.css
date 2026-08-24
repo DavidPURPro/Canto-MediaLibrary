@@ -12,7 +12,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    /* Correction du chemin de l'image */
+    /* correction chemin de l'image */
     background: url('/static/wallp.jpg') no-repeat center center fixed;
     background-size: cover;
     position: relative;

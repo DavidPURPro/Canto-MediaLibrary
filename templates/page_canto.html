@@ -615,17 +615,26 @@
         <h3 style="margin-top: 0; color: #1e293b; font-size: 20px;">
             <i class="fas fa-globe" style="color: #1e40af; margin-right: 8px;"></i> Assign to Portal
         </h3>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Choose a client portal for the selected files.</p>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Choose a client portal, then select the destination folder for the selected files.</p>
         
         <div class="form-group">
+            <label for="bulkPortalSelect" style="display: block; margin-bottom: 7px; color: #475569; font-size: 13px; font-weight: 700;">Portal</label>
             <select id="bulkPortalSelect" style="width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 14px; background-color: #f8fafc; cursor: pointer; color: #334155;">
                 <option value="none">-- Select a Portal --</option>
             </select>
         </div>
+
+        <div class="form-group" id="bulkPortalFolderGroup" style="display: none; margin-top: 16px;">
+            <label for="bulkPortalFolderSelect" style="display: block; margin-bottom: 7px; color: #475569; font-size: 13px; font-weight: 700;">Destination folder</label>
+            <select id="bulkPortalFolderSelect" disabled style="width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 14px; background-color: #f8fafc; cursor: pointer; color: #334155;">
+                <option value="none">-- Select a Folder --</option>
+            </select>
+            <p id="bulkPortalFolderHint" style="margin: 7px 0 0; color: #64748b; font-size: 12px; line-height: 1.4;"></p>
+        </div>
         
         <div class="confirm-buttons" style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
             <button class="confirm-btn cancel" onclick="document.getElementById('bulkPortalModal').classList.remove('active')">Cancel</button>
-            <button class="confirm-btn proceed" id="confirmBulkPortalBtn" style="background: #1e40af; color: white; opacity: 1;">Assign to selection</button>
+            <button class="confirm-btn proceed" id="confirmBulkPortalBtn" disabled style="background: #1e40af; color: white; opacity: 0.55;">Assign to selection</button>
         </div>
     </div>
   </div>

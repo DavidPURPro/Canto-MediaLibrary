@@ -122,7 +122,7 @@ textarea { min-height: 100px; resize: vertical; }
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 .mt-3 { margin-top: 15px; }
 
-/* ── Folder Tree Picker ───────────────────────────────────────────── */
+/* Folder Tree Picker*/
 .folder-picker-wrapper {
   position: relative;
 }
@@ -217,7 +217,7 @@ textarea { min-height: 100px; resize: vertical; }
 
 .fp-node { position: relative; }
 
-/* Subfolder container — indented with dashed left border */
+/* Subfolder container */
 .fp-node .fp-children {
   margin-left: 14px;
   border-left: 2px dashed #cbd5e1;
@@ -295,7 +295,7 @@ textarea { min-height: 100px; resize: vertical; }
   line-height: 1.4
 }
 
-/* Custom styles for precision metadata */
+/* styles for precision metadata */
     .metadata-section-title {
       margin-top: 25px;
       margin-bottom: 15px;

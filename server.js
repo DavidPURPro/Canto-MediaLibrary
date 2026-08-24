@@ -1,3 +1,4 @@
+// commande pour lancer l'app :  npx @dotenvx/dotenvx run -- node server.js
 const { CryptoProvider } = require('@azure/msal-node');
 const cryptoProvider = new CryptoProvider();
 // require('dotenv').config();
@@ -1578,84 +1579,173 @@ app.post('/bulk_update_file_folder', loginRequiredJson, basicAdminRequired, uplo
     }
 });
 
-// ASSIGNATION EN MASSE DE FICHIERS À UN PORTAIL
-// bulk assign des fichiers au portail + check isolation root folder
+// ASSIGNATION EN MASSE DE FICHIERS À UN PORTAIL ET À UN DOSSIER
+// Le dossier de destination doit être lié au portail et rester sous son Root Folder.
 app.post('/bulk_update_file_portal', loginRequiredJson, basicAdminRequired, upload.none(), async (req, res) => {
     try {
-        const { portal_id, filenames } = req.body; 
-        const filesArray = JSON.parse(filenames || "[]");
+        const { portal_id, folder_id, filenames } = req.body;
+
+        let parsedFiles;
+        try {
+            parsedFiles = JSON.parse(filenames || "[]");
+        } catch (parseError) {
+            return res.status(400).json({ status: "error", message: "Invalid file selection" });
+        }
+
+        const filesArray = Array.isArray(parsedFiles)
+            ? [...new Set(parsedFiles.filter(filename => typeof filename === 'string' && filename.trim() !== ''))]
+            : [];
+
         if (filesArray.length === 0) {
             return res.status(400).json({ status: "error", message: "No files selected" });
         }
-        if (!portal_id || portal_id === "none") {
+        const targetPortalId = parseInt(portal_id, 10);
+        if (!portal_id || portal_id === "none" || !Number.isInteger(targetPortalId)) {
             return res.status(400).json({ status: "error", message: "No portal selected" });
         }
 
-        // Check if portal has root_folder_id (Dossier Plafond)
-        const portalCheck = await pool.query("SELECT root_folder_id, name FROM portals WHERE id = $1;", [portal_id]);
-        if (portalCheck.rows.length > 0 && portalCheck.rows[0].root_folder_id) {
-            const root_id = portalCheck.rows[0].root_folder_id;
-            const portalName = portalCheck.rows[0].name;
-            
-            const fileCheck = await pool.query(`
+        const targetFolderId = parseInt(folder_id, 10);
+        if (!folder_id || folder_id === "none" || !Number.isInteger(targetFolderId)) {
+            return res.status(400).json({ status: "error", message: "No destination folder selected" });
+        }
+
+        // Vérifier que le dossier est réellement lié au portail choisi.
+        const destinationRes = await pool.query(`
+            SELECT p.id AS portal_id, p.name AS portal_name, p.root_folder_id,
+                   f.id AS folder_id, f.name AS folder_name
+            FROM portals p
+            JOIN portal_folders pf ON pf.portal_id = p.id
+            JOIN folders f ON f.id = pf.folder_id
+            WHERE p.id = $1 AND f.id = $2
+            LIMIT 1;
+        `, [targetPortalId, targetFolderId]);
+
+        if (destinationRes.rows.length === 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "The selected folder is not linked to this portal"
+            });
+        }
+
+        const destination = destinationRes.rows[0];
+
+        // Si le portail possède un dossier plafond, le dossier choisi doit être dans son arborescence.
+        if (destination.root_folder_id) {
+            const scopeCheck = await pool.query(`
                 WITH RECURSIVE folder_tree AS (
                     SELECT id FROM folders WHERE id = $1
                     UNION
-                    SELECT f.id FROM folders f
+                    SELECT f.id
+                    FROM folders f
                     INNER JOIN folder_tree ft ON f.parent_id = ft.id
                 )
-                SELECT d.nom_fichier, f.name as folder_name 
-                FROM documents d
-                LEFT JOIN folders f ON f.id = d.folder_id
-                WHERE d.nom_fichier = ANY($2::text[]) 
-                  AND (d.folder_id IS NULL OR d.folder_id NOT IN (SELECT id FROM folder_tree));
-            `, [root_id, filesArray]);
-            
-            if (fileCheck.rows.length > 0) {
-                const offendingFile = fileCheck.rows[0].nom_fichier;
-                const folder_name = fileCheck.rows[0].folder_name || "Root";
-                return res.status(400).json({ 
-                    status: "error", 
-                    message: `⚠️ Cannot assign files: File '${offendingFile}' is in folder '${folder_name}' which is outside of the portal's Root Folder hierarchy (${portalName}).` 
+                SELECT 1 FROM folder_tree WHERE id = $2 LIMIT 1;
+            `, [destination.root_folder_id, targetFolderId]);
+
+            if (scopeCheck.rows.length === 0) {
+                return res.status(400).json({
+                    status: "error",
+                    message: `The selected folder is outside of the Root Folder hierarchy for '${destination.portal_name}'`
                 });
             }
         }
 
-        let assignedCount = 0;
-        for (const filename of filesArray) {
-            const exist = await pool.query("SELECT id FROM portal_files WHERE filename = $1 AND portal_id = $2;", [filename, portal_id]);
-            if (exist.rows.length === 0) {
-                const docRes = await pool.query(`
-                    SELECT nom_fichier, lien_telechargement, description, tags, date_ajout 
-                    FROM documents WHERE nom_fichier = $1;
-                `, [filename]);
-                if (docRes.rows.length > 0) {
-                    const doc = docRes.rows[0];
-                    const ext = require('path').extname(filename).toLowerCase();
-                    let file_type = "Other";
-                    if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) file_type = "Image";
-                    else if (['.mp4', '.mov', '.avi', '.wmv'].includes(ext)) file_type = "Video";
-                    else if (['.pdf'].includes(ext)) file_type = "PDF";
-                    else if (['.doc', '.docx'].includes(ext)) file_type = "Document";
-                    else if (['.xls', '.xlsx'].includes(ext)) file_type = "Spreadsheet";
-                    
-                    const blockBlobClient = containerClient.getBlockBlobClient(filename);
-                    const props = await blockBlobClient.getProperties();
-                    const size_bytes = props.contentLength || 0;
+        // Charger tous les documents avant de modifier leur dossier afin d'éviter une opération partielle.
+        const documentsRes = await pool.query(`
+            SELECT nom_fichier, lien_telechargement, description, tags, date_ajout
+            FROM documents
+            WHERE nom_fichier = ANY($1::text[]);
+        `, [filesArray]);
 
-                    await pool.query(`
-                        INSERT INTO portal_files (portal_id, filename, description, file_url, file_type, upload_date, size_bytes, size)
-                        VALUES ($1, $2, $3, $4, $5, COALESCE($6, CURRENT_DATE), $7, $8);
-                    `, [portal_id, filename, doc.description || "No description", doc.lien_telechargement, file_type, doc.date_ajout, size_bytes, formatBytes(size_bytes)]);
-                    assignedCount++;
-                }
-            }
+        const foundFiles = new Set(documentsRes.rows.map(document => document.nom_fichier));
+        const missingFiles = filesArray.filter(filename => !foundFiles.has(filename));
+        if (missingFiles.length > 0) {
+            return res.status(404).json({
+                status: "error",
+                message: `${missingFiles.length} selected file(s) could not be found`
+            });
         }
 
-        await updatePortalStats(portal_id);
-        res.json({ 
-            status: "success", 
-            message: `${assignedCount} files have been successfully assigned to the portal.` 
+        const existingRes = await pool.query(`
+            SELECT filename
+            FROM portal_files
+            WHERE portal_id = $1 AND filename = ANY($2::text[]);
+        `, [targetPortalId, filesArray]);
+        const existingFiles = new Set(existingRes.rows.map(row => row.filename));
+
+        // Préparer les informations nécessaires avant d'ouvrir la transaction SQL.
+        const portalFilesToInsert = [];
+        for (const document of documentsRes.rows) {
+            if (existingFiles.has(document.nom_fichier)) continue;
+
+            const ext = require('path').extname(document.nom_fichier).toLowerCase();
+            let fileType = "Other";
+            if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) fileType = "Image";
+            else if (['.mp4', '.mov', '.avi', '.wmv'].includes(ext)) fileType = "Video";
+            else if (ext === '.pdf') fileType = "PDF";
+            else if (['.doc', '.docx'].includes(ext)) fileType = "Document";
+            else if (['.xls', '.xlsx'].includes(ext)) fileType = "Spreadsheet";
+
+            const blockBlobClient = containerClient.getBlockBlobClient(document.nom_fichier);
+            const props = await blockBlobClient.getProperties();
+            const sizeBytes = props.contentLength || 0;
+
+            portalFilesToInsert.push({
+                filename: document.nom_fichier,
+                description: document.description || "No description",
+                fileUrl: document.lien_telechargement,
+                fileType,
+                uploadDate: document.date_ajout,
+                sizeBytes,
+                size: formatBytes(sizeBytes)
+            });
+        }
+
+        const client = await pool.connect();
+        let assignedCount = 0;
+        try {
+            await client.query('BEGIN');
+
+            await client.query(`
+                UPDATE documents
+                SET folder_id = $1
+                WHERE nom_fichier = ANY($2::text[]);
+            `, [targetFolderId, filesArray]);
+
+            for (const portalFile of portalFilesToInsert) {
+                await client.query(`
+                    INSERT INTO portal_files
+                        (portal_id, filename, description, file_url, file_type, upload_date, size_bytes, size)
+                    VALUES
+                        ($1, $2, $3, $4, $5, COALESCE($6, CURRENT_DATE), $7, $8);
+                `, [
+                    targetPortalId,
+                    portalFile.filename,
+                    portalFile.description,
+                    portalFile.fileUrl,
+                    portalFile.fileType,
+                    portalFile.uploadDate,
+                    portalFile.sizeBytes,
+                    portalFile.size
+                ]);
+                assignedCount++;
+            }
+
+            await client.query('COMMIT');
+        } catch (transactionError) {
+            await client.query('ROLLBACK');
+            throw transactionError;
+        } finally {
+            client.release();
+        }
+
+        await updatePortalStats(targetPortalId);
+        res.json({
+            status: "success",
+            assigned_count: assignedCount,
+            moved_count: filesArray.length,
+            folder_id: targetFolderId,
+            message: `${filesArray.length} files have been assigned to '${destination.folder_name}' in the '${destination.portal_name}' portal.`
         });
     } catch (error) {
         console.error("Erreur bulk_update_file_portal:", error);
@@ -1851,7 +1941,7 @@ app.post('/assign_file_folder', loginRequiredJson, basicAdminRequired, upload.no
 
         if (result.rowCount > 0) {
             insightsClient.trackEvent({
-            name: "file_reassigned_successfully",
+            name: "fichier_reassigner_avec_succes",
             properties: {
                 file: filename,
                 user: getAuditUser(req)
@@ -1906,7 +1996,7 @@ app.post('/delete', loginRequiredJson, adminRequired, upload.none(), async (req,
             await updatePortalStats(portal_id);
         }
         insightsClient.trackEvent({
-            name: "File_deleted",
+            name: "Fichier_Supprime",
             properties: {
                 file: filename,
                 user: getAuditUser(req)
@@ -2464,7 +2554,7 @@ app.post('/delete_portal/:portal_id', loginRequiredJson, upload.none(), async (r
         
         if (delRes.rows.length > 0) {
             insightsClient.trackEvent({
-            name: "portal_deleted",
+            name: "portal deleted",
             properties: {
                 portal_name: delRes.rows[0].name,
                 user: getAuditUser(req)
@@ -3274,7 +3364,13 @@ app.get('/portal_folders/:portal_id', loginRequiredJson, async (req, res) => {
     try {
         const portalRes = await pool.query("SELECT root_folder_id FROM portals WHERE id = $1;", [req.params.portal_id]);
         const root_folder_id = portalRes.rows.length > 0 ? portalRes.rows[0].root_folder_id : null;
-        const result = await pool.query("SELECT folder_id, display_size FROM portal_folders WHERE portal_id = $1;", [req.params.portal_id]);
+        const result = await pool.query(`
+            SELECT pf.folder_id, pf.display_size, f.name AS folder_name
+            FROM portal_folders pf
+            JOIN folders f ON f.id = pf.folder_id
+            WHERE pf.portal_id = $1
+            ORDER BY pf.position ASC NULLS LAST, f.name ASC;
+        `, [req.params.portal_id]);
         res.json({ status: "success", folders: result.rows, root_folder_id: root_folder_id });
     } catch (error) {
         res.status(500).json({ status: "error", message: error.message });
@@ -3904,11 +4000,11 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
     }
 });
 
-// route admin pour les stats et logs d'audit locaux
+// Route d'administration pour les statistiques et logs d'audit locaux
 // secret dashboard pour monitorer la perf et les logs d'audit
 app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     try {
-        // filterable and paginated audit logs
+        // 1. Filterable and paginated audit logs
         const selectedEvent = typeof req.query.event === 'string' ? req.query.event.trim().slice(0, 100) : '';
         const selectedUser = typeof req.query.user === 'string' ? req.query.user.trim().slice(0, 100) : '';
         const requestedLogPage = Math.max(1, parseInt(req.query.log_page, 10) || 1);
@@ -3956,7 +4052,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY LOWER(username) ASC;
         `);
 
-        // count actions by type
+        // 2. Count actions by type
         const statsByEventRes = await pool.query(`
             SELECT event_name, COUNT(*) as count 
             FROM activity_logs 
@@ -3964,7 +4060,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY count DESC;
         `);
 
-        // count actions by user
+        // 3. Count actions by user
         const statsByUserRes = await pool.query(`
             SELECT username, COUNT(*) as count 
             FROM activity_logs 
@@ -3972,7 +4068,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY count DESC LIMIT 10;
         `);
 
-        // timeline data (last 7 days activity)
+        // 4. Timeline data (last 7 days activity)
         const timelineRes = await pool.query(`
             SELECT to_char(timestamp, 'YYYY-MM-DD') as day, COUNT(*) as count 
             FROM activity_logs 
@@ -3981,12 +4077,12 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
             ORDER BY day ASC;
         `);
 
-        // total counts of distinct actions
+        // 5. Total counts of distinct actions
         const totalLogsRes = await pool.query("SELECT COUNT(*) FROM activity_logs;");
         const totalUploadsRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%upload%' OR event_name ILIKE '%ajout%';");
         const totalDeletesRes = await pool.query("SELECT COUNT(*) FROM activity_logs WHERE event_name ILIKE '%delete%' OR event_name ILIKE '%suppr%';");
 
-        // performance and site speed metrics (dynamically captured)
+        // 6. Performance & Site Speed metrics (dynamically captured)
         const avgPageLoadRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'duration_ms' AS INTEGER))) as avg FROM activity_logs WHERE event_name = 'page_load';");
         const avgDownloadSpeedRes = await pool.query("SELECT ROUND(AVG(CAST(properties->>'speed_mbps' AS NUMERIC)), 2) as avg FROM activity_logs WHERE event_name = 'file_download';");
         const activeUsersTodayRes = await pool.query("SELECT COUNT(DISTINCT username) as count FROM activity_logs WHERE timestamp > CURRENT_DATE;");
@@ -4026,7 +4122,7 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
     }
 });
 
-// ============================================
+// =======================================
 
 
 app.listen(PORT, () => {

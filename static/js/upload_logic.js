@@ -5,6 +5,8 @@ const userRole = document.body.getAttribute('data-user-role');
 const isBasicAdmin = userRole === 'basic_admin';
 
 // Globals for Custom Precision Metadata
+// Un uploader peut remplir les metadata soit individuellement pour chaque fichier ou alors remplir les 
+// champs globaux s'il veut affecter ces metadata a un groupe de fichiers (au lieu de remplir un par un les mêmes)
 let globalMetaArrays = {
     activity: [],
     challenge: [],
@@ -102,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const formatDateInput = (input) => {
         if (!input) return;
         input.addEventListener('input', (e) => {
-            let val = input.value.replace(/\D/g, ''); // keep digits only
+            let val = input.value.replace(/\D/g, '');
             if (val.length > 8) val = val.slice(0, 8);
             let formatted = '';
             if (val.length > 0) {
@@ -160,7 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
         folders.forEach(f => {
             if (f.parent_id && byId[f.parent_id]) {
                 byId[f.parent_id].children.push(byId[f.id]);
-            } else {
+            } 
+            else {
                 roots.push(byId[f.id]);
             }
         });
@@ -180,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggle.innerHTML = '<i class="fas fa-plus"></i>'; 
                     toggle.addEventListener('click', (e) => {
                         e.stopPropagation();
+
                         const childrenEl = li.querySelector(':scope > .fp-children');
                         if (childrenEl) {
                             const isClosed = childrenEl.style.display === 'none';
@@ -210,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderNodes(node.children, childrenUl);
                     li.appendChild(childrenUl);
                 }
+
 
                 container.appendChild(li);
             });
@@ -524,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (fileCategory) fileCategory.value = "";
             fileEventDate.value = "";
             
-            // Reset individual file metadata inputs and arrays
+            // reset individual file metadata inputs and arrays
             document.getElementById('fileMetaAuthor').value = "";
             document.getElementById('fileMetaCopyright').value = "";
             document.getElementById('fileMetaCooperative').value = "";
@@ -773,7 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isSuperAdmin = (isAdmin || userRole === 'admin');
 
             if (!isSuperAdmin) {
-                // For non-super-admins, country, region and project name are strictly mandatory
+                // for non-super-admins, country, region and project name are strictly mandatory
                 if (!finalCountry) {
                     msg.className = "message error";
                     msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" is missing the Country (mandatory).`;
@@ -791,7 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // For everyone, if Event Date is filled, validate its format to avoid server-side crash
+            // Pour everyone, if Event Date is filled, validate its format to avoid server side crash
             if (finalEventDate && !isValidDate(finalEventDate)) {
                 msg.className = "message error";
                 msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> File "${file.name}" has an invalid Event Date format. Please use dd/mm/yyyy.`;
@@ -826,7 +831,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (details.tags && details.tags.length > 0) {
                 finalTags = [...new Set([...details.tags, ...gTagsArray])]; 
-            } else {
+            }
+             else {
                 finalTags = gTagsArray;
             }
             
@@ -876,7 +882,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (result.status === "success") {
                     successCount++;
                     uploadedFileNames.push(file.name);
-                } else {
+                } 
+                
+                else {
                     throw new Error(result.message || "Upload failed");
                 }
             } catch (err) {
@@ -898,7 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else {
             msg.className = "message error";
             msg.innerHTML = `<i class="fas fa-exclamation-circle"></i> Uploaded ${successCount} of ${filesToSend.length} files. Errors:<br>${errors.join('<br>')}`;
-            // Supprimer uniquement les fichiers qui ont été uploadés avec succès de la file d'attente
+            // suppr uniquement les fichiers qui ont été uploadés avec succès de la file d'attente
             filesToUpload = filesToUpload.filter(file => !uploadedFileNames.includes(file.name));
             renderFileList();
         }

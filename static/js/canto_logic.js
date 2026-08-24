@@ -1,4 +1,33 @@
-// Logique pour la page principale
+/**
+ * CANTO / PUR MEDIA LIBRARY — GUIDE RAPIDE
+ *
+ * Ce fichier JavaScript pilote toute l’interface de la médiathèque : dossiers, galerie,
+ * recherche, modale fichier, métadonnées, portails, favoris et actions en masse.
+ *
+ * Architecture : JavaScript natif + appels fetch vers server.js. Le script dépend fortement
+ * des IDs/classes de page_canto.html. Les cartes de recherche étant créées dynamiquement,
+ * leurs événements utilisent la délégation ou sont rebranchés après chaque rendu.
+ *
+ * États principaux :
+ * - globalFoldersList : copie locale de l’arborescence ;
+ * - currentFolderFilter : dossier actuellement consulté ;
+ * - currentModalFilename/currentFileMetadata : fichier ouvert et métadonnées éditables ;
+ * - selectedFiles : fichiers sélectionnés pour les actions bulk ;
+ * - __searchRequestToken : empêche une ancienne recherche d’écraser la plus récente.
+ *
+ * Règles métier importantes :
+ * - le Root Folder est la limite de navigation et de sécurité d’un portail ;
+ * - dans un folder de portail, Add New Folder crée un frère avec le même parent ;
+ * - le bouton + d’un folder crée toujours un enfant ;
+ * - créer un folder ne l’ajoute pas automatiquement au portail : l’administrateur le lie
+ *   manuellement avant de pouvoir y assigner des fichiers, individuellement ou en masse.
+ *
+ * Permissions : canEditFiles/canManageFolders contrôlent l’interface seulement. Les routes
+ * serveur doivent toujours revérifier le rôle, la session et le périmètre du portail.
+ *
+ * Dépendances globales : JSZip et saveAs pour les ZIP, Font Awesome pour les icônes.
+ * Les fonctions window.* restent globales car certaines sont appelées par des onclick HTML.
+ */
 const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
 const userRole = document.body.getAttribute('data-user-role');
 const isBasicAdmin = userRole === 'basic_admin';
@@ -8,8 +37,12 @@ const canEditFiles = isAdmin || isBasicAdmin;
 let currentFileMetadata = {};
 let currentModalPortalId = null;
 
+/*
+ * 1. PERMISSIONS ET MÉTADONNÉES
+ * Les rôles viennent des data-* du body. Cette configuration alimente les éditeurs inline.
+ */
 const dropdownFieldsConfig = {
-    // Standard fields
+    // Champs standards modifiables dans le modal.
     'section': [
         "Agroforestry", "Biodiversity", "Carbon & Climate", "Community & Livelihoods", "Corporate", "Events", "General", 
         "Mangrove & Coastal", "Marketing", "Monitoring & Reporting", "Products", "Projects", "Reforestation", 
@@ -20,7 +53,7 @@ const dropdownFieldsConfig = {
         "Livestock & Dairy", "Official Photos", "Palm Oil", "Presentations", "Reports", "Rubber", "Social Media", 
         "Spices", "Tea", "Tutorials", "Vanilla", "Web Banners"
     ],
-    // Metadata fields
+    // Métadonnées métier modifiables dans le modal.
     'farmer_consent': ["yes", "no"],
     'activity': [
         "Agroforestry (Pre/Post)", "Awareness", "Beekeeping", "Biomass Inventory", "Carb Audit", 
@@ -35,13 +68,18 @@ const dropdownFieldsConfig = {
     'intervention_project_type': ["Agroforestry", "Animal", "Awareness-raising", "Certified Carbon", "Cocoa", "Coffee", "Conservation", "Livelihood", "Marine", "Reforestation", "Regenerative Agriculture"]
 };
 
-// helper pour mettre la premiere lettre en majuscule
+/**
+ * Met en majuscule la première lettre d’un libellé.
+ */
 function capitalizeFirstLetter(string) {
     if (!string) return '';
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-// render l'affichage d'un champ de precision dans le modal ( badges si multi, tiret si vide )
+/**
+ * Affiche une métadonnée dans le modal.
+ * Les tableaux deviennent des badges ; une valeur vide devient « — ».
+ */
 function renderMetaFieldDisplay(element, key, val) {
     if (!element) return;
     element.innerHTML = '';
@@ -69,14 +107,19 @@ function renderMetaFieldDisplay(element, key, val) {
         if (val === undefined || val === null || val === '') {
             element.textContent = '—';
             element.style.color = '#94a3b8';
-        } else {
+        } 
+         
+        else {
             element.style.color = '';
             element.textContent = val;
         }
     }
 }
 
-// Affiche immédiatement les tags dans le modal, y compris après une modification.
+/**
+ * Affiche les tags du modal.
+ * Un clic sur un tag ferme le modal et lance une recherche sur ce tag.
+ */
 function renderModalTags(element, tags) {
     if (!element) return;
 
@@ -115,8 +158,15 @@ function renderModalTags(element, tags) {
     });
 }
 
+/*
+ * 2. ZOOM DE L’IMAGE DU MODAL
+ * Une seule loupe est active ; son cleanup retire le carré, les timers et les listeners.
+ */
 let activeModalImageZoomCleanup = null;
 
+/**
+ * Supprime la loupe active et tous les listeners associés.
+ */
 function clearModalImageZoom() {
     if (typeof activeModalImageZoomCleanup === 'function') {
         activeModalImageZoomCleanup();
@@ -124,6 +174,10 @@ function clearModalImageZoom() {
     }
 }
 
+/**
+ * Installe la loupe sur une image du modal.
+ * Le carré fixe suit le pointeur via requestAnimationFrame sans modifier l’image principale.
+ */
 function setupModalImageZoom(image) {
     clearModalImageZoom();
     if (!image) return;
@@ -163,6 +217,9 @@ function setupModalImageZoom(image) {
     let hideTimer = null;
     let isVisible = false;
 
+    /**
+     * Affiche la loupe lorsque l’image est chargée.
+     */
     const showZoom = () => {
         if (isVisible) return;
         isVisible = true;
@@ -173,6 +230,9 @@ function setupModalImageZoom(image) {
         });
     };
 
+    /**
+     * Masque la loupe lorsque le pointeur quitte l’image.
+     */
     const hideZoom = () => {
         isVisible = false;
         zoomSquare.style.opacity = '0';
@@ -182,6 +242,9 @@ function setupModalImageZoom(image) {
         }, 130);
     };
 
+    /**
+     * Positionne la loupe et son fond agrandi sous le pointeur.
+     */
     const updateZoom = () => {
         animationFrame = null;
         if (!latestPointer || !image.isConnected) return;
@@ -228,6 +291,9 @@ function setupModalImageZoom(image) {
         zoomSquare.style.transform = `translate3d(${squareLeft}px, ${squareTop}px, 0)`;
     };
 
+    /**
+     * Mémorise le pointeur et limite le calcul à une fois par frame.
+     */
     const scheduleZoomUpdate = event => {
         if (event.pointerType && event.pointerType !== 'mouse') return;
         latestPointer = { clientX: event.clientX, clientY: event.clientY };
@@ -237,7 +303,13 @@ function setupModalImageZoom(image) {
         }
     };
 
+    /**
+     * Désactive la loupe si l’image ne peut pas être chargée.
+     */
     const handleImageError = () => clearModalImageZoom();
+    /**
+     * Masque la loupe pendant un scroll ou un redimensionnement.
+     */
     const handleViewportChange = () => hideZoom();
 
     image.addEventListener('pointerenter', scheduleZoomUpdate);
@@ -261,6 +333,10 @@ function setupModalImageZoom(image) {
     };
 }
 
+/*
+ * 3. ÉTAT GLOBAL ET RÉFÉRENCES DOM
+ * Ces IDs/classes forment le contrat entre ce script et page_canto.html.
+ */
 let isListView = false;
 let isSortedByDate = false;
 let isAuthenticated = false;
@@ -302,7 +378,7 @@ let globalFoldersList = [];
 let draggedFolderElement = null;
 
 
-// mappage des types de fichiers
+// Extensions reconnues par les filtres et les aperçus.
 const fileTypeMap = {
   images: ['.png', '.jpg', '.jpeg', '.jfif', '.jpe', '.gif', '.bmp', '.svg', '.webp', '.tif', '.tiff', '.avif', '.heif', '.dng', '.cr2', '.nef', '.arw'],
   videos: ['.mp4', '.mov', '.avi', '.wmv', '.flv', '.mkv', '.webm'],
@@ -311,11 +387,17 @@ const fileTypeMap = {
   presentations: ['.ppt', '.pptx', '.key', '.odp']
 };
 
+/**
+ * Retourne l’extension du fichier en minuscules, point inclus.
+ */
 function getFileExtension(filename) {
   return filename.slice(filename.lastIndexOf('.')).toLowerCase();
 }
 
 
+/**
+ * Retourne une date JJ-MM-AAAA ou un libellé de repli.
+ */
 function formatDateForDisplay(dateString) {
   if (!dateString) return "No date";
   
@@ -332,8 +414,14 @@ function formatDateForDisplay(dateString) {
   }
 }
 
-// dossiers
-// recup les dossiers depuis la bdd et les charge dans la sidebar
+/*
+ * 4. ARBORESCENCE ET CRUD DES DOSSIERS
+ * La liste plate du serveur est transformée en arbre, puis rendue récursivement dans la sidebar.
+ */
+/**
+ * Charge les folders avec GET /get_folders.
+ * Met à jour globalFoldersList, rerend la sidebar puis restaure le folder actif.
+ */
 function loadFolders(folderIdToRestore = null) {
   fetch('/get_folders')
     .then(response => response.json())
@@ -352,6 +440,9 @@ function loadFolders(folderIdToRestore = null) {
     .catch(error => console.error('Error loading folders:', error));
 }
 
+/**
+ * Transforme la liste plate des folders en racines et lance le rendu récursif.
+ */
 function renderFolderStructure(folders) {
   foldersContainer.innerHTML = '';
   const folderMap = new Map();
@@ -376,6 +467,10 @@ function renderFolderStructure(folders) {
   });
 }
 
+/**
+ * Crée le DOM d’un folder et de ses enfants.
+ * Branche navigation, boutons, permissions, partage et drag-and-drop.
+ */
 function renderFolder(folder, parentElement) {
   const folderElement = document.createElement('div');
   folderElement.className = 'folder';
@@ -554,8 +649,9 @@ function renderFolder(folder, parentElement) {
   folder.element = folderElement;
 }
 
-// envoyer le nouvel ordre au serveur
-// save le nouvel ordre des dossiers dans la bdd apres un drag and drop
+/**
+ * Envoie l’ordre des folders frères à POST /update_folder_order après un drag-and-drop.
+ */
 function saveFolderOrder(container) {
     const folders = container.querySelectorAll(':scope > .folder');
     const orderData = [];
@@ -583,19 +679,25 @@ function saveFolderOrder(container) {
     .catch(err => console.error("Erreur réseau :", err));
 }
 
+/**
+ * Ajoute un input temporaire dans l’arbre.
+ * Entrée crée le folder avec le parent reçu ; Échap ou blur annule.
+ */
 function showFolderInput(parentElement, parentId = null) {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'folder-input';
   input.placeholder = 'Enter folder name';
   let isHandled = false; 
-  input.addEventListener('keyup', function(e) {
+  input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && this.value.trim() && !isHandled) {
+      e.preventDefault();
       isHandled = true; 
       createFolder(this.value.trim(), parentId);
       if (this.parentNode) this.remove();
     } 
     else if (e.key === 'Escape' && !isHandled) {
+      e.preventDefault();
       isHandled = true; 
       if (this.parentNode) this.remove();
     }
@@ -610,11 +712,14 @@ function showFolderInput(parentElement, parentId = null) {
   input.focus();
 }
 
-// requete ajax pour creer un nouveau dossier en bdd
+/**
+ * Crée un folder avec POST /create_folder.
+ * Ajoute immédiatement le résultat à l’arbre local et au snapshot sandbox, sans le lier au portail.
+ */
 function createFolder(name, parentId = null) {
   const formData = new FormData();
   formData.append('name', name);
-  if (parentId) formData.append('parent_id', parentId);
+  if (parentId !== null) formData.append('parent_id', parentId);
   fetch('/create_folder', {
     method: 'POST',
     body: formData
@@ -622,7 +727,86 @@ function createFolder(name, parentId = null) {
   .then(response => response.json())
   .then(data => {
     if (data.status === 'success') {
-      loadFolders(parentId);
+      const returnedFolder = data.folder || {};
+      const createdFolderId = Number.parseInt(returnedFolder.id, 10);
+
+      // Le serveur renvoie le folder créé : on l’ajoute localement pour éviter un refresh,
+      // notamment dans le sandbox où /get_folders peut provenir d’un snapshot.
+      if (!Number.isInteger(createdFolderId)) {
+        loadFolders(parentId);
+        return;
+      }
+
+      const returnedParentId = Object.prototype.hasOwnProperty.call(returnedFolder, 'parent_id')
+        ? returnedFolder.parent_id
+        : parentId;
+      const normalizedParentId = returnedParentId === null || returnedParentId === ''
+        ? null
+        : Number.parseInt(returnedParentId, 10);
+      const localFolder = {
+        ...returnedFolder,
+        id: createdFolderId,
+        name: returnedFolder.name || name,
+        parent_id: Number.isInteger(normalizedParentId) ? normalizedParentId : null
+      };
+      const existingFolderIndex = globalFoldersList.findIndex(
+        folder => Number.parseInt(folder.id, 10) === createdFolderId
+      );
+
+      if (existingFolderIndex >= 0) {
+        globalFoldersList[existingFolderIndex] = localFolder;
+      }
+      else {
+        globalFoldersList.push(localFolder);
+      }
+
+      // Seul le snapshot de navigation est synchronisé.
+      // portal_folders reste inchangé : l’administrateur choisit les folders visibles.
+      /*
+       * Après création, le snapshot sandbox est mis à jour pour afficher le dossier sans refresh.
+       * Cela ne modifie jamais portal_folders : la liaison visuelle au portail reste manuelle.
+       */
+      const sandboxFoldersData = document.getElementById('sandbox-folders-data');
+      if (sandboxFoldersData) {
+        try {
+          const sandboxData = JSON.parse(sandboxFoldersData.textContent || '[]');
+          if (Array.isArray(sandboxData)) {
+            sandboxFoldersData.textContent = JSON.stringify(globalFoldersList);
+          }
+          else {
+            sandboxData.folders = globalFoldersList;
+            sandboxFoldersData.textContent = JSON.stringify(sandboxData);
+          }
+        }
+        catch (error) {
+          console.error('Error updating the portal folder snapshot:', error);
+        }
+      }
+
+      renderFolderStructure(globalFoldersList);
+
+      const folderIdToRestore = currentFolderFilter !== null
+        ? currentFolderFilter
+        : localFolder.parent_id;
+      if (folderIdToRestore !== null && typeof window.triggerFolderClick === 'function') {
+        requestAnimationFrame(() => {
+          // Après le rerender, on conserve le folder consulté et on révèle le nouveau nœud.
+          window.triggerFolderClick(folderIdToRestore);
+          const createdFolderElement = document.querySelector(
+            `.folder[data-folder-id="${createdFolderId}"]`
+          );
+          if (createdFolderElement) {
+            let parentFolderElement = createdFolderElement.parentElement.closest('.folder');
+            while (parentFolderElement) {
+              parentFolderElement.classList.add('active');
+              const subfolders = parentFolderElement.querySelector(':scope > .subfolders');
+              if (subfolders) subfolders.style.display = 'block';
+              parentFolderElement = parentFolderElement.parentElement.closest('.folder');
+            }
+            createdFolderElement.scrollIntoView({ block: 'nearest' });
+          }
+        });
+      }
     } 
     else {
       alert('Error creating folder: ' + data.message);
@@ -630,8 +814,9 @@ function createFolder(name, parentId = null) {
   })
   .catch(error => console.error('Error creating folder:', error));
 }
-
-// suppr un dossier de la bdd
+/**
+ * Confirme puis supprime un folder avec POST /delete_folder.
+ */
 function deleteFolder(folderId) {
   const formData = new FormData();
   formData.append('folder_id', folderId);
@@ -661,8 +846,9 @@ function deleteFolder(folderId) {
   .catch(error => console.error('Error deleting folder:', error));
 }
 
-// fonction rename dossier double clic
-// renomme un dossier existant en bdd
+/**
+ * Remplace le nom par un input et sauvegarde avec POST /rename_folder.
+ */
 function renameFolder(element, folderId) {
     if (element.querySelector('input')) return;
     const currentName = element.textContent.trim();    
@@ -679,6 +865,9 @@ function renameFolder(element, folderId) {
     element.appendChild(input);
     input.focus();
     input.select();
+    /**
+     * Valide le renommage saisi puis restaure l’affichage du folder.
+     */
     const saveRename = async () => {
         const newName = input.value.trim();        
         if (!newName || newName === currentName) {
@@ -717,6 +906,9 @@ function renameFolder(element, folderId) {
     });
 }
 
+/**
+ * Initialise les bulles décoratives de l’en-tête.
+ */
 function createHeaderBubbles() {
   const header = document.querySelector('header');
   const bubblesContainer = document.createElement('div');
@@ -732,6 +924,9 @@ function createHeaderBubbles() {
   }
 }
 
+/**
+ * Crée et anime une bulle décorative.
+ */
 function createBubble(container) {
   const bubble = document.createElement('div');
   bubble.classList.add('bubble');
@@ -753,14 +948,17 @@ function createBubble(container) {
   }, (duration + delay) * 1000);
 }
 
-// filtre et affiche uniquement les fichiers d'un dossier
+/**
+ * Charge les fichiers d’un folder avec l’ancien endpoint dédié.
+ * La navigation principale utilise maintenant executeGlobalSearch avec folder_id.
+ */
 function filterFilesByFolder(folderId) {
-  // récupérer tous les fichiers dans ce dossier et ses sous dossiers
+  // Récupère le contenu du folder, descendants inclus.
   fetch(`/get_files_in_folder/${folderId}`)
     .then(response => response.json())
     .then(data => {
       const filesInFolder = data.files.map(f => f.name.toLowerCase());
-      // maintenant filtrer l'affichage
+      // Remplace la galerie par les fichiers retournés.
       const items = gallery.querySelectorAll(".gallery-item");
       items.forEach(item => {
         const itemName = item.getAttribute("data-name").toLowerCase();
@@ -774,9 +972,11 @@ function filterFilesByFolder(folderId) {
     });
 }
 
-// change le dossier parent d'un fichier en bdd
+/**
+ * Assigne le fichier ouvert à un folder avec POST /update_file_folder.
+ */
 function updateFileFolder(filename, folderId) {
-  // On utilise URLSearchParams au lieu de FormData pour que le serveur Node.js puisse le lire nativement
+  // URLSearchParams correspond au format urlencoded attendu par cette route Node.js.
   const params = new URLSearchParams();
   params.append('filename', filename);
   if (folderId) params.append('folder_id', folderId);
@@ -802,12 +1002,18 @@ function updateFileFolder(filename, folderId) {
   .catch(error => console.error('Error:', error));
 }
 
-// gestion files
+// Helpers historiques de tri, regroupement et chargement local des fichiers.
+/**
+ * Applique le filtre de type sélectionné aux cartes présentes.
+ */
 function filterAndDisplay() {
   const currentFilter = document.querySelector('.filter-dropdown-content button[data-filter]')?.getAttribute('data-filter') || 'all';
   filterAndDisplayWithFilter(currentFilter);
 }
 
+/**
+ * Trie localement les cartes par nom.
+ */
 function sortGallery(asc = true) {
   const items = Array.from(gallery.children).filter(item => item.classList.contains('gallery-item') && !item.classList.contains('folder-card'));
   items.sort((a, b) => {
@@ -820,6 +1026,9 @@ function sortGallery(asc = true) {
   filterAndDisplay();
 }
 
+/**
+ * Regroupe localement les cartes sous des en-têtes de date.
+ */
 function groupFilesByDate() {
   const gallery = document.getElementById("gallery");
   const items = Array.from(gallery.querySelectorAll(".gallery-item"));
@@ -863,6 +1072,9 @@ function groupFilesByDate() {
   });
 }
 
+/**
+ * Charge les images lorsqu’elles approchent de la zone visible avec IntersectionObserver.
+ */
 function lazyLoadImages() {
   const lazyImages = document.querySelectorAll('img[loading="lazy"]');
   
@@ -900,7 +1112,14 @@ function lazyLoadImages() {
   });
 }
 
-// charge les details d'un fichier et ouvre le modal de la galerie
+/*
+ * 5. MODALE DE DÉTAIL D’UN FICHIER
+ * La carte fournit un premier état ; /file_details complète ensuite les données du modal.
+ */
+/**
+ * Ouvre le modal à partir des data-* de la carte.
+ * Construit l’aperçu, active le zoom si nécessaire, puis complète les champs via /file_details.
+ */
 function showFileModal(item) {
   currentModalFilename = item.getAttribute('data-filename');
   const filename = currentModalFilename;
@@ -967,24 +1186,24 @@ function showFileModal(item) {
       if (modalSection) modalSection.textContent = data.section || "—";
       if (modalCategory) modalCategory.textContent = data.category || "—";
 
-      // update portal display from file_details response!
+      // Actualise le portail à partir de la réponse complète /file_details.
       const currentPortalNameSpan = document.getElementById('currentPortalName');
       const currentPortalFolderNameSpan = document.getElementById('currentPortalFolderName');
       const btnRemovePortal = document.getElementById('removeFromPortalBtn');
       
-      // hide the assignment workflow inputs by default when opening
+      // Referme les formulaires d’assignation à chaque ouverture du modal.
       const folderGroup = document.getElementById('modalPortalFolderGroup');
       const saveBtn = document.getElementById('confirmAssignPortalBtn');
       if (folderGroup) folderGroup.style.display = 'none';
       if (saveBtn) saveBtn.style.display = 'none';
       
-      // load Portals list into select dropdown
+      // Recharge la liste des portails disponibles.
       loadPortalsForSelect();
 
       if (data.portal_id && data.portal_name) {
           if (currentPortalNameSpan) currentPortalNameSpan.textContent = data.portal_name;
           
-          // look up current folder name
+          // Résout le nom du folder courant depuis globalFoldersList.
           const folderObj = globalFoldersList.find(gf => gf.id == data.folder_id);
           if (currentPortalFolderNameSpan) currentPortalFolderNameSpan.textContent = folderObj ? folderObj.name : '—';
           
@@ -1056,6 +1275,9 @@ function showFileModal(item) {
   }
 }
 
+/**
+ * Charge et construit l’arbre utilisé par « Add to Folder » dans le modal.
+ */
 function loadFoldersForModal(currentFolderId) {
   fetch('/get_folders')
     .then(response => response.json())
@@ -1065,6 +1287,9 @@ function loadFoldersForModal(currentFolderId) {
         folderMap[folder.id] = { ...folder, element: null, subfolders: [] };
       });
 
+      /**
+       * Reconstruit le chemin complet d’un folder en remontant ses parents.
+       */
       const getFullFolderPath = (folderId, map) => {
         const parts = [];
         let current = map[folderId];
@@ -1116,6 +1341,10 @@ if (btnRemoveFolder) {
     });
 }
 
+/**
+ * Rend un nœud du sélecteur de folder et ses enfants.
+ * Cliquer le nœud assigne currentModalFilename à ce folder.
+ */
 function renderFolderNode(folder, parentElement, currentFolderId) {
   const folderElement = document.createElement('div');
   folderElement.className = 'folder-node';
@@ -1147,6 +1376,9 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
       });
   }
 
+  /**
+   * Construit le chemin affiché pour un folder.
+   */
   const buildFolderPath = (f) => {
     const parts = [];
     let current = f;
@@ -1157,23 +1389,23 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
     return parts.join(' / ');
   };
 
-  // gere le clic sur la checkbox
+  // La checkbox sélectionne ce folder comme destination.
   const checkbox = folderHeader.querySelector('.select-folder-checkbox');
   checkbox.addEventListener('change', function(e) {
     e.stopPropagation();
     if (this.checked) {
-      // décocher toutes les autres checkboxes
+      // Une seule destination peut être choisie.
       document.querySelectorAll('#folderTree .select-folder-checkbox').forEach(cb => {
         if (cb !== this) cb.checked = false;
       });
-      // assigner le fichier à ce dossier
+      // Envoie immédiatement l’assignation du fichier ouvert.
       updateFileFolder(currentModalFilename, folder.id);
       document.getElementById('currentFolderName').textContent = buildFolderPath(folder);
     }
   });
   
   folderHeader.addEventListener('click', function(e) {
-    // si on a cliqué sur la checkbox, ne pas faire le toggle (deja géré par l'événement change)
+    // Le clic checkbox est déjà traité par change : ne pas déplier le nœud.
     if (e.target.closest('.select-folder-checkbox')) return;
 
     folderElement.classList.toggle('active');
@@ -1193,7 +1425,9 @@ function renderFolderNode(folder, parentElement, currentFolderId) {
   parentElement.appendChild(folderElement);
 }
 
-// ferme le modal de details de fichier + reset les players video/audio
+/**
+ * Ferme le modal et nettoie le zoom ainsi que les états visuels temporaires.
+ */
 function closeFileModal() {
   sessionStorage.removeItem('lastOpenFilename');
   clearModalImageZoom();
@@ -1211,6 +1445,9 @@ function closeFileModal() {
   });
 }
 
+/**
+ * Masque ou affiche les fichiers selon le type, sans toucher aux cartes folder.
+ */
 function filterAndDisplayWithFilter(filterValue) {
   let visibleCount = 0;
   const items = gallery.querySelectorAll(".gallery-item");
@@ -1241,14 +1478,17 @@ function filterAndDisplayWithFilter(filterValue) {
   lazyLoadImages();
 }
 
-// recherche global
+/*
+ * 6. RECHERCHE, FILTRES ET PAGINATION
+ * executeGlobalSearch rerend toute la galerie et ignore les réponses devenues obsolètes.
+ */
 const pagination = document.querySelector('.pagination');
 let typingTimer;                
 const doneTypingInterval = 400;  
 let currentSearchQuery = ""; 
 let __searchRequestToken = 0;
 
-// Toggle recherche IA
+// Active ou désactive l’enrichissement IA de la recherche.
 let aiSearchEnabled = false;
 const aiToggleBtn = document.getElementById('aiSearchToggle');
 const aiHintBox = document.getElementById('aiSearchHint');
@@ -1261,7 +1501,7 @@ if (aiToggleBtn) {
             aiHintBox.style.display = 'none';
             aiHintBox.innerHTML = '';
         }
-        // relance la recherche courante avec/sans IA si requête est en cours
+        // Rejoue la requête courante avec le nouveau mode IA.
         const query = searchInput ? searchInput.value.trim() : '';
         if (query.length > 0) {
             executeGlobalSearch(query, 1);
@@ -1286,7 +1526,10 @@ if (searchInput) {
 
 
 let currentFolderFilter = null;
-// effectue la recherche globale de fichiers avec pagination, filtres et tris
+/**
+ * Appelle GET /search_file avec recherche, page, tri, filtres, IA et folder_id.
+ * Le token de requête ignore les anciennes réponses avant de rerendre la galerie.
+ */
 function executeGlobalSearch(query, page = 1) {
     const __myToken = ++__searchRequestToken;
     gallery.innerHTML = `
@@ -1303,7 +1546,7 @@ function executeGlobalSearch(query, page = 1) {
         .then(response => response.json())
         .then(data => {
             if (__myToken !== __searchRequestToken) return;
-            gallery.innerHTML = ''; // nettoyage initial de la galerie
+            gallery.innerHTML = ''; // Efface l’ancien rendu uniquement après validation du token.
             if (aiToggleBtn) aiToggleBtn.classList.remove('loading');
             if (aiSearchEnabled && data.ai_terms && data.ai_terms.length > 0) {
                 aiHintBox.style.display = 'flex';
@@ -1315,7 +1558,7 @@ function executeGlobalSearch(query, page = 1) {
                 aiHintBox.innerHTML = '';
             }
 
-            // folders correspondant (ia)
+            // Ajoute d’abord les folders trouvés, avec un badge lorsque l’IA est active.
             if (data.folders && data.folders.length > 0) {
                 data.folders.forEach(folder => {
                     const folderCardHtml = `
@@ -1498,7 +1741,9 @@ function executeGlobalSearch(query, page = 1) {
         });
 }
 
-// recréer les boutons de pagination
+/**
+ * Crée les boutons de page qui relancent executeGlobalSearch avec la même requête.
+ */
 function renderSearchPagination(query, currentPage, totalPages) {
     if (!pagination) return;
     if (totalPages <= 1) {
@@ -1529,6 +1774,13 @@ function renderSearchPagination(query, currentPage, totalPages) {
 }
 
 
+/*
+ * 7. ÉVÉNEMENTS PRINCIPAUX
+ * Tri, filtres, téléchargement, sidebar, profil, folders et portails sont branchés ici.
+ */
+/**
+ * Branche une seule fois les interactions permanentes de la page.
+ */
 function setupEventListeners() {
 document.querySelectorAll('.sort-dropdown-content button[data-sort]').forEach(button => {
     button.addEventListener('click', (e) => {
@@ -1546,7 +1798,7 @@ if (modalFavBtn) {
     });
 }
 
-// slug
+// Filtres globaux envoyés au serveur.
 document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEach(button => {
     button.addEventListener('click', (e) => {
         currentGlobalFilter = e.currentTarget.getAttribute('data-filter');
@@ -1556,7 +1808,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     });
 });
   
-  // boutons affichage
+  // Bascule entre galerie et liste.
   toggleViewBtn.addEventListener("click", () => {
     isListView = !isListView;
     document.body.classList.toggle("list-view", isListView);
@@ -1564,7 +1816,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     lazyLoadImages();
   });
   
-  // boutons copie et téléchargement
+  // Branche les actions présentes sur les cartes initiales.
   setupCopyLinkButtons();
   setupGalleryItemClicks();
 
@@ -1637,7 +1889,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     }
   });
   
-  // modal de confirmation
+  // Téléchargement exclusif : confirmation obligatoire avant de continuer.
   confirmCheckbox.addEventListener('change', function() {
     confirmProceed.disabled = !this.checked;
   });
@@ -1688,7 +1940,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     });
 }
 
-// gestion logout 
+// Dans un portail, utilise la route de logout dédiée ; sinon, logout global.
   if (profileLogout) {
     profileLogout.addEventListener('click', function(e) {
       e.preventDefault(); 
@@ -1726,7 +1978,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
         confirmModal.classList.add('active');
       } 
       else {
-        // download normal pour les fichiers non exclusifs
+        // Un fichier non exclusif est téléchargé directement.
         const a = document.createElement('a');
         a.href = downloadBtn.href;
         let dlName = downloadBtn.getAttribute('download');
@@ -1746,7 +1998,7 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     }
   });
   
-  // Sidebar
+  // Ouvre/ferme la sidebar et la replie sur mobile après un clic extérieur.
   sidebarToggle.addEventListener('click', function(e) {
     e.stopPropagation();
     sidebar.classList.toggle('active');
@@ -1762,26 +2014,58 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
     }
   });
   
-  // bouton ajout de dossier principal
-  const addMainFolderBtn = document.getElementById('addMainFolderBtn'); 
-if (addMainFolderBtn) {
+  /*
+   * RÈGLE CRITIQUE : en sandbox portail, le bouton principal récupère le parent du folder
+   * ouvert et crée donc un frère. Le bouton + de l’arbre continue à créer un enfant.
+   */
+  const addMainFolderBtn = document.getElementById('addMainFolderBtn');
+  if (addMainFolderBtn) {
     addMainFolderBtn.addEventListener('click', function() {
-        if (canEditFiles) {
-            showFolderInput(foldersContainer);
+      if (canEditFiles) {
+        const isPortalFolderView = document.body.dataset.isSandbox === 'true';
+        const openedFolderId = Number.parseInt(document.body.dataset.folderId, 10);
+        const openedFolder = isPortalFolderView
+          ? globalFoldersList.find(folder => Number.parseInt(folder.id, 10) === openedFolderId)
+          : null;
+        const openedFolderParentId = openedFolder && openedFolder.parent_id !== null
+          ? Number.parseInt(openedFolder.parent_id, 10)
+          : null;
+        const parentId = Number.isInteger(openedFolderParentId)
+          ? openedFolderParentId
+          : null;
+        let inputContainer = foldersContainer;
+
+        // En vue folder de portail, le bouton principal crée un frère du folder ouvert.
+        // Le bouton + de chaque nœud reste réservé à la création d’un enfant.
+        if (isPortalFolderView && Number.isInteger(openedFolderId)) {
+          const openedFolderElement = foldersContainer.querySelector(
+            `.folder[data-folder-id="${openedFolderId}"]`
+          );
+          const siblingContainer = openedFolderElement
+            ? openedFolderElement.parentElement
+            : null;
+
+          if (siblingContainer) {
+            siblingContainer.style.display = 'block';
+            inputContainer = siblingContainer;
+          }
         }
-        else {
-            alert("You don't have permission to perform this action. Only administrators can modify folders.");
-        }
+
+        showFolderInput(inputContainer, parentId);
+      }
+      else {
+        alert("You don't have permission to perform this action. Only administrators can modify folders.");
+      }
     });
-}
+  }
   
-  // gestion du profil et logout
+  // Ouvre ou ferme le menu du profil.
   profileBtn.addEventListener('click', function(e) {
     e.stopPropagation();
     profileDropdown.classList.toggle('active');
   });
   
-  // fermer le dropdown quand on clique ailleurs
+  // Ferme le menu profil lors d’un clic extérieur.
   document.addEventListener('click', function(e) {
     if (!e.target.closest('.profile-container')) {
       profileDropdown.classList.remove('active');
@@ -1795,7 +2079,7 @@ if (addMainFolderBtn) {
     }
   });
   
-  // pour le bouton "Add to Folder"
+  // Affiche l’arbre de destination dans le modal fichier.
   const btnAddFolder = document.getElementById('addToFolderBtn');
   if (btnAddFolder) {
       btnAddFolder.addEventListener('click', function() {
@@ -1808,7 +2092,7 @@ if (addMainFolderBtn) {
       });
   }
 
-  // add to portal
+  // Affiche le parcours d’assignation portail + folder.
   const btnAddPortal = document.getElementById('addToPortalBtn');
   if (btnAddPortal) {
       btnAddPortal.addEventListener('click', function() {
@@ -1825,6 +2109,9 @@ if (addMainFolderBtn) {
 }
 
 
+/**
+ * Branche la copie de lien sur les cartes déjà présentes.
+ */
 function setupCopyLinkButtons() {
   const copyButtons = document.querySelectorAll('.copy-link-btn');
   copyButtons.forEach(button => {
@@ -1848,6 +2135,9 @@ function setupCopyLinkButtons() {
   });
 }
 
+/**
+ * Ancien binding des boutons Exclusive, conservé pour compatibilité.
+ */
 function setupExclusiveButtons() {
   document.addEventListener('click', async (e) => {
     const button = e.target.closest('.exclusive-btn');
@@ -1899,6 +2189,9 @@ function setupExclusiveButtons() {
   });
 }
 
+/**
+ * Ouvre le modal au clic sur une carte, sauf si une action interne a été cliquée.
+ */
 function setupGalleryItemClicks() {
   const items = document.querySelectorAll('.gallery-item');
   items.forEach(item => {
@@ -1927,6 +2220,9 @@ function setupGalleryItemClicks() {
   });
 }
 
+/**
+ * Positionne les tooltips des boutons d’action par délégation sur document.
+ */
 function setupTooltips() {
   document.addEventListener('mouseover', function(e) {
     const tooltip = e.target.closest('.download-btn, .copy-link-btn, .exclusive-btn')?.querySelector('.tooltip');
@@ -1937,7 +2233,11 @@ function setupTooltips() {
   });
 }
 
-// authentification
+// Helper legacy : contrôle visuel uniquement, jamais une sécurité serveur.
+/**
+ * Helper legacy de contrôle client.
+ * Il ne remplace pas l’autorisation serveur et ne doit pas être utilisé comme sécurité.
+ */
 function promptForPassword(actionCallback) {
   if (canManageFolders) {
     actionCallback();
@@ -2021,7 +2321,9 @@ function promptForPassword(actionCallback) {
   passwordInput.focus();
 }
 
-// init
+/**
+ * Affiche le bouton Upload uniquement lorsque isAdmin est vrai.
+ */
 function updateUploadButtonVisibility() {
   const uploadBtn = document.querySelector('.upload-btn');
   if (uploadBtn) {
@@ -2029,6 +2331,10 @@ function updateUploadButtonVisibility() {
   }
 }
 
+/*
+ * 8. INITIALISATION DE LA PAGE
+ * L’ordre est important : permissions, événements, dossiers, recherche puis filtres dynamiques.
+ */
 document.addEventListener('DOMContentLoaded', function() {
   enforceNonAdminLock();
   setupEventListeners();
@@ -2043,6 +2349,9 @@ document.addEventListener('DOMContentLoaded', function() {
   loadDynamicFilters();
   
  
+  /**
+   * Ouvre ou ferme la sidebar selon le breakpoint de 992 px.
+   */
   function handleSidebarOnResize() {
     if (window.innerWidth >= 992) {
       sidebar.classList.add('active');
@@ -2056,7 +2365,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.addEventListener('load', handleSidebarOnResize);
   window.addEventListener('resize', handleSidebarOnResize);
 
-  // Restore previously opened file details modal after refresh (robust polling approach)
+  // Après un reload, recherche temporairement la carte pour rouvrir le dernier modal.
   const lastOpen = sessionStorage.getItem('lastOpenFilename');
   if (lastOpen) {
       let attempts = 0;
@@ -2068,7 +2377,7 @@ document.addEventListener('DOMContentLoaded', function() {
               clearInterval(interval);
               card.scrollIntoView({ behavior: 'smooth', block: 'center' });
               card.click();
-          } else if (attempts > 100) { // Max 10 seconds (100 * 100ms)
+          } else if (attempts > 100) { // Arrête la restauration après 10 secondes.
               clearInterval(interval);
               sessionStorage.removeItem('lastOpenFilename');
           }
@@ -2076,6 +2385,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
+/**
+ * Applique la couleur du bouton profil selon le rôle.
+ */
 function setProfileButtonColor() {
   const profileBtn = document.getElementById('profileBtn');
   if (profileBtn) {
@@ -2118,7 +2430,9 @@ function setProfileButtonColor() {
   }
 }
 
-// masque tous les boutons d'admin si l'user connecté n'a pas les droits requis
+/**
+ * Masque les actions d’édition non autorisées dans l’interface.
+ */
 function enforceNonAdminLock() {
   const adminButtons = document.querySelectorAll('.add-main-folder-btn, .add-folder-btn, .delete-folder-btn, #addToPortalBtn, #addToFolderBtn, #removeFromFolderBtn');
   adminButtons.forEach(button => {
@@ -2128,7 +2442,13 @@ function enforceNonAdminLock() {
   });
 }
 
-// charge la liste des portails clients dans le select d'assignation du modal
+/*
+ * 9. ASSIGNATION INDIVIDUELLE PORTAIL + FOLDER
+ * Le portail est choisi d’abord ; le second select charge uniquement ses folders déjà liés.
+ */
+/**
+ * Charge GET /get_all_portals dans le select du modal.
+ */
 function loadPortalsForSelect() {
     const portalSelect = document.getElementById('modalPortalSelect');
     if (!portalSelect) return;
@@ -2148,7 +2468,7 @@ function loadPortalsForSelect() {
         .catch(err => console.error("Error loading portals:", err));
 }
 
-// Step 2: Dynamically load folders for the chosen portal
+// Étape 2 : charge uniquement les folders déjà liés au portail choisi.
 document.addEventListener('change', function(e) {
     if (e.target && e.target.id === 'modalPortalSelect') {
         const portalId = e.target.value;
@@ -2189,7 +2509,7 @@ document.addEventListener('change', function(e) {
     }
 });
 
-// Step 3: Save assignment and update folder_id on documents
+// Étape 3 : confirme puis enregistre le couple portail + folder.
 document.addEventListener('click', function(e) {
     if (e.target && e.target.id === 'confirmAssignPortalBtn') {
         if (!currentModalFilename) return;
@@ -2223,17 +2543,17 @@ document.addEventListener('click', function(e) {
                     document.getElementById('currentPortalName').textContent = portalName;
                     document.getElementById('currentPortalFolderName').textContent = folderName;
                     
-                    // Update standard folder display
+                    // Synchronise aussi le libellé standard du folder.
                     const folderNameSpan = document.getElementById('currentFolderName');
                     if (folderNameSpan) folderNameSpan.textContent = folderName;
                     
-                    // Show/hide buttons
+                    // Referme le formulaire et affiche l’action de retrait.
                     document.getElementById('removeFromPortalBtn').style.display = 'inline-block';
                     saveBtn.style.display = 'none';
                     document.getElementById('modalPortalFolderGroup').style.display = 'none';
                     document.getElementById('modalPortalSelect').value = '';
                     
-                    // Update search card and layout
+                    // Met à jour les data-* de la carte sans attendre un refresh.
                     const safeFilename = currentModalFilename.replace(/"/g, '\\"');
                     const card = document.querySelector(`.gallery-item[data-filename="${safeFilename}"]`);
                     if (card) {
@@ -2256,6 +2576,9 @@ document.addEventListener('click', function(e) {
     }
 });
 
+/**
+ * Vérifie avec /get_portal_files si un fichier appartient à un portail.
+ */
 function checkFileInPortal(filename, portalId) {
   return fetch(`/get_portal_files/${portalId}`)
     .then(response => response.json())
@@ -2268,7 +2591,7 @@ function checkFileInPortal(filename, portalId) {
     });
 }
 
-// === ÉCOUTEUR GLOBAL POUR LE RETRAIT D'UN PORTAIL ===
+// Le bouton du modal retire le fichier de son portail actuel.
 document.addEventListener('click', function(e) {
     if (e.target && e.target.id === 'removeFromPortalBtn') {
         if (!canEditFiles) {
@@ -2281,7 +2604,9 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// retire un fichier de son portail d'assignation
+/**
+ * Retire le fichier ouvert du portail puis actualise le modal et sa carte.
+ */
 function removeFileFromPortal() {
   if (!currentModalFilename) return;
   const params = new URLSearchParams();
@@ -2322,6 +2647,9 @@ function removeFileFromPortal() {
   });
 }
 
+  /**
+   * Demande au serveur de mettre à jour les statistiques d’un portail.
+   */
   function updatePortalStats(portalId) {
   fetch(`/portal/${portalId}/stats`)
     .then(response => response.json())
@@ -2332,7 +2660,10 @@ function removeFileFromPortal() {
     })
     .catch(error => console.error('Error updating portal stats:', error));
 }
-// maj le portail d'un fichier
+/**
+ * Ancien helper d’assignation simple à un portail.
+ * Le parcours actuel utilise portail + folder via confirmAssignPortalBtn.
+ */
 function updateFilePortal(filename, portalId) {
   const formData = new FormData();
   formData.append('filename', filename);
@@ -2345,7 +2676,7 @@ function updateFilePortal(filename, portalId) {
   .then(response => response.json())
   .then(data => {
     if (data.status === 'success') {
-      // maj interface utilisateur 
+      // Le serveur est à jour ; l’interface appelante gère son propre rendu.
       console.log('File portal updated successfully');
     } else {
       alert('Error updating portal: ' + data.message);
@@ -2354,6 +2685,9 @@ function updateFilePortal(filename, portalId) {
   .catch(error => console.error('Error:', error));
 }
 
+/**
+ * Affiche Add Folder ou Remove Folder selon l’affectation actuelle.
+ */
 function updateFolderButtons(hasFolder) {
     const btnAddFolder = document.getElementById('addToFolderBtn');
     const btnRemoveFolder = document.getElementById('removeFromFolderBtn');
@@ -2368,7 +2702,9 @@ function updateFolderButtons(hasFolder) {
     }
 }
 
-// supprimer un fichier d'un dossier
+/**
+ * Retire un fichier de son folder, synchronise l’état puis conserve le reload historique.
+ */
 function removeFileFromFolder(filename) {
     if (!confirm("Are you sure you want to remove this file from its current folder?")) {
         return;
@@ -2401,6 +2737,9 @@ function removeFileFromFolder(filename) {
     });
 }
 
+/**
+ * Demande au serveur de resynchroniser le folder d’un fichier.
+ */
 function syncFolderState(filename) {
     fetch('/sync_file_folder', {
         method: 'POST',
@@ -2421,19 +2760,13 @@ function syncFolderState(filename) {
 }
 
 /*
-const btnAddPortalbtn = document.getElementById('addToPortalBtn');
-if (btnAddPortalbtn) {
-  btnAddPortal.addEventListener('click', function() {
-    if (isAdmin) {
-      const portalList = document.getElementById('portalList');
-      portalList.style.display = portalList.style.display === 'none' ? 'block' : 'none';
-    } else {
-      alert("You don't have permission to perform this action. Only administrators can modify portals.");
-    }
-  });
-}
-*/ 
-
+ * Ancien listener Add to Portal retiré de la lecture : il doublonnait le flux actif.
+ * L’assignation actuelle impose le choix du portail puis d’un folder déjà lié.
+ */
+/**
+ * Ancien helper d’assignation directe sans choix de folder.
+ * Le parcours portail + folder est le flux à privilégier.
+ */
 function addFileToPortal(targetPortalId, portalName) {
     if (!currentModalFilename) {
         console.error("Aucun fichier sélectionné (currentModalFilename est null)");
@@ -2474,12 +2807,15 @@ function addFileToPortal(targetPortalId, portalName) {
     });
 }
 
-// MULTI-SELECT
+/*
+ * 10. SÉLECTION MULTIPLE
+ * selectedFiles contient les noms et liens utilisés par toutes les actions bulk.
+ */
 let selectedFiles = [];
 document.addEventListener('click', function(e) {
     const checkbox = e.target.closest('.select-checkbox');
     if (checkbox) {
-        e.stopPropagation(); // Empêche d'ouvrir la modale du fichier
+        e.stopPropagation(); // La sélection bulk ne doit pas ouvrir le modal.
         const item = checkbox.closest('.gallery-item');
         const filename = item.getAttribute('data-filename');
         const link = item.getAttribute('data-link');
@@ -2494,6 +2830,9 @@ document.addEventListener('click', function(e) {
     }
 });
 
+/**
+ * Affiche la barre bulk et le nombre de fichiers sélectionnés.
+ */
 function updateBulkActionBar() {
     const bar = document.getElementById('bulkActionBar');
     const countSpan = document.getElementById('bulkCount');
@@ -2514,7 +2853,10 @@ function updateBulkActionBar() {
     }
 }
 
- // filtre sur section et catégories 
+ // Charge les filtres Section et Category depuis les données existantes.
+    /**
+     * Charge les Sections et Categories disponibles avec /get_filters_data.
+     */
     function loadDynamicFilters() {
     fetch('/get_filters_data')
         .then(res => res.json())
@@ -2526,12 +2868,12 @@ function updateBulkActionBar() {
             sectionContent.innerHTML = '';
             categoryContent.innerHTML = '';
 
-            //bouton "All Sections" 
+            // Option sans filtre de Section.
             const allSecBtn = document.createElement('button');
             allSecBtn.textContent = 'All Sections';
             allSecBtn.onclick = () => setSectionFilter('all');
             sectionContent.appendChild(allSecBtn);
-            // ajoute les sections de la bdd
+            // Ajoute chaque Section renvoyée par le serveur.
             data.sections.forEach(sec => {
                 const btn = document.createElement('button');
                 btn.textContent = sec;
@@ -2539,13 +2881,13 @@ function updateBulkActionBar() {
                 sectionContent.appendChild(btn);
             });
 
-            // bouton "All Categories" 
+            // Option sans filtre de Category.
             const allCatBtn = document.createElement('button');
             allCatBtn.textContent = 'All Categories';
             allCatBtn.onclick = () => setCategoryFilter('all');
             categoryContent.appendChild(allCatBtn);
 
-            // ajout catégories de la bdd
+            // Ajoute chaque Category renvoyée par le serveur.
             data.categories.forEach(cat => {
                 const btn = document.createElement('button');
                 btn.textContent = cat;
@@ -2556,12 +2898,18 @@ function updateBulkActionBar() {
         .catch(err => console.error("Erreur chargement filtres :", err));
     }
 
+    /**
+     * Change la Section active puis relance la recherche.
+     */
     function setSectionFilter(section) {
         currentSectionFilter = section;
         document.getElementById('sectionFilterBtn').innerHTML = `<i class="fas fa-folder-open"></i> Section: ${section === 'all' ? 'All' : section}`;
         executeGlobalSearch(currentSearchQuery, 1);
     }
 
+    /**
+     * Change la Category active puis relance la recherche.
+     */
     function setCategoryFilter(category) {
         currentCategoryFilter = category;
         document.getElementById('categoryFilterBtn').innerHTML = `<i class="fas fa-list-ul"></i> Category: ${category === 'all' ? 'All' : category}`;
@@ -2569,6 +2917,9 @@ function updateBulkActionBar() {
     }
 
    
+/**
+ * Branche l’ouverture et la fermeture de la modale About.
+ */
 function initAboutModal() {
     const aboutModal = document.getElementById('aboutModal');
     const openBtn = document.getElementById('openAboutBtn');
@@ -2601,6 +2952,10 @@ function initAboutModal() {
     });
 }
 
+/**
+ * Bascule le favori via /toggle_favorite.
+ * Met à jour le cache, la carte, le modal et le filtre Favorites.
+ */
 window.toggleFavorite = function(event, filename) {
     event.stopPropagation();
     const formData = new FormData();
@@ -2640,7 +2995,11 @@ window.toggleFavorite = function(event, filename) {
 
 document.addEventListener('DOMContentLoaded', initAboutModal);
 
-// annuler la sélection
+// Annule la sélection bulk et retire l’état selected des cartes.
+/*
+ * 11. ACTIONS BULK, PARTAGE ET ZIP
+ * Ce bloc gère partage, téléchargement, déplacement, portail, retrait et suppression en masse.
+ */
 document.addEventListener('DOMContentLoaded', () => {
     const btnCancel = document.getElementById('bulkCancelBtn');
     if (btnCancel) {
@@ -2653,7 +3012,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Bouton Partager — génère un lien groupé via /create_share_link
+    // Génère un lien unique pour tous les fichiers sélectionnés.
     const btnShare = document.getElementById('bulkShareBtn');
     if (btnShare) {
         btnShare.addEventListener('click', async () => {
@@ -2669,7 +3028,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const openBtn = document.getElementById('shareOpenBtn');
             const previewContainer = document.getElementById('shareFilePreview');
 
-            // Reset state
+            // Réinitialise la modale avant la nouvelle génération.
             loading.style.display = 'none';
             result.style.display = 'none';
             errorDiv.style.display = 'none';
@@ -2694,7 +3053,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     result.style.display = 'block';
                     openBtn.style.display = 'inline-flex';
 
-                    // Aperçu des fichiers dans la modale
+                    // Affiche un aperçu compact des fichiers inclus dans le lien.
                     previewContainer.innerHTML = selectedFiles.map(f => {
                         const ext = (f.filename.split('.').pop() || '').toLowerCase();
                         const isImg = ['jpg','jpeg','png','gif','webp','svg'].includes(ext);
@@ -2706,7 +3065,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>`;
                     }).join('');
 
-                    // Copier automatiquement dans le clipboard
+                    // Tente de copier le lien automatiquement ; l’échec n’est pas bloquant.
                     try { await navigator.clipboard.writeText(data.url); } catch {}
 
                 } else {
@@ -2722,7 +3081,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Bouton copier dans la modale de partage
+    // Permet de recopier manuellement le lien généré.
     const shareCopyBtn = document.getElementById('shareCopyBtn');
     if (shareCopyBtn) {
         shareCopyBtn.addEventListener('click', async () => {
@@ -2740,7 +3099,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // télécharger tous les fichiers sélectionnés
+    // Télécharge les fichiers sélectionnés puis construit un ZIP côté navigateur.
     const btnDownload = document.getElementById('bulkDownloadBtn');
     if (btnDownload) {
         btnDownload.addEventListener('click', async () => {
@@ -2771,7 +3130,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-// download folders
+/**
+ * Récupère récursivement les fichiers du folder, les télécharge via le proxy,
+ * puis crée le ZIP dans le navigateur avec JSZip et saveAs.
+ */
 window.downloadFolderAsZip = async function(folderId, btnElement) {
     const originalHtml = btnElement.innerHTML;
     btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -2813,7 +3175,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
     }
 };
 
-    // logique selection en masse pour assigner fichier a folder
+    // Déplacement bulk vers un folder ou vers la racine Library.
     const bulkFolderBtn = document.getElementById('bulkFolderBtn');
     const bulkFolderModal = document.getElementById('bulkFolderModal');
     const bulkFolderSelect = document.getElementById('bulkFolderSelect');
@@ -2841,7 +3203,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                     treeContainer.innerHTML = '';
                     selectedBulkFolderId = 'none';
                     
-                    // --- 1. DOSSIER RACINE (ROOT) ---
+                    // Première destination possible : aucun folder, donc racine Library.
                     const rootDiv = document.createElement('div');
                     rootDiv.style.cssText = 'padding: 6px 8px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #334155;';
                     rootDiv.innerHTML = `
@@ -2873,6 +3235,9 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                             }
                         });
 
+                        /**
+                         * Crée un nœud repliable du sélecteur bulk de destination folder.
+                         */
                         function createTreeNode(folder) {
                             const node = document.createElement('div');
                             node.style.marginLeft = folder.parent_id ? '20px' : '0px';
@@ -2902,7 +3267,10 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                                 folder.subfolders.forEach(sub => childrenContainer.appendChild(createTreeNode(sub)));
                             }
 
-                            // Clic sur le nom pour déplier/replier
+                            // Le nom déplie ou replie uniquement les enfants.
+                            /**
+                             * Déplie ou replie un nœud de l’arbre bulk.
+                             */
                             const toggleAction = (e) => {
                                 e.stopPropagation();
                                 if (hasChildren) {
@@ -2915,7 +3283,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
 
                             header.querySelector('.folder-name-toggle').onclick = toggleAction;
 
-                            // Clic sur le bouton VERT pour valider le déplacement
+                            // Le bouton vert choisit ce folder et déclenche la confirmation.
                             header.querySelector('button').onclick = (e) => {
                                 e.stopPropagation();
                                 selectedBulkFolderId = folder.id;
@@ -2974,21 +3342,58 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         });
     }
 
-    // logique selection en masse pour assigner fichier a portail
+    // Assignation bulk en deux choix obligatoires : portail, puis folder lié.
+    /*
+     * BULK PORTAIL : chaque changement de portail réinitialise le folder, puis charge uniquement
+     * les folders liés via /portal_folders/:id. La confirmation exige les deux sélections.
+     */
     const bulkPortalBtn = document.getElementById('bulkPortalBtn');
     const bulkPortalModal = document.getElementById('bulkPortalModal');
     const bulkPortalSelect = document.getElementById('bulkPortalSelect');
+    const bulkPortalFolderGroup = document.getElementById('bulkPortalFolderGroup');
+    const bulkPortalFolderSelect = document.getElementById('bulkPortalFolderSelect');
+    const bulkPortalFolderHint = document.getElementById('bulkPortalFolderHint');
     const confirmBulkPortalBtn = document.getElementById('confirmBulkPortalBtn');
+
+    /**
+     * Active la confirmation seulement si portail et folder sont sélectionnés.
+     */
+    const updateBulkPortalSubmitState = () => {
+        if (!confirmBulkPortalBtn) return;
+        const hasPortal = bulkPortalSelect && bulkPortalSelect.value !== 'none';
+        const hasFolder = bulkPortalFolderSelect && bulkPortalFolderSelect.value !== 'none';
+        confirmBulkPortalBtn.disabled = !(hasPortal && hasFolder);
+        confirmBulkPortalBtn.style.opacity = confirmBulkPortalBtn.disabled ? '0.55' : '1';
+    };
+
+    /**
+     * Vide le choix de folder lorsqu’un autre portail est sélectionné.
+     */
+    const resetBulkPortalFolderSelection = () => {
+        if (bulkPortalFolderGroup) bulkPortalFolderGroup.style.display = 'none';
+        if (bulkPortalFolderSelect) {
+            bulkPortalFolderSelect.innerHTML = '<option value="none">-- Select a Folder --</option>';
+            bulkPortalFolderSelect.disabled = true;
+        }
+        if (bulkPortalFolderHint) bulkPortalFolderHint.textContent = '';
+        updateBulkPortalSubmitState();
+    };
 
     if (bulkPortalBtn) {
         bulkPortalBtn.addEventListener('click', () => {
             if (selectedFiles.length === 0) return;
+
+            resetBulkPortalFolderSelection();
+            if (confirmBulkPortalBtn) confirmBulkPortalBtn.innerHTML = 'Assign to selection';
+
             if (bulkPortalSelect) {
-                bulkPortalSelect.innerHTML = '<option value="none">-- Select a Portal --</option>';
-                fetch('/get_all_portals')
+                bulkPortalSelect.disabled = true;
+                bulkPortalSelect.innerHTML = '<option value="none">Loading portals...</option>';
+                fetch('/get_all_portals', { cache: 'no-store' })
                     .then(response => response.json())
                     .then(data => {
-                        if (data.portals) {
+                        bulkPortalSelect.innerHTML = '<option value="none">-- Select a Portal --</option>';
+                        if (Array.isArray(data.portals)) {
                             data.portals.forEach(portal => {
                                 const opt = document.createElement('option');
                                 opt.value = portal.id;
@@ -2996,31 +3401,110 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                                 bulkPortalSelect.appendChild(opt);
                             });
                         }
+                    })
+                    .catch(err => {
+                        console.error('Error loading portals:', err);
+                        bulkPortalSelect.innerHTML = '<option value="none">Unable to load portals</option>';
+                    })
+                    .finally(() => {
+                        bulkPortalSelect.disabled = false;
+                        updateBulkPortalSubmitState();
                     });
             }
+
             if (bulkPortalModal) bulkPortalModal.classList.add('active');
         });
+    }
+
+    if (bulkPortalSelect) {
+        bulkPortalSelect.addEventListener('change', () => {
+            resetBulkPortalFolderSelection();
+            const portalId = bulkPortalSelect.value;
+            if (portalId === 'none') return;
+
+            if (bulkPortalFolderGroup) bulkPortalFolderGroup.style.display = 'block';
+            if (bulkPortalFolderSelect) {
+                bulkPortalFolderSelect.disabled = true;
+                bulkPortalFolderSelect.innerHTML = '<option value="none">Loading folders...</option>';
+            }
+            if (bulkPortalFolderHint) bulkPortalFolderHint.textContent = 'Loading the folders linked to this portal...';
+
+            fetch(`/portal_folders/${encodeURIComponent(portalId)}`, { cache: 'no-store' })
+                .then(response => response.json())
+                .then(data => {
+                    if (!bulkPortalFolderSelect) return;
+                    bulkPortalFolderSelect.innerHTML = '<option value="none">-- Select a Folder --</option>';
+
+                    if (data.status === 'success' && Array.isArray(data.folders) && data.folders.length > 0) {
+                        data.folders.forEach(folder => {
+                            const opt = document.createElement('option');
+                            opt.value = folder.folder_id;
+                            const folderObj = globalFoldersList.find(item => item.id == folder.folder_id);
+                            opt.textContent = folder.folder_name || (folderObj ? folderObj.name : `Folder #${folder.folder_id}`);
+                            bulkPortalFolderSelect.appendChild(opt);
+                        });
+                        bulkPortalFolderSelect.disabled = false;
+                        if (bulkPortalFolderHint) {
+                            bulkPortalFolderHint.textContent = 'Only folders linked to the selected portal are available.';
+                        }
+                    } else {
+                        const opt = document.createElement('option');
+                        opt.value = 'none';
+                        opt.textContent = 'No folders linked to this portal';
+                        bulkPortalFolderSelect.appendChild(opt);
+                        bulkPortalFolderSelect.disabled = true;
+                        if (bulkPortalFolderHint) {
+                            bulkPortalFolderHint.textContent = 'Add a folder to this portal before assigning files.';
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading portal folders:', err);
+                    if (bulkPortalFolderSelect) {
+                        bulkPortalFolderSelect.innerHTML = '<option value="none">Unable to load folders</option>';
+                        bulkPortalFolderSelect.disabled = true;
+                    }
+                    if (bulkPortalFolderHint) bulkPortalFolderHint.textContent = 'The portal folders could not be loaded.';
+                })
+                .finally(updateBulkPortalSubmitState);
+        });
+    }
+
+    if (bulkPortalFolderSelect) {
+        bulkPortalFolderSelect.addEventListener('change', updateBulkPortalSubmitState);
     }
 
     if (confirmBulkPortalBtn) {
         confirmBulkPortalBtn.addEventListener('click', () => {
             if (selectedFiles.length === 0) return;
-            const portalId = bulkPortalSelect.value;
+
+            const portalId = bulkPortalSelect ? bulkPortalSelect.value : 'none';
+            const folderId = bulkPortalFolderSelect ? bulkPortalFolderSelect.value : 'none';
             if (portalId === 'none') {
                 alert('Please select a portal first.');
                 return;
             }
-            const portalName = bulkPortalSelect.options[bulkPortalSelect.selectedIndex].text;
-            const filenamesArray = selectedFiles.map(f => f.filename);
+            if (folderId === 'none') {
+                alert('Please select a destination folder.');
+                return;
+            }
 
-            const msg = `You are about to share ${filenamesArray.length} files on the portal '${portalName}'. These files will be immediately visible to the client. Confirm?`;
+            const portalName = bulkPortalSelect.options[bulkPortalSelect.selectedIndex].text;
+            const folderName = bulkPortalFolderSelect.options[bulkPortalFolderSelect.selectedIndex].text;
+            const filenamesArray = selectedFiles.map(file => file.filename);
+
+            const msg = `You are about to share ${filenamesArray.length} files in the folder '${folderName}' on the portal '${portalName}'. These files will be immediately visible to the client. Confirm?`;
             if (!confirm(msg)) return;
 
             confirmBulkPortalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assigning...';
             confirmBulkPortalBtn.disabled = true;
+            confirmBulkPortalBtn.style.opacity = '0.55';
+            if (bulkPortalSelect) bulkPortalSelect.disabled = true;
+            if (bulkPortalFolderSelect) bulkPortalFolderSelect.disabled = true;
 
             const formData = new FormData();
             formData.append('portal_id', portalId);
+            formData.append('folder_id', folderId);
             formData.append('filenames', JSON.stringify(filenamesArray));
 
             fetch('/bulk_update_file_portal', {
@@ -3031,25 +3515,27 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
             .then(data => {
                 if (data.status === 'success') {
                     if (bulkPortalModal) bulkPortalModal.classList.remove('active');
-                    alert(data.message || `${filenamesArray.length} items assigned to portal.`);
+                    alert(data.message || `${filenamesArray.length} items assigned to '${folderName}' in '${portalName}'.`);
                     document.getElementById('bulkCancelBtn').click();
                     location.reload();
                 } else {
-                    alert("Error: " + data.message);
+                    alert('Error: ' + data.message);
                 }
             })
             .catch(err => {
                 console.error("Erreur lors de l'assignation en masse au portail :", err);
-                alert("Connection error.");
+                alert('Connection error.');
             })
             .finally(() => {
                 confirmBulkPortalBtn.innerHTML = 'Assign to selection';
-                confirmBulkPortalBtn.disabled = false;
+                if (bulkPortalSelect) bulkPortalSelect.disabled = false;
+                if (bulkPortalFolderSelect) bulkPortalFolderSelect.disabled = false;
+                updateBulkPortalSubmitState();
             });
         });
     }
 
-    // logique selection en masse pour retirer fichier d'un folder
+    // Retire en masse les fichiers de leurs folders actuels.
     const bulkRemoveFolderBtn = document.getElementById('bulkRemoveFolderBtn');
     if (bulkRemoveFolderBtn) {
         bulkRemoveFolderBtn.addEventListener('click', () => {
@@ -3090,7 +3576,10 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         });
     }
 
-    // ── Suppression individuelle (icône trash sur chaque carte) ──────────────
+    // Suppression individuelle depuis l’icône de la carte.
+    /**
+     * Supprime un fichier individuel avec POST /delete et actualise son bouton.
+     */
     async function deleteFile(filename) {
         const fd = new FormData();
         fd.append('filename', filename);
@@ -3108,7 +3597,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                     card.style.transform = 'scale(0.9)';
                     setTimeout(() => card.remove(), 300);
                 }
-                // retirer de selectedFiles si sélectionné
+                // Nettoie aussi selectedFiles si la carte faisait partie du bulk.
                 selectedFiles = selectedFiles.filter(f => f.filename !== filename);
                 updateBulkActionBar();
             } else {
@@ -3122,7 +3611,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         }
     }
 
-    // délégation sur la gallery pour gérer les cartes Jinja ET les cartes injectées en JS
+    // Délégation nécessaire pour couvrir les cartes initiales et celles créées par la recherche.
     document.getElementById('gallery').addEventListener('click', function(e) {
         const trashBtn = e.target.closest('.delete-file-btn');
         if (!trashBtn) return;
@@ -3133,7 +3622,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         deleteFile(filename);
     });
 
-    // suppression en masse
+    // Supprime définitivement tous les fichiers sélectionnés après confirmation.
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     if (bulkDeleteBtn) {
         bulkDeleteBtn.addEventListener('click', async () => {
@@ -3151,7 +3640,7 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
                 const res = await fetch('/bulk_delete', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    // retirer les cartes du DOM avec animation
+                    // Retire immédiatement les cartes supprimées avec une courte animation.
                     selectedFiles.forEach(({ filename }) => {
                         const card = document.querySelector(`.gallery-item[data-filename="${CSS.escape(filename)}"]`);
                         if (card) {
@@ -3178,7 +3667,10 @@ window.downloadFolderAsZip = async function(folderId, btnElement) {
         });
     }
 
-// charger les favoris de l'utilisateur au chargement
+/*
+ * 12. FAVORIS
+ * Le cache utilisateur est chargé puis la recherche est relancée pour actualiser les cartes.
+ */
 fetch('/my_favorites')
     .then(res => res.json())
     .then(data => {
@@ -3188,6 +3680,10 @@ fetch('/my_favorites')
         }
     });
 
+/*
+ * 13. ÉDITION INLINE
+ * Un double-clic transforme un champ du modal en éditeur et sauvegarde via /update_file_metadata.
+ */
 document.addEventListener('dblclick', function(e) {
     if (!canEditFiles) return;
     const target = e.target.closest('.editable-field, .editable-meta-field');
@@ -3201,7 +3697,7 @@ document.addEventListener('dblclick', function(e) {
     
     const dropdownOptions = dropdownFieldsConfig[field] || dropdownFieldsConfig[metaKey];
     
-    // Multi-select meta fields editor
+    // Les métadonnées multi-valeurs utilisent un éditeur à badges.
     const isMultiSelect = dropdownOptions && ['activity', 'challenge', 'commodity', 'ecosystem_service', 'intervention_project_type'].includes(metaKey);
     
     const originalHTML = target.innerHTML;
@@ -3209,7 +3705,7 @@ document.addEventListener('dblclick', function(e) {
     if (['—', 'None', 'Unknown', 'Not specified'].includes(currentValue)) currentValue = '';
     
     if (isMultiSelect) {
-        // Build multi-select dropdown editor inline
+        // Construit le select, les badges et les boutons directement dans le champ.
         const editContainer = document.createElement('div');
         editContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px; width: 100%; border: 1.5px solid #16677c; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;';
         
@@ -3231,7 +3727,7 @@ document.addEventListener('dblclick', function(e) {
         const pillsContainer = document.createElement('div');
         pillsContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;';
         
-        // Load current array
+        // Copie la valeur courante sans modifier currentFileMetadata avant sauvegarde.
         let currentArray = [];
         try {
             const rawVal = currentFileMetadata[metaKey];
@@ -3239,6 +3735,9 @@ document.addEventListener('dblclick', function(e) {
             else if (typeof rawVal === 'string' && rawVal) currentArray = [rawVal];
         } catch(err) {}
         
+        /**
+         * Rerend les valeurs choisies dans l’éditeur de métadonnée multi-sélection.
+         */
         const renderEditPills = () => {
             pillsContainer.innerHTML = '';
             currentArray.forEach(val => {
@@ -3330,7 +3829,7 @@ document.addEventListener('dblclick', function(e) {
         return;
     }
     
-    // For single-select or text inputs
+    // Les autres champs utilisent un select, un textarea ou un input simple.
     if (field === 'tags') {
         const tagSpans = target.querySelectorAll('.modal-tag');
         const tagArray = [];
@@ -3391,6 +3890,9 @@ document.addEventListener('dblclick', function(e) {
     target.appendChild(inputElement);
     inputElement.focus();
     
+    /**
+     * Sauvegarde une édition simple avec /update_file_metadata puis actualise le modal et la carte.
+     */
     const saveEdit = async () => {
         let newValue = inputElement.value.trim();                
         if ((field === 'section' || field === 'category') && !newValue) {
@@ -3496,7 +3998,13 @@ document.addEventListener('dblclick', function(e) {
 });
 });
 
-// fil d'ariane 
+/*
+ * 14. BREADCRUMBS, NAVIGATION ET PARTAGE DE DOSSIER
+ * Le chemin est reconstruit en remontant parent_id dans globalFoldersList.
+ */
+/**
+ * Construit le fil d’Ariane en remontant parent_id dans globalFoldersList.
+ */
 function updateBreadcrumbs(folderId) {
     const breadcrumbContainer = document.getElementById('breadcrumbContainer');
     if (!breadcrumbContainer) return;
@@ -3537,6 +4045,9 @@ function updateBreadcrumbs(folderId) {
     }
 }
 
+/**
+ * Sélectionne un folder, déplie ses parents et relance la recherche avec son ID.
+ */
 window.triggerFolderClick = function(folderId) {
     const folderElement = document.querySelector(`.folder[data-folder-id="${folderId}"]`);
     if (!folderElement) return;
@@ -3566,6 +4077,9 @@ window.triggerFolderClick = function(folderId) {
     executeGlobalSearch(searchInput ? searchInput.value.trim() : '', 1);
 };
 
+/**
+ * Navigue vers un folder puis centre son nœud dans la sidebar.
+ */
 window.forceNavigateToFolder = function(folderId) {
     if (typeof window.triggerFolderClick === 'function') {
         window.triggerFolderClick(folderId);        
@@ -3585,6 +4099,9 @@ window.forceNavigateToFolder = function(folderId) {
 };
 
 
+/**
+ * Revient à la racine Library et relance la recherche sans folder_id.
+ */
 window.resetFolderSelection = function() {
     document.querySelectorAll('.folder').forEach(f => f.classList.remove('active'));
     document.querySelectorAll('.folder-name').forEach(fn => fn.classList.remove('is-selected'));
@@ -3594,7 +4111,9 @@ window.resetFolderSelection = function() {
     executeGlobalSearch(document.getElementById('searchInput').value.trim(), 1);
 };
 
-// partager un doss
+/**
+ * Crée un lien de partage récursif avec /api/share_folder/:id et l’affiche dans le modal.
+ */
 async function shareFolder(folderId, folderName) {
     const modal = document.getElementById('shareModal');
     const loading = document.getElementById('shareLoading');
