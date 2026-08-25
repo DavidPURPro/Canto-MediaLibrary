@@ -52,7 +52,7 @@ const pool = new Pool({
     password: process.env.POSTGRES_PASSWORD,
     port: process.env.POSTGRES_PORT || 5432,
     ssl: { rejectUnauthorized: false },
-    max: 30,
+    max: 100,
     idleTimeoutMillis: 30000,
 });
 
@@ -5079,6 +5079,9 @@ app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
 
 
 // démarre le serveur express sur le port fourni par l’environnement
-app.listen(PORT, () => {
+ const server = app.listen(PORT, () => {
     console.log(`serv Node.js démarré sur http://localhost:${PORT}`);
 });
+
+server.keepAliveTimeout = 120000; 
+server.headersTimeout = 120000;

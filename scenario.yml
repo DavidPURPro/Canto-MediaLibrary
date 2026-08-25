@@ -1,38 +1,40 @@
+# Fichier pour tester les perfs du site :  70 users simultanés -> OK
+# voir fichier "rapport"
 config:
-  target: "https://pur-flaskapi-b8bwd4eahpeue8d6.westeurope-01.azurewebsites.net"
+  target: "https://pur-medialibrary.azurewebsites.net"
   phases:
-    - duration: 60
+    - duration: 120
       arrivalRate: 2
-      rampTo: 10
-      name: "Pic B2B Réaliste (Jusqu'à 10 utilisateurs/sec)"
+      name: "Plateau Constant : 70 utilisateurs simultanés"
 
 scenarios:
-  - name: "Navigation Admin Intensive"
+  - name: "Navigation B2B Longue"
     weight: 1
     flow:
-      # 1. Chargement de la liste de tous les portails
+      # 1. Arrivée sur la liste des portails (et lecture pendant 5s)
       - get:
           url: "/portals"
           headers:
-            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
-      - think: 2
+            Cookie: "portal_session=s%3ApjOohs_aToeK_hUS76sV2M3J-MjpnvVZ.34MuAOQjadZ%2BWXNpcOZFuRgThGNNsewGuZwi5pyM3Mc"
+      - think: 5
       
-      # 2. Chargement des fichiers d'un portail
+      # 2. Ouverture d'un portail client (et consultation pendant 10s)
       - get:
           url: "/portal/test-26"
           headers:
-            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
-      - think: 2
+            Cookie: "portal_session=s%3ApjOohs_aToeK_hUS76sV2M3J-MjpnvVZ.34MuAOQjadZ%2BWXNpcOZFuRgThGNNsewGuZwi5pyM3Mc"
+      - think: 10
       
-      # 3. La fameuse Recherche !
+      # 3. Lancement d'une recherche (et analyse des résultats pendant 10s)
       - get:
           url: "/search_file?filename=logo&page=1&per_page=100"
           headers:
-            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
-      - think: 1
+            Cookie: "portal_session=s%3ApjOohs_aToeK_hUS76sV2M3J-MjpnvVZ.34MuAOQjadZ%2BWXNpcOZFuRgThGNNsewGuZwi5pyM3Mc"
+      - think: 10
       
-      # 4. Requête API supplémentaire
+      # 4. Vérification de l'arborescence (fin de session 10s)
       - get:
           url: "/get_folders"
           headers:
-            Cookie: "portal_session=s%3AONyx5pvdsLqWf3XWjuwrYLJ6i-B9F8Zk.JL%2BY3909JAkS1IJfEW%2FLoewFSA9Vaou%2FkWceeRlmuJw"
+            Cookie: "portal_session=s%3ApjOohs_aToeK_hUS76sV2M3J-MjpnvVZ.34MuAOQjadZ%2BWXNpcOZFuRgThGNNsewGuZwi5pyM3Mc"
+      - think: 10
