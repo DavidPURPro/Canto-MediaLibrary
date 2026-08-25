@@ -15,8 +15,201 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/portal_page_style.css') }}">
 
+  <style>
+    /* keep multi-selection visible on loose-file cards */
+    .file-card { position: relative; }
+    .file-card .select-checkbox {
+      position: absolute !important;
+      top: 12px !important;
+      right: 12px !important;
+      z-index: 15 !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      width: 24px !important;
+      height: 24px !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      border: 2px solid #ffffff !important;
+      border-radius: 7px !important;
+      background: rgba(15, 23, 42, 0.72) !important;
+      color: transparent !important;
+      cursor: pointer !important;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+    }
+    .file-card.selected .select-checkbox,
+    .file-card.is-selected .select-checkbox {
+      background: #0f766e !important;
+      color: #ffffff !important;
+    }
+    .file-card.selected,
+    .file-card.is-selected {
+      outline: 3px solid rgba(15, 118, 110, 0.82);
+      outline-offset: -3px;
+    }
+
+    /* explicit colors prevent inherited white-on-white bulk buttons */
+    #bulkActionBar {
+      background: #102f3b !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.35) !important;
+    }
+    #bulkActionBar .bulk-info,
+    #bulkActionBar #bulkCount { color: #ffffff !important; font-weight: 700; }
+    #bulkActionBar .bulk-btn,
+    #bulkActionBar .bulk-cancel-btn {
+      border: 1px solid rgba(255, 255, 255, 0.28) !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+    }
+    #bulkCopyBtn { background: #0f766e !important; }
+    #bulkDownloadBtn { background: #16677c !important; }
+    #bulkPortalBtn { background: #7c3aed !important; }
+    #bulkCancelBtn { background: #334155 !important; }
+
+    .business-metadata-title {
+      margin: 16px 0 8px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(148, 163, 184, 0.28);
+      color: inherit;
+      font-size: 0.95rem;
+      font-weight: 800;
+    }
+    .modal-meta .metadata-row { align-items: flex-start; }
+    .metadata-value { white-space: normal; overflow-wrap: anywhere; }
+    .metadata-pill {
+      display: inline-block;
+      margin: 2px 5px 2px 0;
+      padding: 3px 7px;
+      border: 1px solid #dbe5e8;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 0.78rem;
+    }
+
+    .portal-assignment-panel,
+    .bulk-assignment-panel {
+      margin-top: 12px;
+      padding: 14px;
+      border: 1px solid #dbe5e8;
+      border-radius: 12px;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .assignment-field { margin-bottom: 12px; }
+    .assignment-field label {
+      display: block;
+      margin-bottom: 6px;
+      color: #334155;
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .assignment-field select {
+      width: 100%;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #0f172a;
+    }
+    .assignment-hint { margin: 6px 0 0; color: #64748b; font-size: 0.8rem; }
+    .assignment-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .bulk-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10020;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.58);
+    }
+    .bulk-modal.active { display: flex; }
+    .bulk-modal-content {
+      width: min(520px, 100%);
+      max-height: min(720px, 90vh);
+      overflow: auto;
+      border-radius: 16px;
+      background: #ffffff;
+      color: #0f172a;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.38);
+    }
+    .bulk-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .bulk-modal-header h3 { margin: 0; }
+    .bulk-modal-close {
+      border: 0;
+      background: transparent;
+      color: #64748b;
+      font-size: 1.6rem;
+      cursor: pointer;
+    }
+    .bulk-modal-body { padding: 20px; }
+    .bulk-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .editable-field,
+    .editable-meta-field {
+      border-radius: 5px;
+      cursor: text;
+      transition: background-color 140ms ease, box-shadow 140ms ease;
+    }
+    .editable-field:hover,
+    .editable-meta-field:hover {
+      background: rgba(22, 103, 124, 0.08);
+      box-shadow: 0 0 0 3px rgba(22, 103, 124, 0.08);
+    }
+    .inline-edit-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #0f172a;
+      box-sizing: border-box;
+    }
+    .inline-edit-input {
+      width: 100%;
+      min-height: 38px;
+      padding: 7px 9px;
+      border: 2px solid #16677c;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #0f172a;
+      font: inherit;
+      box-sizing: border-box;
+    }
+    .inline-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .inline-edit-actions button { padding: 5px 11px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 700; }
+    .inline-edit-save { background: #16677c; color: #ffffff; }
+    .inline-edit-cancel { background: #e2e8f0; color: #334155; }
+
+    @media (max-width: 700px) {
+      #bulkActionBar { width: calc(100% - 24px); }
+      #bulkActionBar .bulk-buttons { gap: 6px; flex-wrap: wrap; }
+      #bulkActionBar .modern-btn { padding: 8px 10px !important; font-size: 0.82rem; }
+    }
+  </style>
+
 </head>
-<body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{ user_role }}" data-portal-id="{{ portal.id }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}">
+<body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{ user_role }}" data-can-manage-files="{{ 'true' if can_manage_files else 'false' }}" data-portal-id="{{ portal.id }}" data-portal-name="{{ portal.name }}" data-portal-slug="{{ portal.slug or portal.id }}" data-portal-email="{{ session.get('portal_user_email', '') }}" data-portal-access="{{ portal.access }}">
 
   <header>
     <div class="header-left">
@@ -104,6 +297,10 @@
           <input type="text" class="showcase-search-input" placeholder="Search folders & files..." id="searchInput" style="flex: 1; border: none; background: transparent; font-size: 1.05rem; color: #1e293b; outline: none;">
           <button class="search-button" id="searchButton" style="background: #16677c; color: white; padding: 10px 25px; border-radius: 40px; cursor: pointer; font-weight: 600; font-size: 14px; transition: var(--transition);">Search</button>
         </div>
+
+        <button id="portalFavoritesFilterBtn" style="height: 52px; padding: 0 25px; border-radius: 50px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; backdrop-filter: blur(10px);">
+          <i class="far fa-heart" id="portalFavoritesFilterIcon"></i> <span>Favorites</span>
+        </button>
 
         <div class="sort-dropdown" style="position: relative; display: inline-block;">
           <button class="back-btn" id="sortDropdownBtn" style="height: 52px; padding: 0 25px; border-radius: 50px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; backdrop-filter: blur(10px);">
@@ -210,11 +407,12 @@
                data-filetype="{{ file.file_type }}"
                data-description="{{ file.description }}"
                data-date-added="{{ file.upload_date }}"
-               data-size-bytes="{{ file.size }}"
-               data-section="Not specified"
-               data-category="Not specified"
-               data-date-event="Not specified"
-              data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
+               data-size-bytes="{{ file.size_bytes or 0 }}"
+               data-section="{{ file.section or 'Not specified' }}"
+               data-category="{{ file.category or 'Not specified' }}"
+               data-date-event="{{ file.date_event or 'Not specified' }}"
+               data-tags="{{ file.tags | join('|||') if file.tags else '' }}"
+               data-folder-name="{{ file.folder_name if file.folder_name else 'None' }}"
                style="cursor: pointer;">
 
             <div class="select-checkbox"><i class="fas fa-check"></i></div>
@@ -273,26 +471,42 @@
       </div>
 
       <div class="modal-info">
-        <h2 class="modal-title" id="modalTitle"></h2>
-        <div class="modal-description" id="modalDescription"></div>
+        <h2 class="modal-title{% if can_manage_files %} editable-field{% endif %}" id="modalTitle"{% if can_manage_files %} data-field="filename" title="Double-click to edit"{% endif %}></h2>
+        <div class="modal-description{% if can_manage_files %} editable-field{% endif %}" id="modalDescription"{% if can_manage_files %} data-field="description" title="Double-click to edit"{% endif %}></div>
 
-        <div class="modal-tags" id="modalTags"></div>
+        <div class="modal-tags-container{% if can_manage_files %} editable-field{% endif %}"{% if can_manage_files %} data-field="tags" title="Double-click to edit tags"{% endif %}>
+          <div class="modal-tags" id="modalTags"></div>
+        </div>
 
         <div class="modal-meta">
-          <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection"></span></div>
-          <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory"></span></div>
-          <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"></span></div>
-          <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"></span></div>
+          <div><i class="fas fa-folder-open" style="width: 20px;"></i> <strong>Section:</strong> <span id="modalSection"{% if can_manage_files %} class="editable-field" data-field="section" title="Double-click to edit"{% endif %}></span></div>
+          <div><i class="fas fa-list-ul" style="width: 20px;"></i> <strong>Category:</strong> <span id="modalCategory"{% if can_manage_files %} class="editable-field" data-field="category" title="Double-click to edit"{% endif %}></span></div>
+          <div><i class="fas fa-calendar-plus" style="width: 20px;"></i> <strong>Added on:</strong> <span id="modalAddedDate"{% if can_manage_files %} class="editable-field" data-field="date_ajout" title="Double-click to edit"{% endif %}></span></div>
+          <div><i class="fas fa-calendar-check" style="width: 20px;"></i> <strong>Event Date:</strong> <span id="modalEventDate"{% if can_manage_files %} class="editable-field" data-field="date_event" title="Double-click to edit"{% endif %}></span></div>
+          <div class="business-metadata-title">Business metadata</div>
+          <div class="metadata-row"><i class="fas fa-user-pen" style="width: 20px;"></i> <strong>Author:</strong> <span id="modalMetaAuthor" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="author" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="far fa-copyright" style="width: 20px;"></i> <strong>Copyright:</strong> <span id="modalMetaCopyright" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="copyright" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-people-group" style="width: 20px;"></i> <strong>Cooperative:</strong> <span id="modalMetaCooperative" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="cooperative" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-earth-americas" style="width: 20px;"></i> <strong>Country:</strong> <span id="modalMetaCountry" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="country" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-user-check" style="width: 20px;"></i> <strong>Farmer Consent:</strong> <span id="modalMetaFarmerConsent" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="farmer_consent" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-diagram-project" style="width: 20px;"></i> <strong>Project Name:</strong> <span id="modalMetaProjectName" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="project_name" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-location-dot" style="width: 20px;"></i> <strong>Region:</strong> <span id="modalMetaRegion" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="region" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-water" style="width: 20px;"></i> <strong>Wave:</strong> <span id="modalMetaWave" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="wave" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-person-digging" style="width: 20px;"></i> <strong>Activity:</strong> <span id="modalMetaActivity" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="activity" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-triangle-exclamation" style="width: 20px;"></i> <strong>Challenge:</strong> <span id="modalMetaChallenge" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="challenge" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-seedling" style="width: 20px;"></i> <strong>Commodity:</strong> <span id="modalMetaCommodity" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="commodity" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-leaf" style="width: 20px;"></i> <strong>Ecosystem Service:</strong> <span id="modalMetaEcosystemService" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="ecosystem_service" title="Double-click to edit"{% endif %}></span></div>
+          <div class="metadata-row"><i class="fas fa-screwdriver-wrench" style="width: 20px;"></i> <strong>Intervention / Project Type:</strong> <span id="modalMetaInterventionProjectType" class="metadata-value{% if can_manage_files %} editable-meta-field{% endif %}"{% if can_manage_files %} data-meta-key="intervention_project_type" title="Double-click to edit"{% endif %}></span></div>
         </div>
 
         <div class="folder-selector" id="folderSelector">
           <h4><i class="far fa-folder-open"></i> Folder Assignment</h4>
           <div class="current-status"><strong>Current:</strong> <span id="currentFolderName">None</span></div>
 
-          {% if is_admin %}
+          {% if can_manage_files %}
           <div class="action-group">
-            <button class="modern-btn secondary-btn" id="addToFolderBtn">Change Folder</button>
-            <button class="modern-btn danger-btn" id="removeFromFolderBtn" style="display: none;">Remove</button>
+            <button type="button" class="modern-btn secondary-btn" id="addToFolderBtn">Add to Folder</button>
+            <button type="button" class="modern-btn danger-btn" id="removeFromFolderBtn" style="display: none;">Remove</button>
           </div>
           <div class="folder-tree" id="folderTree" style="display: none;"></div>
           {% endif %}
@@ -300,14 +514,29 @@
 
         <div class="portal-selector" id="portalSelector">
           <h4><i class="fas fa-globe"></i> Portal Assignment</h4>
-          <div class="current-status"><strong>Current:</strong> <span id="currentPortalName">None</span></div>
-
-          {% if is_admin %}
-          <div class="action-group">
-            <button class="modern-btn secondary-btn" id="addToPortalBtn" onclick="togglePortalList()">Assign to Portal</button>
-            <button class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none;">Remove</button>
+          <div class="current-status" style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px;">
+            <div><strong>Current Portal:</strong> <span id="currentPortalName">None</span></div>
+            <div><strong>Current Folder:</strong> <span id="currentPortalFolderName">None</span></div>
           </div>
-          <div class="portal-list" id="portalList" style="display: none;"></div>
+
+          {% if can_manage_files %}
+          <div class="action-group" style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="assignment-field">
+              <select id="modalPortalSelect" aria-label="Portal">
+                <option value="">-- Select a Portal --</option>
+              </select>
+            </div>
+            <div class="assignment-field" id="modalPortalFolderGroup" style="display: none;">
+              <select id="modalPortalFolderSelect" aria-label="Folder linked to the portal" disabled>
+                <option value="">-- Select Folder --</option>
+              </select>
+              <p class="assignment-hint">Only folders configured for the selected portal are available.</p>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 5px;">
+              <button type="button" class="modern-btn primary-btn" id="confirmAssignPortalBtn" style="display: none;">Save Assignment</button>
+              <button type="button" class="modern-btn danger-btn" id="removeFromPortalBtn" style="display: none;">Remove</button>
+            </div>
+          </div>
           {% endif %}
         </div>
 
@@ -345,11 +574,47 @@
             <span id="bulkCount">0</span>
         </div>
         <div class="bulk-buttons">
-            <button id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
-            <button id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
-            <button id="bulkCancelBtn" class="bulk-cancel-btn"><i class="fas fa-times"></i></button>
+            <button type="button" id="bulkCopyBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-link"></i> Copy Links</button>
+            <button type="button" id="bulkDownloadBtn" class="modern-btn primary-btn bulk-btn"><i class="fas fa-file-archive"></i> Download ZIP</button>
+            {% if can_manage_files %}
+            <button type="button" id="bulkPortalBtn" class="modern-btn secondary-btn bulk-btn"><i class="fas fa-share-nodes"></i> Assign Portal &amp; Folder</button>
+            {% endif %}
+            <button type="button" id="bulkCancelBtn" class="bulk-cancel-btn" title="Cancel selection"><i class="fas fa-times"></i></button>
         </div>
   </div>
+
+  {% if can_manage_files %}
+  <div id="bulkPortalModal" class="bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulkPortalModalTitle">
+    <div class="bulk-modal-content">
+      <div class="bulk-modal-header">
+        <h3 id="bulkPortalModalTitle"><i class="fas fa-share-nodes"></i> Assign selected files</h3>
+        <button type="button" class="bulk-modal-close" id="bulkPortalModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="bulk-modal-body">
+        <p><strong id="bulkPortalSelectedCount">0</strong> file(s) selected.</p>
+        <div class="bulk-assignment-panel">
+          <div class="assignment-field">
+            <label for="bulkPortalSelect">Portal</label>
+            <select id="bulkPortalSelect">
+              <option value="">Select a portal...</option>
+            </select>
+          </div>
+          <div class="assignment-field" id="bulkPortalFolderGroup" style="display: none;">
+            <label for="bulkPortalFolderSelect">Folder linked to this portal</label>
+            <select id="bulkPortalFolderSelect" disabled>
+              <option value="">Select a portal first...</option>
+            </select>
+            <p class="assignment-hint">The same destination will be applied to every selected file.</p>
+          </div>
+        </div>
+      </div>
+      <div class="bulk-modal-footer">
+        <button type="button" class="modern-btn secondary-btn" id="bulkPortalCancel">Cancel</button>
+        <button type="button" class="modern-btn primary-btn" id="bulkPortalConfirm" disabled><i class="fas fa-check"></i> Confirm assignment</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -428,4 +693,5 @@
     };
   </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a25e4c7938d10053',t:'MTc4NTg1NDIzMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
+<script id="portal-all-files-data" type="application/json">{{ all_portal_files_json | safe }}</script>
+</body></html>
