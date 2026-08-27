@@ -1759,22 +1759,52 @@ app.post('/create_folder', loginRequiredJson, basicAdminRequired, upload.none(),
             return res.status(400).json({ status: "error", message: "Required folder name" });
         }
 
-        // lignes renvoyées par la requête sql en cours
+        // 1. Création du dossier
         const result = await pool.query(
             "INSERT INTO folders (name, parent_id) VALUES ($1, $2) RETURNING id;",
             [name, parent_id]
         );
-        // identifiant du folder actuellement traité
         const folder_id = result.rows[0].id;
-        if (insightsClient) {
+
+        // 2. Récupération du chemin complet via une requête SQL récursive
+        let fullPath = name; // Par défaut, juste le nom (s'il est à la racine)
+        
+        if (parent_id) {
+            const pathResult = await pool.query(`
+                WITH RECURSIVE folder_tree AS (
+                    -- On part du dossier qu'on vient de créer
+                    SELECT id, parent_id, name::text AS path
+                    FROM folders
+                    WHERE id = $1
+                    
+                    UNION ALL
+                    
+                    -- On remonte les parents en boucle et on ajoute leur nom au chemin
+                    SELECT p.id, p.parent_id, (p.name || '/' || c.path)
+                    FROM folders p
+                    INNER JOIN folder_tree c ON c.parent_id = p.id
+                )
+                -- On récupère la ligne finale (celle qui n'a plus de parent)
+                SELECT path FROM folder_tree WHERE parent_id IS NULL;
+            `, [folder_id]);
+            
+            if (pathResult.rows.length > 0) {
+                fullPath = pathResult.rows[0].path;
+            }
+        }
+
+        // 3. Envoi au mouchard (Application Insights)
+        if (typeof insightsClient !== 'undefined' && insightsClient) {
             insightsClient.trackEvent({
                 name: "folder_created",
                 properties: {
                     folder_name: name,
-                    user: getAuditUser(req)
+                    full_path: fullPath, // EX: "Rapports/Finance/2026"
+                    user: typeof getAuditUser === 'function' ? getAuditUser(req) : "Unknown"
                 }
             });
         }
+
         res.json({
             status: "success",
             folder: { id: folder_id, name: name, parent_id: parent_id }
