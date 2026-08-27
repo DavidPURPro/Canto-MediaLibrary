@@ -244,8 +244,7 @@
       <div class="profile-container">
         <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn">
           {% if user_email %}
-            {% set parts = user_email.split('@')[0].split('.') %}
-            {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+            {{ get_initials(user_email) }}
           {% else %}
             ?
           {% endif %}
@@ -694,4 +693,63 @@
   </script>
 
 <script id="portal-all-files-data" type="application/json">{{ all_portal_files_json | safe }}</script>
-</body></html>
+<script>
+    (function () {
+        function c() {
+            var b = a.contentDocument || (
+                a.contentWindow && a.contentWindow.document
+            );
+
+            if (b) {
+                var d = b.createElement('script');
+
+                d.innerHTML =
+                    "window.__CF$cv$params={" +
+                    "r:'a31b4a61a8816eb7'," +
+                    "t:'MTc4NzgzNTk1NQ=='" +
+                    "};" +
+                    "var a=document.createElement('script');" +
+                    "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';" +
+                    "document.getElementsByTagName('head')[0].appendChild(a);";
+
+                b.getElementsByTagName('head')[0].appendChild(d);
+            }
+        }
+
+        if (document.body) {
+            var a = document.createElement('iframe');
+
+            a.height = 1;
+            a.width = 1;
+            a.style.position = 'absolute';
+            a.style.top = 0;
+            a.style.left = 0;
+            a.style.border = 'none';
+            a.style.visibility = 'hidden';
+
+            document.body.appendChild(a);
+
+            if ('loading' !== document.readyState) {
+                c();
+            } 
+            else if (window.addEventListener) {
+                document.addEventListener('DOMContentLoaded', c);
+            } 
+            else {
+                var e = document.onreadystatechange || function () {};
+
+                document.onreadystatechange = function (b) {
+                    e(b);
+
+                    'loading' !== document.readyState && (
+                        document.onreadystatechange = e,
+                        c()
+                    );
+                };
+            }
+        }
+    })();
+</script>
+
+</body>
+</html>

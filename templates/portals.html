@@ -1,5 +1,3 @@
-<!-- Page qui affiche tous les portails -->
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -31,12 +29,15 @@
             {% endif %}
             
             <div class="profile-container">
+              {% set active_email = user_email if user_email else (session.get('user_email') or '') %}
+              {% set local_part = active_email.split('@')[0] %}
+              {% set local_part = local_part.slice(4) if (local_part.slice(0, 4) | lower) == 'ext-' else local_part %}
+              {% set parts = local_part.split('.') %}
               <button class="profile-btn {% if is_admin %}is-admin{% endif %}" id="profileBtn" data-is-admin="{{ 'true' if is_admin else 'false' }}">
-                {% set parts = session.get('user_email', '').split('@')[0].split('.') %}
-                {{ parts[0][0] | upper if parts|length > 0 else '' }}{{ parts[1][0] | upper if parts|length > 1 else '' }}
+                {{ (parts[0][0] if parts[0] else 'C') | upper }}{{ (parts[1][0] if parts|length > 1 and parts[1] else '') | upper }}
               </button>
               <div class="profile-dropdown" id="profileDropdown">
-                <div class="profile-email" id="profileEmail">{{ session.get('user_email', '') }}</div>
+                <div class="profile-email" id="profileEmail">{{ active_email }}</div>
                 {% if is_admin or user_role == 'admin' %}
                     <div class="profile-admin-badge">
                         <i class="fas fa-shield-alt"></i> Admin
@@ -124,7 +125,7 @@
   </main>
 
   <div id="addPortalModal" class="modern-modal-overlay">
-    <div class="modal-window" style="max-height: 85vh; overflow-y: auto;">
+    <div class="modal-window">
       <h3>Add New Portal</h3>
       <form id="portalForm" class="modern-form">
         <div class="form-group">
@@ -132,14 +133,14 @@
           <input type="text" id="portalName" name="name" required placeholder="Ex: Client XYZ">
         </div>
         <div class="form-group">
+          <label for="newPortalFolderSelect"><i class="fas fa-folder-open"></i> Link to Folder (Optional)</label>
+          <div class="form-group">
           <label><i class="fas fa-folder-open"></i> Link to Folders (Optional)</label>
-          <div id="newPortalFoldersChecklist" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;"></div>
+          <div id="newPortalFoldersChecklist" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;">
+              </div>
         </div>
-        
-        <div class="form-group">
-          <label><i class="fas fa-folder"></i> Root Folder (Portal Isolation) *</label>
-          <div id="portalRootFolderTree" class="portal-folders-tree-checklist" style="max-height: 180px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;"></div>
-          <p style="font-size: 11px; color: #64748b; margin-top: 4px;">The client portal will be strictly restricted to this folder and its subfolders.</p>
+              <option value="">No folder linked</option>
+          </select>
         </div>
         <div class="form-group">
           <label for="portalAccess">Access Type</label>
@@ -187,17 +188,27 @@
 </div>
 
 <div id="linkFolderModal" class="modern-modal-overlay">
-    <div class="modal-window" style="max-height: 85vh; overflow-y: auto;">
+    <div class="modal-window">
         <h3>Link <span id="linkPortalNameText" style="color: #16677c;"></span> to a Folder</h3>
         <div class="form-group" style="margin-top: 15px;">
+            <label for="existingPortalFolderSelect"><i class="fas fa-folder"></i> Select Folder</label>
+            <div class="form-group" style="margin-top: 15px;">
             <label><i class="fas fa-folder"></i> Select Folders to display</label>
-            <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;"></div>
+            <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;">
+              <label class="folder-row">
+                  <input type="checkbox" value="FOLDER_ID">
+                  <span>FOLDER_NAME</span>
+                  <select class="folder-size" data-folder="FOLDER_ID">
+                    <option value="standard">Standard (1×1)</option>
+                    <option value="large">Large (2×1)</option>
+                    <option value="tall">Tall (1×2)</option>
+                    <option value="hero">Hero (full)</option>
+                  </select>
+                </label>
+                </div>
         </div>
-        
-        <div class="form-group" style="margin-top: 15px;">
-          <label><i class="fas fa-folder"></i> Root Folder (Portal Isolation)</label>
-          <div id="existingPortalRootFolderTree" class="portal-folders-tree-checklist" style="max-height: 180px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;"></div>
-          <p style="font-size: 11px; color: #64748b; margin-top: 4px;">Root folder for recursive isolation of this portal.</p>
+                <option value="">No folder linked</option>
+            </select>
         </div>
         <div class="modal-actions">
             <button class="btn-secondary" onclick="document.getElementById('linkFolderModal').classList.remove('active')">Cancel</button>
@@ -207,5 +218,56 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/portals_logic.js') }}"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b97e07ecac4e73',t:'MTc4NDEyNjExMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>
+    (function () {
+        function c() {
+            var b = a.contentDocument ||
+                (a.contentWindow && a.contentWindow.document);
+
+            if (b) {
+                var d = b.createElement('script');
+
+                d.innerHTML =
+                    "window.__CF$cv$params={r:'a31b6ece8bfdca0d',t:'MTc4NzgzNzQ0Nw=='};" +
+                    "var a=document.createElement('script');" +
+                    "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';" +
+                    "document.getElementsByTagName('head')[0].appendChild(a);";
+
+                b.getElementsByTagName('head')[0].appendChild(d);
+            }
+        }
+
+        if (document.body) {
+            var a = document.createElement('iframe');
+
+            a.height = 1;
+            a.width = 1;
+            a.style.position = 'absolute';
+            a.style.top = 0;
+            a.style.left = 0;
+            a.style.border = 'none';
+            a.style.visibility = 'hidden';
+
+            document.body.appendChild(a);
+
+            if ('loading' !== document.readyState) {
+                c();
+            } 
+            else if (window.addEventListener) {
+                document.addEventListener('DOMContentLoaded', c);
+            }
+            else {
+                var e = document.onreadystatechange || function () {};
+
+                document.onreadystatechange = function (b) {
+                    e(b);
+
+                    'loading' !== document.readyState &&
+                        (document.onreadystatechange = e, c());
+                };
+            }
+        }
+    })();
+</script>
+</body>
 </html>

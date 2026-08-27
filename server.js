@@ -366,6 +366,25 @@ env.addFilter('min', function(array) {
     return Math.min(...array);
 });
 
+// calcule les initiales du bouton profil à partir de l’email
+// ignore le préfixe ext- des comptes externes (ext-prenom.nom@pur.co -> PN)
+function getInitialsFromEmail(email) {
+    if (!email || typeof email !== 'string') return 'C';
+
+    let localPart = email.split('@')[0] || '';
+    if (localPart.toLowerCase().startsWith('ext-')) {
+        localPart = localPart.slice(4);
+    }
+
+    const parts = localPart.split('.').filter(part => part && part.length > 0);
+    const firstInitial = parts[0] ? parts[0].charAt(0).toUpperCase() : '';
+    const lastInitial = parts[1] ? parts[1].charAt(0).toUpperCase() : '';
+    return (firstInitial + lastInitial) || 'C';
+}
+
+env.addGlobal('get_initials', getInitialsFromEmail);
+env.addFilter('get_initials', getInitialsFromEmail);
+
 // formate une date complète pour les templates nunjucks
 env.addFilter('date', function(dateObj) {
     if (!dateObj) return "";
@@ -2622,7 +2641,13 @@ app.get('/portals', loginRequiredHtml, async (req, res) => {
             });
         }
 
-        res.render('portals.html', { portals: portals_list, is_admin: req.session.is_admin, user_role: req.session.user_role });
+        res.render('portals.html', {
+            portals: portals_list,
+            is_admin: req.session.is_admin,
+            user_role: req.session.user_role,
+            user_email: req.session.user_email,
+            username: req.session.username
+        });
     } catch (error) {
         console.error("Erreur /portals:", error);
         res.status(500).send("Erreur serveur");
