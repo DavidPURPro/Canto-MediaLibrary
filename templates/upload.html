@@ -77,6 +77,14 @@
           </div>
         </div>
 
+        <div class="form-group" id="globalPortalFolderGroup" style="display: none; margin-bottom: 15px;">
+          <label style="font-weight: 600; font-size: 13px;"><i class="fas fa-folder-tree"></i> Portal Folder</label>
+          <select id="globalPortalFolder" class="modern-input" style="width: 100%; padding: 8px;" disabled>
+            <option value="">-- Select a Folder --</option>
+          </select>
+          <p id="globalPortalFolderHint" style="margin: 6px 0 0; color: #64748b; font-size: 12px;">Choose a folder already linked to this portal, or pick another folder above to keep the files loose on the portal.</p>
+        </div>
+
         <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
           <div class="form-group half" style="flex: 1;">
             <label style="font-weight: 600; font-size: 13px;">Section</label>
@@ -398,6 +406,14 @@
               </div>
             </div>
 
+            <div class="form-group" id="filePortalFolderGroup" style="display: none; margin-bottom: 15px;">
+              <label for="filePortalFolder" style="font-weight: 600; display: block; margin-bottom: 5px;"><i class="fas fa-folder-tree"></i> Portal Folder</label>
+              <select id="filePortalFolder" class="modern-input" style="width: 100%; box-sizing: border-box;" disabled>
+                <option value="">-- Loose file on portal --</option>
+              </select>
+              <p id="filePortalFolderHint" style="margin: 6px 0 0; color: #64748b; font-size: 12px;">Choose a folder already linked to this portal, or pick another folder above to keep the file loose on the portal.</p>
+            </div>
+
             <div class="form-group" style="margin-bottom: 15px;">
             <label for="section" style="font-weight: 600; display: block; margin-bottom: 5px;">Section</label>
             <select name="section" id="section" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
@@ -665,5 +681,5 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/upload_logic.js') }}"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a25e4ea54a03d347',t:'MTc4NTg1NDMyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a25e4ea54a03d347',t:'MTc4NTg1NDMyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a321e5bc6bce60df',t:'MTc4NzkwNTIzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

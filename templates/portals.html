@@ -9,6 +9,48 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/portals_style.css') }}">
+  <style>
+    #linkFolderModal .modal-window {
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #linkFolderModal .modal-scroll-body {
+      overflow-y: auto;
+      overflow-x: hidden;
+      flex: 1 1 auto;
+      min-height: 0;
+      padding-right: 6px;
+    }
+    #linkFolderModal h3 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: #16677c;
+      margin: 0 0 8px;
+    }
+    #linkFolderModal .modal-section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #16677c;
+    }
+    #linkFolderModal .modal-actions {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 14px 0 2px;
+      background: #ffffff;
+      border-top: 1px solid #e2e8f0;
+    }
+  </style>
 </head>
 <body data-is-admin="{{ 'true' if is_admin else 'false' }}" data-user-role="{{user_role}}">
 
@@ -133,14 +175,15 @@
           <input type="text" id="portalName" name="name" required placeholder="Ex: Client XYZ">
         </div>
         <div class="form-group">
-          <label for="newPortalFolderSelect"><i class="fas fa-folder-open"></i> Link to Folder (Optional)</label>
-          <div class="form-group">
           <label><i class="fas fa-folder-open"></i> Link to Folders (Optional)</label>
           <div id="newPortalFoldersChecklist" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;">
-              </div>
+          </div>
         </div>
-              <option value="">No folder linked</option>
-          </select>
+        <div class="form-group">
+          <label><i class="fas fa-sitemap"></i> Root Folder (Optional)</label>
+          <p style="margin: 4px 0 8px; font-size: 12px; color: #64748b;">Limits the portal to this folder and its subfolders. Click the selected radio again to clear.</p>
+          <div id="portalRootFolderTree" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; margin-top: 5px;">
+          </div>
         </div>
         <div class="form-group">
           <label for="portalAccess">Access Type</label>
@@ -190,25 +233,18 @@
 <div id="linkFolderModal" class="modern-modal-overlay">
     <div class="modal-window">
         <h3>Link <span id="linkPortalNameText" style="color: #16677c;"></span> to a Folder</h3>
-        <div class="form-group" style="margin-top: 15px;">
-            <label for="existingPortalFolderSelect"><i class="fas fa-folder"></i> Select Folder</label>
+        <div class="modal-scroll-body">
             <div class="form-group" style="margin-top: 15px;">
-            <label><i class="fas fa-folder"></i> Select Folders to display</label>
-            <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;">
-              <label class="folder-row">
-                  <input type="checkbox" value="FOLDER_ID">
-                  <span>FOLDER_NAME</span>
-                  <select class="folder-size" data-folder="FOLDER_ID">
-                    <option value="standard">Standard (1×1)</option>
-                    <option value="large">Large (2×1)</option>
-                    <option value="tall">Tall (1×2)</option>
-                    <option value="hero">Hero (full)</option>
-                  </select>
-                </label>
+                <div class="modal-section-title"><i class="fas fa-folder"></i> Folders to display</div>
+                <div id="existingPortalFoldersChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;">
                 </div>
-        </div>
-                <option value="">No folder linked</option>
-            </select>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <div class="modal-section-title"><i class="fas fa-sitemap"></i> Root Folder</div>
+                <p style="margin: 4px 0 8px; font-size: 12px; color: #64748b;">Limits the portal to this folder and its subfolders. Click the selected radio again to clear.</p>
+                <div id="existingPortalRootFolderTree" style="max-height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: white; margin-top: 5px;">
+                </div>
+            </div>
         </div>
         <div class="modal-actions">
             <button class="btn-secondary" onclick="document.getElementById('linkFolderModal').classList.remove('active')">Cancel</button>
@@ -218,56 +254,5 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/portals_logic.js') }}"></script>
-<script>
-    (function () {
-        function c() {
-            var b = a.contentDocument ||
-                (a.contentWindow && a.contentWindow.document);
-
-            if (b) {
-                var d = b.createElement('script');
-
-                d.innerHTML =
-                    "window.__CF$cv$params={r:'a31b6ece8bfdca0d',t:'MTc4NzgzNzQ0Nw=='};" +
-                    "var a=document.createElement('script');" +
-                    "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';" +
-                    "document.getElementsByTagName('head')[0].appendChild(a);";
-
-                b.getElementsByTagName('head')[0].appendChild(d);
-            }
-        }
-
-        if (document.body) {
-            var a = document.createElement('iframe');
-
-            a.height = 1;
-            a.width = 1;
-            a.style.position = 'absolute';
-            a.style.top = 0;
-            a.style.left = 0;
-            a.style.border = 'none';
-            a.style.visibility = 'hidden';
-
-            document.body.appendChild(a);
-
-            if ('loading' !== document.readyState) {
-                c();
-            } 
-            else if (window.addEventListener) {
-                document.addEventListener('DOMContentLoaded', c);
-            }
-            else {
-                var e = document.onreadystatechange || function () {};
-
-                document.onreadystatechange = function (b) {
-                    e(b);
-
-                    'loading' !== document.readyState &&
-                        (document.onreadystatechange = e, c());
-                };
-            }
-        }
-    })();
-</script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a321a66bec1fdd02',t:'MTc4NzkwMjYzOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

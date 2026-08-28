@@ -126,12 +126,16 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             const portalSelect = document.getElementById('filePortal');
+            if (!portalSelect) return;
+            // Options are already rendered server-side; only fill if the select is empty.
+            if (portalSelect.options.length > 1) return;
+
             const defaultOption = document.createElement('option');
             defaultOption.value = "none";
             defaultOption.textContent = "(No portal)";
             portalSelect.appendChild(defaultOption);
             
-            data.portals.forEach(portal => {
+            (data.portals || []).forEach(portal => {
                 const option = document.createElement('option');
                 option.value = portal.id;
                 option.textContent = portal.name;
@@ -149,6 +153,132 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         })
         .catch(error => console.error('Error loading folders:', error));
+
+    const linkedPortalFolderIds = {
+        global: new Set(),
+        file: new Set()
+    };
+    let syncingFolderFields = false;
+
+    function resetPortalFolderSelect(select, group, hint, message, scope) {
+        if (group) group.style.display = 'none';
+        if (select) {
+            select.innerHTML = '<option value="">-- Loose file on portal --</option>';
+            select.disabled = true;
+            select.value = '';
+        }
+        if (hint) hint.textContent = message || '';
+        if (scope && linkedPortalFolderIds[scope]) linkedPortalFolderIds[scope].clear();
+    }
+
+    async function loadLinkedPortalFolders(portalId, select, group, hint, preferredFolderId = '', scope = 'file') {
+        if (!select || !group) return;
+        if (!portalId || portalId === 'none') {
+            resetPortalFolderSelect(select, group, hint, '', scope);
+            return;
+        }
+
+        group.style.display = 'block';
+        select.disabled = true;
+        select.innerHTML = '<option value="">Loading folders...</option>';
+        if (hint) hint.textContent = 'Loading the folders linked to this portal...';
+        if (linkedPortalFolderIds[scope]) linkedPortalFolderIds[scope].clear();
+
+        try {
+            const response = await fetch(`/portal_folders/${encodeURIComponent(portalId)}`);
+            const data = await response.json();
+            select.innerHTML = '<option value="">-- Loose file on portal --</option>';
+
+            const folders = (data.status === 'success' && Array.isArray(data.folders)) ? data.folders : [];
+            if (folders.length > 0) {
+                folders.forEach(folder => {
+                    const option = document.createElement('option');
+                    option.value = String(folder.folder_id || folder.id);
+                    option.textContent = folder.folder_name || folder.name || `Folder #${option.value}`;
+                    select.appendChild(option);
+                    if (linkedPortalFolderIds[scope]) linkedPortalFolderIds[scope].add(String(option.value));
+                });
+                select.disabled = false;
+                if (preferredFolderId && linkedPortalFolderIds[scope].has(String(preferredFolderId))) {
+                    select.value = String(preferredFolderId);
+                }
+                if (hint) hint.textContent = 'Choose a folder already linked to this portal, or pick another folder above to keep the file loose on the portal.';
+            } else {
+                select.disabled = true;
+                if (hint) hint.textContent = 'No folder is linked to this portal. The file will appear as a loose file.';
+            }
+        } catch (error) {
+            console.error('Error loading portal folders:', error);
+            select.innerHTML = '<option value="">Unable to load folders</option>';
+            select.disabled = true;
+            if (hint) hint.textContent = 'The portal folders could not be loaded.';
+        }
+    }
+
+    function syncPortalFolderFromLibraryFolder(scope, folderId) {
+        const select = document.getElementById(scope === 'global' ? 'globalPortalFolder' : 'filePortalFolder');
+        if (!select || select.disabled) return;
+        const linked = linkedPortalFolderIds[scope] || new Set();
+        if (folderId && folderId !== 'none' && linked.has(String(folderId))) {
+            select.value = String(folderId);
+        } else {
+            select.value = '';
+        }
+    }
+
+    const globalPortalSelect = document.getElementById('globalPortal');
+    const globalPortalFolderSelect = document.getElementById('globalPortalFolder');
+    const globalPortalFolderGroup = document.getElementById('globalPortalFolderGroup');
+    const globalPortalFolderHint = document.getElementById('globalPortalFolderHint');
+    if (globalPortalSelect) {
+        globalPortalSelect.addEventListener('change', async () => {
+            await loadLinkedPortalFolders(
+                globalPortalSelect.value,
+                globalPortalFolderSelect,
+                globalPortalFolderGroup,
+                globalPortalFolderHint,
+                '',
+                'global'
+            );
+            syncPortalFolderFromLibraryFolder('global', document.getElementById('globalFolder')?.value);
+        });
+    }
+    if (globalPortalFolderSelect) {
+        globalPortalFolderSelect.addEventListener('change', () => {
+            if (syncingFolderFields) return;
+            if (!globalPortalFolderSelect.value) return;
+            syncingFolderFields = true;
+            setFolderPicker('globalFolderPicker', globalPortalFolderSelect.value);
+            syncingFolderFields = false;
+        });
+    }
+
+    const filePortalSelect = document.getElementById('filePortal');
+    const filePortalFolderSelect = document.getElementById('filePortalFolder');
+    const filePortalFolderGroup = document.getElementById('filePortalFolderGroup');
+    const filePortalFolderHint = document.getElementById('filePortalFolderHint');
+    if (filePortalSelect) {
+        filePortalSelect.addEventListener('change', async () => {
+            await loadLinkedPortalFolders(
+                filePortalSelect.value,
+                filePortalFolderSelect,
+                filePortalFolderGroup,
+                filePortalFolderHint,
+                '',
+                'file'
+            );
+            syncPortalFolderFromLibraryFolder('file', document.getElementById('fileFolder')?.value);
+        });
+    }
+    if (filePortalFolderSelect) {
+        filePortalFolderSelect.addEventListener('change', () => {
+            if (syncingFolderFields) return;
+            if (!filePortalFolderSelect.value) return;
+            syncingFolderFields = true;
+            setFolderPicker('fileFolderPicker', filePortalFolderSelect.value);
+            syncingFolderFields = false;
+        });
+    }
 
     function buildFolderPicker(folders, wrapperId, hiddenInputId, treeId) {
         const wrapper = document.getElementById(wrapperId);
@@ -253,6 +383,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         wrapper.classList.remove('open');
+        if (!syncingFolderFields) {
+            const scope = hiddenInput.id === 'globalFolder' ? 'global' : 'file';
+            syncPortalFolderFromLibraryFolder(scope, isNone ? '' : value);
+        }
     }
 
     document.addEventListener('click', () => {
@@ -322,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tags = Array.from(tagsContainer.querySelectorAll(".tag"))
                 .map(tag => tag.textContent.replace("×", "").trim());
             const folderId = document.getElementById('fileFolder').value;
+            const portalFolderId = document.getElementById('filePortalFolder')?.value || '';
             const isExclusive = document.getElementById('fileExclusive').checked;
             
             const author = document.getElementById('fileMetaAuthor')?.value.trim() || "";
@@ -337,8 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 description,
                 tags,
                 eventDate,
-                portalId, 
+                portalId,
                 folderId,
+                portalFolderId,
                 section,
                 category,
                 isExclusive,
@@ -525,6 +661,13 @@ document.addEventListener('DOMContentLoaded', () => {
             fileTags.value = "";
             document.getElementById('filePortal').value = "none";
             resetFolderPicker('fileFolderPicker', 'none');
+            resetPortalFolderSelect(
+                document.getElementById('filePortalFolder'),
+                document.getElementById('filePortalFolderGroup'),
+                document.getElementById('filePortalFolderHint'),
+                '',
+                'file'
+            );
             if (fileSection) fileSection.value = "";
             if (fileCategory) fileCategory.value = "";
             fileEventDate.value = "";
@@ -558,12 +701,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 fileDescription.value = fileDetails[file.name].description || "";
                 fileEventDate.value = fileDetails[file.name]?.eventDate || "";
                 
-                if(fileDetails[file.name].portalId) {
-                    document.getElementById('filePortal').value = fileDetails[file.name].portalId;
-                }
-                
-                if(fileDetails[file.name].folderId) {
-                    setFolderPicker('fileFolderPicker', fileDetails[file.name].folderId);
+                const savedPortalId = fileDetails[file.name].portalId;
+                const savedFolderId = fileDetails[file.name].folderId;
+                const savedPortalFolderId = fileDetails[file.name].portalFolderId || '';
+                if (savedPortalId && savedPortalId !== 'none') {
+                    document.getElementById('filePortal').value = savedPortalId;
+                    loadLinkedPortalFolders(
+                        savedPortalId,
+                        document.getElementById('filePortalFolder'),
+                        document.getElementById('filePortalFolderGroup'),
+                        document.getElementById('filePortalFolderHint'),
+                        savedPortalFolderId || savedFolderId || '',
+                        'file'
+                    ).then(() => {
+                        if (savedFolderId) {
+                            syncingFolderFields = true;
+                            setFolderPicker('fileFolderPicker', savedFolderId);
+                            syncingFolderFields = false;
+                        }
+                        syncPortalFolderFromLibraryFolder('file', savedFolderId);
+                        const pf = document.getElementById('filePortalFolder');
+                        if (pf && savedPortalFolderId && linkedPortalFolderIds.file.has(String(savedPortalFolderId))) {
+                            pf.value = String(savedPortalFolderId);
+                        }
+                    });
+                } else if (savedFolderId) {
+                    setFolderPicker('fileFolderPicker', savedFolderId);
                 }
 
                 if (fileSection && fileDetails[file.name].section) fileSection.value = fileDetails[file.name].section;
@@ -734,6 +897,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const gCategory = document.getElementById('globalCategory')?.value || "";
         const gEventDate = document.getElementById('globalEventDate')?.value || "";
         const gPortal = document.getElementById('globalPortal')?.value || "";
+        const gPortalFolder = document.getElementById('globalPortalFolder')?.value || "";
         const gFolder = document.getElementById('globalFolder')?.value || "";
         const gExclusive = document.getElementById('globalExclusive')?.checked || false;
         const gTagsRaw = document.getElementById('globalTags')?.value || "";
@@ -823,8 +987,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalDesc = details.description || gDesc;
             const finalSection = details.section || gSection || "General";
             const finalCategory = details.category || gCategory || "General";
-            const finalPortal = (details.portalId && details.portalId !== "none") ? details.portalId : gPortal;
-            const finalFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
+            const fileHasPortal = details.portalId && details.portalId !== "none";
+            const finalPortal = fileHasPortal ? details.portalId : gPortal;
+            const finalPortalFolder = fileHasPortal
+                ? (details.portalFolderId || "")
+                : gPortalFolder;
+            const libraryFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
+            const finalFolder = finalPortalFolder || libraryFolder;
             const finalExclusive = details.isExclusive !== undefined ? details.isExclusive : gExclusive;
             const finalEventDate = details.eventDate || gEventDate;
             let finalTags = [];

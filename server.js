@@ -1,3 +1,6 @@
+// npm install
+// test en local : npx @dotenvx/dotenvx run -- node server.js
+
 const { CryptoProvider } = require('@azure/msal-node');
 const cryptoProvider = new CryptoProvider();
 const express = require('express');
