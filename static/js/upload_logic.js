@@ -87,6 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_FILES = 35;
     let filesToUpload = [];
     let fileDetails = {};
+    const contextFolderId = new URLSearchParams(window.location.search).get('folder_id') || '';
+    let allFolders = [];
+    let lastGlobalFolderId = contextFolderId ? String(contextFolderId) : '';
+    let userOverrideDestination = false;
+    if (contextFolderId) {
+        const earlyGlobalFolder = document.getElementById('globalFolder');
+        if (earlyGlobalFolder && !earlyGlobalFolder.value) {
+            earlyGlobalFolder.value = String(contextFolderId);
+        }
+    }
     const modal = document.getElementById("fileDetailsModal");
     const closeBtn = document.querySelector(".close-btn");
     const cancelBtn = document.getElementById("cancelBtn");
@@ -148,8 +158,12 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             if (data.folders) {
+                allFolders = data.folders;
                 buildFolderPicker(data.folders, 'globalFolderPicker', 'globalFolder', 'globalFolderTree');
                 buildFolderPicker(data.folders, 'fileFolderPicker', 'fileFolder', 'fileFolderTree');
+                applyContextFolder();
+            } else {
+                applyContextFolder();
             }
         })
         .catch(error => console.error('Error loading folders:', error));
@@ -387,9 +401,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const scope = hiddenInput.id === 'globalFolder' ? 'global' : 'file';
             syncPortalFolderFromLibraryFolder(scope, isNone ? '' : value);
         }
+        if (hiddenInput.id === 'globalFolder') {
+            const newId = isNone ? '' : String(value || '');
+            if (!syncingFolderFields) userOverrideDestination = true;
+            const previous = lastGlobalFolderId;
+            if (String(previous) !== String(newId)) {
+                lastGlobalFolderId = newId;
+                propagateFolderToFollowingFiles(previous, newId);
+            } else {
+                lastGlobalFolderId = newId;
+            }
+            updateDestinationBanner();
+            syncGalleryLinks();
+        }
     }
 
-    document.addEventListener('click', () => {
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.folder-picker-wrapper, #uploadChangeFolderBtn, #uploadRootFolderBtn')) return;
         document.querySelectorAll('.folder-picker-wrapper.open').forEach(w => w.classList.remove('open'));
     });
 
@@ -407,19 +435,203 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function findFolderRow(wrapper, folderId) {
+        const wanted = String(folderId);
+        return Array.from(wrapper.querySelectorAll('.fp-row')).find(row => String(row.dataset.id) === wanted) || null;
+    }
+
+    function revealFolderRow(wrapper, row) {
+        let el = row.parentElement;
+        while (el && el !== wrapper) {
+            if (el.classList.contains('fp-children')) {
+                el.style.display = '';
+                const toggle = el.parentElement?.querySelector(':scope > .fp-row .fp-toggle');
+                if (toggle) toggle.innerHTML = '<i class="fas fa-minus"></i>';
+            }
+            el = el.parentElement;
+        }
+    }
+
     function setFolderPicker(pickerId, folderId) {
         const wrapper = document.getElementById(pickerId);
-        if (!wrapper) return;
+        if (!wrapper) return false;
         const hiddenInput = wrapper.querySelector('input[type="hidden"]');
-        if (!hiddenInput) return;
+        if (!hiddenInput) return false;
         if (!folderId || folderId === 'none' || folderId === '') {
             resetFolderPicker(pickerId, hiddenInput.id === 'fileFolder' ? 'none' : '');
+            return true;
+        }
+        const target = findFolderRow(wrapper, folderId);
+        const folderMeta = allFolders.find(f => String(f.id) === String(folderId));
+        const label = (target && target.dataset.name) || (folderMeta && folderMeta.name) || `Folder #${folderId}`;
+        if (target) {
+            revealFolderRow(wrapper, target);
+            selectFolder(wrapper, hiddenInput, target.dataset.id, label);
+            return true;
+        }
+        hiddenInput.value = String(folderId);
+        const trigger = wrapper.querySelector('.trigger-label');
+        if (trigger) {
+            trigger.textContent = label;
+            trigger.classList.add('selected');
+        }
+        if (hiddenInput.id === 'globalFolder') {
+            lastGlobalFolderId = String(folderId);
+            updateDestinationBanner();
+            syncGalleryLinks();
+        }
+        return !!folderMeta;
+    }
+
+    function normalizeFolderId(id) {
+        if (!id || id === 'none') return '';
+        return String(id);
+    }
+
+    function getCurrentGlobalFolderId() {
+        return normalizeFolderId(document.getElementById('globalFolder')?.value);
+    }
+
+    function getFolderPathLabel(folderId) {
+        const id = normalizeFolderId(folderId);
+        if (!id) return 'Library (root)';
+        const byId = {};
+        allFolders.forEach(f => { byId[String(f.id)] = f; });
+        const parts = [];
+        let current = byId[id];
+        const seen = new Set();
+        while (current && !seen.has(String(current.id))) {
+            seen.add(String(current.id));
+            parts.unshift(current.name);
+            current = current.parent_id ? byId[String(current.parent_id)] : null;
+        }
+        if (!parts.length) return `Folder #${id}`;
+        return 'Library / ' + parts.join(' / ');
+    }
+
+    function updateDestinationBanner() {
+        const banner = document.getElementById('uploadDestinationBanner');
+        const pathEl = document.getElementById('uploadDestinationPath');
+        const hintEl = document.getElementById('uploadDestinationHint');
+        if (!banner || !pathEl) return;
+        const folderId = getCurrentGlobalFolderId();
+        const missingContext = contextFolderId && allFolders.length > 0 && !allFolders.some(f => String(f.id) === String(contextFolderId));
+        if (!folderId && missingContext) {
+            banner.style.display = 'block';
+            pathEl.textContent = 'The original folder could not be found. Files will go to the library root unless you pick another folder.';
+            if (hintEl) hintEl.textContent = '';
             return;
         }
-        const target = wrapper.querySelector(`.fp-row[data-id="${folderId}"]`);
-        if (target) {
-            selectFolder(wrapper, hiddenInput, folderId, target.dataset.name);
+        banner.style.display = (folderId || contextFolderId) ? 'block' : 'none';
+        pathEl.textContent = getFolderPathLabel(folderId);
+        if (hintEl) {
+            hintEl.textContent = folderId
+                ? 'This folder is applied to Global Folder and to each file. You can still change it per file in File Details.'
+                : 'Files will go to the library root, unless you assign a folder per file.';
         }
+    }
+
+    function syncGalleryLinks() {
+        const folderId = getCurrentGlobalFolderId();
+        const galleryUrl = folderId ? `/?folder_id=${encodeURIComponent(folderId)}` : '/';
+        const back = document.getElementById('backToGalleryLink');
+        if (back) back.setAttribute('href', galleryUrl);
+    }
+
+    function propagateFolderToFollowingFiles(previousId, newId) {
+        const prev = normalizeFolderId(previousId);
+        const next = normalizeFolderId(newId) || 'none';
+        Object.keys(fileDetails).forEach(name => {
+            const details = fileDetails[name];
+            if (!details) return;
+            const current = normalizeFolderId(details.folderId);
+            if (details.folderFollowsGlobal === false) return;
+            if (details.folderFollowsGlobal || current === prev || !current) {
+                details.folderId = next;
+                details.folderFollowsGlobal = true;
+            }
+        });
+    }
+
+    function seedFileWithCurrentFolder(file) {
+        const gFolder = getCurrentGlobalFolderId();
+        if (!fileDetails[file.name]) {
+            fileDetails[file.name] = {
+                description: '',
+                tags: [],
+                eventDate: '',
+                portalId: 'none',
+                folderId: gFolder || 'none',
+                portalFolderId: '',
+                section: '',
+                category: '',
+                isExclusive: false,
+                folderFollowsGlobal: true,
+                metadata: {}
+            };
+            return;
+        }
+        if (fileDetails[file.name].folderFollowsGlobal !== false) {
+            fileDetails[file.name].folderId = gFolder || 'none';
+        }
+    }
+
+    function applyContextFolder() {
+        if (userOverrideDestination) {
+            updateDestinationBanner();
+            syncGalleryLinks();
+            return;
+        }
+        if (contextFolderId) {
+            lastGlobalFolderId = String(contextFolderId);
+            const hidden = document.getElementById('globalFolder');
+            if (hidden) hidden.value = String(contextFolderId);
+            const wasSyncing = syncingFolderFields;
+            syncingFolderFields = true;
+            setFolderPicker('globalFolderPicker', contextFolderId);
+            syncingFolderFields = wasSyncing;
+        }
+        updateDestinationBanner();
+        syncGalleryLinks();
+    }
+
+    const uploadChangeFolderBtn = document.getElementById('uploadChangeFolderBtn');
+    if (uploadChangeFolderBtn) {
+        uploadChangeFolderBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const wrapper = document.getElementById('globalFolderPicker');
+            const section = wrapper?.closest('.global-metadata-section') || wrapper;
+            if (section && typeof section.scrollIntoView === 'function') {
+                section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            setTimeout(() => {
+                if (!wrapper) return;
+                document.querySelectorAll('.folder-picker-wrapper.open').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.add('open');
+                const trigger = wrapper.querySelector('.folder-picker-trigger');
+                if (trigger) trigger.focus();
+            }, 0);
+        });
+    }
+    const uploadRootFolderBtn = document.getElementById('uploadRootFolderBtn');
+    if (uploadRootFolderBtn) {
+        uploadRootFolderBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            userOverrideDestination = true;
+            const previous = lastGlobalFolderId || getCurrentGlobalFolderId() || contextFolderId;
+            resetFolderPicker('globalFolderPicker', '');
+            lastGlobalFolderId = '';
+            const hidden = document.getElementById('globalFolder');
+            if (hidden) hidden.value = '';
+            propagateFolderToFollowingFiles(previous, '');
+            syncPortalFolderFromLibraryFolder('global', '');
+            updateDestinationBanner();
+            syncGalleryLinks();
+        });
     }
 
     dropArea.addEventListener("dragover", (e) => {
@@ -458,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const folderId = document.getElementById('fileFolder').value;
             const portalFolderId = document.getElementById('filePortalFolder')?.value || '';
             const isExclusive = document.getElementById('fileExclusive').checked;
+            const folderFollowsGlobal = normalizeFolderId(folderId) === getCurrentGlobalFolderId();
             
             const author = document.getElementById('fileMetaAuthor')?.value.trim() || "";
             const copyright = document.getElementById('fileMetaCopyright')?.value.trim() || "";
@@ -475,6 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 portalId,
                 folderId,
                 portalFolderId,
+                folderFollowsGlobal,
                 section,
                 category,
                 isExclusive,
@@ -611,6 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const alreadyExists = filesToUpload.some(existing => existing.name === zipFile.name);
                             if (!alreadyExists) {
                                 filesToUpload.push(zipFile);
+                                seedFileWithCurrentFolder(zipFile);
                                 openFileDetailsModal(filesToUpload.length - 1);
                             } 
                             else {
@@ -632,6 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const alreadyExists = filesToUpload.some(existing => existing.name === file.name);
             if (!alreadyExists) {
                 filesToUpload.push(file);
+                seedFileWithCurrentFolder(file);
                 openFileDetailsModal(filesToUpload.length - 1);
             } else {
                 duplicateDetected = true;
@@ -661,6 +877,13 @@ document.addEventListener('DOMContentLoaded', () => {
             fileTags.value = "";
             document.getElementById('filePortal').value = "none";
             resetFolderPicker('fileFolderPicker', 'none');
+            const savedDetails = fileDetails[file.name];
+            const pendingFolderId = (savedDetails && savedDetails.folderFollowsGlobal === false)
+                ? (savedDetails.folderId || 'none')
+                : ((savedDetails && savedDetails.folderId) || getCurrentGlobalFolderId());
+            if (pendingFolderId && pendingFolderId !== 'none') {
+                setFolderPicker('fileFolderPicker', pendingFolderId);
+            }
             resetPortalFolderSelect(
                 document.getElementById('filePortalFolder'),
                 document.getElementById('filePortalFolderGroup'),
@@ -898,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const gEventDate = document.getElementById('globalEventDate')?.value || "";
         const gPortal = document.getElementById('globalPortal')?.value || "";
         const gPortalFolder = document.getElementById('globalPortalFolder')?.value || "";
-        const gFolder = document.getElementById('globalFolder')?.value || "";
+        const gFolder = getCurrentGlobalFolderId();
         const gExclusive = document.getElementById('globalExclusive')?.checked || false;
         const gTagsRaw = document.getElementById('globalTags')?.value || "";
         const gTagsArray = gTagsRaw.split(',').map(t => t.trim()).filter(t => t.length > 0);
@@ -992,7 +1215,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const finalPortalFolder = fileHasPortal
                 ? (details.portalFolderId || "")
                 : gPortalFolder;
-            const libraryFolder = (details.folderId && details.folderId !== "none") ? details.folderId : gFolder;
+            let libraryFolder = '';
+            if (details.folderFollowsGlobal === false) {
+                libraryFolder = (details.folderId && details.folderId !== 'none') ? details.folderId : '';
+            } else if (details.folderId && details.folderId !== 'none') {
+                libraryFolder = details.folderId;
+            } else {
+                libraryFolder = gFolder;
+            }
             const finalFolder = finalPortalFolder || libraryFolder;
             const finalExclusive = details.isExclusive !== undefined ? details.isExclusive : gExclusive;
             const finalEventDate = details.eventDate || gEventDate;
@@ -1070,7 +1300,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderFileList();
             msg.className = "message success";
             msg.innerHTML = '<i class="fas fa-check-circle"></i> All files uploaded successfully!';
-            setTimeout(() => { window.location.href = '/'; }, 1500);
+            const destFolder = getCurrentGlobalFolderId();
+            const destUrl = destFolder ? `/?folder_id=${encodeURIComponent(destFolder)}` : '/';
+            setTimeout(() => { window.location.href = destUrl; }, 1500);
         } 
         else {
             msg.className = "message error";

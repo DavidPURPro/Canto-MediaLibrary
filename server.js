@@ -811,6 +811,10 @@ function uploaderOrAdminRequired(req, res, next) {
 }
 
 // affiche la page de connexion microsoft pour un utilisateur interne
+app.get('/privacy', (req, res) => {
+    res.render('privacy.html');
+});
+
 app.get('/login', (req, res) => {
     if (req.session.user_email) return res.redirect('/');
     res.render('login.html');

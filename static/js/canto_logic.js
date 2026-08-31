@@ -431,8 +431,11 @@ function loadFolders(folderIdToRestore = null) {
       const targetId = folderIdToRestore || currentFolderFilter;
       if (targetId) {
           setTimeout(() => {
-              if (typeof window.triggerFolderClick === 'function') {
+              const exists = document.querySelector(`.folder[data-folder-id="${targetId}"]`);
+              if (exists && typeof window.triggerFolderClick === 'function') {
                   window.triggerFolderClick(targetId);
+              } else if (!currentFolderFilter) {
+                  executeGlobalSearch('', 1);
               }
           }, 50);
       }
@@ -637,6 +640,7 @@ function renderFolder(folder, parentElement) {
         if (sibling !== folderElement) sibling.classList.remove('active');
     });
     updateBreadcrumbs(currentFolderFilter);
+    syncUploadNavLink();
     gallery.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--gray-500);">
             <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i>
@@ -1526,6 +1530,18 @@ if (searchInput) {
 
 
 let currentFolderFilter = null;
+
+function getUploadNavUrl() {
+  if (currentFolderFilter) {
+    return `/upload?folder_id=${encodeURIComponent(currentFolderFilter)}`;
+  }
+  return '/upload';
+}
+
+function syncUploadNavLink() {
+  const uploadBtn = document.getElementById('uploadNavBtn');
+  if (uploadBtn) uploadBtn.setAttribute('href', getUploadNavUrl());
+}
 /**
  * Appelle GET /search_file avec recherche, page, tri, filtres, IA et folder_id.
  * Le token de requête ignore les anciennes réponses avant de rerendre la galerie.
@@ -2340,12 +2356,24 @@ document.addEventListener('DOMContentLoaded', function() {
   setupEventListeners();
   filterAndDisplay();
   lazyLoadImages();
-  loadFolders();
+  const initialFolderId = new URLSearchParams(window.location.search).get('folder_id');
+  loadFolders(initialFolderId);
   setProfileButtonColor();
   updateUploadButtonVisibility();
   createHeaderBubbles();
   setupTooltips();
-  executeGlobalSearch('', 1);
+  syncUploadNavLink();
+  const uploadNavBtn = document.getElementById('uploadNavBtn');
+  if (uploadNavBtn) {
+    uploadNavBtn.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      window.location.href = getUploadNavUrl();
+    });
+  }
+  if (!initialFolderId) {
+    executeGlobalSearch('', 1);
+  }
   loadDynamicFilters();
   
  
@@ -4065,6 +4093,7 @@ window.triggerFolderClick = function(folderId) {
     if (folderName) folderName.classList.add('is-selected');
     currentFolderFilter = folderId;
     updateBreadcrumbs(currentFolderFilter);
+    syncUploadNavLink();
     const gallery = document.getElementById("gallery");
     if (gallery) {
         gallery.innerHTML = `

@@ -24,7 +24,7 @@
       </a>
       <h1 class="header-title" style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;">Media Library Upload</h1>
       <nav class="nav-controls">
-        <a href="{{ url_for('index') }}" class="btn-nav-glass"><i class="fas fa-arrow-left"></i> Back to Gallery</a>
+        <a href="{{ url_for('index') }}" id="backToGalleryLink" class="btn-nav-glass"><i class="fas fa-arrow-left"></i> Back to Gallery</a>
       </nav>
     </div>
   </header>
@@ -34,6 +34,21 @@
       <div class="upload-header">
         <h2><i class="fas fa-cloud-upload-alt"></i> Upload Files</h2>
         <p class="subtitle">Upload images, videos, PDFs or ZIP archives to your library.</p>
+      </div>
+
+      <div id="uploadDestinationBanner" style="display: none; margin-top: 16px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 14px 16px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="color: #0f172a; font-size: 14px; line-height: 1.45;">
+            <i class="far fa-folder-open" style="color: #16677c; margin-right: 6px;"></i>
+            <strong>Destination:</strong>
+            <span id="uploadDestinationPath">Library</span>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="uploadChangeFolderBtn" class="btn-secondary" style="padding: 8px 12px; font-size: 13px; cursor: pointer;">Change folder</button>
+            <button type="button" id="uploadRootFolderBtn" class="btn-secondary" style="padding: 8px 12px; font-size: 13px; cursor: pointer;">Upload to library root</button>
+          </div>
+        </div>
+        <p id="uploadDestinationHint" style="margin: 8px 0 0; color: #64748b; font-size: 12px;">This folder is applied to Global Folder and to each file. You can still change it per file in File Details.</p>
       </div>
 
       <div class="upload-dropzone" id="drop-area">
@@ -681,5 +696,5 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/upload_logic.js') }}"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a25e4ea54a03d347',t:'MTc4NTg1NDMyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a321e5bc6bce60df',t:'MTc4NzkwNTIzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a25e4ea54a03d347',t:'MTc4NTg1NDMyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3224ada1af56f8d',t:'MTc4NzkwOTM3NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3225f960a4b0274',t:'MTc4NzkxMDIyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
