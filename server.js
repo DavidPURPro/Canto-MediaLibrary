@@ -235,7 +235,7 @@ app.use(session({
     saveUninitialized: false,
     name: 'portal_session',
     rolling: true,
-    cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
 
@@ -597,86 +597,6 @@ async function generateAndUploadThumbnail(filename, containerClient, pool) {
         if (fs.existsSync(tmpThumb)) fs.unlinkSync(tmpThumb);
     }
 }
-
-// charge la galerie principale avec ses filtres, son tri et sa pagination
-app.get('/', async (req, res) => {
-    // numéro de la page demandée pour la pagination
-    const page = parseInt(req.query.page) || 1;
-    // tri choisi pour ordonner les résultats
-    const sort = req.query.sort || 'date_desc';
-    // filtre choisi pour limiter les résultats
-    const filter = req.query.filter || 'all';
-    // nombre maximal de lignes affichées sur une page
-    const limit = 12;
-    // nombre de lignes ignorées avant la page demandée
-    const offset = (page - 1) * limit;
-    // extension du fichier actuellement traité
-    const ext = {
-        images: ["'%.png'", "'%.jpg'", "'%.jpeg'", "'%.jpe'", "'%.gif'", "'%.bmp'", "'%.svg'", "'%.webp'"],
-        videos: ["'%.mp4'", "'%.mov'", "'%.avi'", "'%.wmv'", "'%.flv'", "'%.mkv'", "'%.webm'"],
-        audio: ["'%.mp3'", "'%.wav'", "'%.aac'", "'%.flac'", "'%.ogg'", "'%.m4a'"],
-        documents: ["'%.pdf'", "'%.doc'", "'%.docx'", "'%.xls'", "'%.xlsx'", "'%.txt'", "'%.rtf'", "'%.odt'"],
-        presentations: ["'%.ppt'", "'%.pptx'", "'%.key'", "'%.odp'"],
-        others: ["'%.ai'", "'%.kml'", "'%.zip'", "'%.rar'", "'%.eps'", "'%.psd'", "'%.heic'", "'%.heif'", "'%.thm'", "'%.emf'", "'%.srt'", "'%.tif'", "'%.tiff'"]
-    };
-    // ensemble des extensions reconnues par le serveur
-    const allKnownExts = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
-
-    try {
-        // requête sql construite pour cette opération
-        let baseQuery = `FROM documents d LEFT JOIN folders f ON d.folder_id = f.id WHERE 1=1`;
-        // paramètres préparés pour exécuter la requête sans concaténer les valeurs
-        let queryParams = [];
-
-        if (filter === 'exclusive') {
-            baseQuery += ` AND d.is_exclusive = true`;
-        } else if (filter === 'images') {
-            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.images.join(',')}])`;
-        } else if (filter === 'videos') {
-            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.videos.join(',')}])`;
-        } else if (filter === 'audio') {
-            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.audio.join(',')}])`;
-        } else if (filter === 'documents') {
-            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.documents.join(',')}])`;
-        } else if (filter === 'presentations') {
-            baseQuery += ` AND LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.presentations.join(',')}])`;
-        } else if (filter === 'others') {
-            // extensions déjà classées dans une catégorie précise
-            const knownWithoutOthers = [...ext.images, ...ext.videos, ...ext.audio, ...ext.documents, ...ext.presentations];
-            baseQuery += ` AND (LOWER(d.nom_fichier) LIKE ANY(ARRAY[${ext.others.join(',')}]) OR NOT LOWER(d.nom_fichier) LIKE ANY(ARRAY[${knownWithoutOthers.join(',')}]))`;
-        }
-
-        // colonne sql utilisée pour trier les résultats
-        let orderBy = 'ORDER BY d.date_ajout DESC';
-        if (sort === 'name_asc') orderBy = 'ORDER BY LOWER(d.nom_fichier) ASC';
-        if (sort === 'name_desc') orderBy = 'ORDER BY LOWER(d.nom_fichier) DESC';
-        if (sort === 'date_asc') orderBy = 'ORDER BY d.date_ajout ASC';
-
-        // valeur statistique renvoyée par la requête sql
-        const countRes = await pool.query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
-        // nombre calculé pour total files
-        const totalFiles = parseInt(countRes.rows[0].count);
-        // nombre calculé pour total pages
-        const totalPages = Math.ceil(totalFiles / limit) || 1;
-        // requête sql construite pour cette opération
-        const dataQuery = `SELECT d.*, f.name as folder_name ${baseQuery} ${orderBy} LIMIT ${limit} OFFSET ${offset}`;
-        // lignes renvoyées par la requête sql en cours
-        const result = await pool.query(dataQuery, queryParams);
-
-        res.render('index.html', {
-            files: result.rows,
-            current_page: page,
-            total_pages: totalPages,
-            currentSort: sort,
-            currentFilter: filter,
-            is_admin: req.session.is_admin,
-            user_role: req.session.user_role
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Erreur SQL lors du filtrage");
-    }
-});
 
 // affiche la page principale en réutilisant le traitement de la racine
 // garde les mêmes paramètres de filtre, de tri et de pagination
@@ -3412,54 +3332,6 @@ app.post('/remove_file_from_portal', loginRequiredJson, upload.none(), async (re
         });
         res.json({ status: "success" });
     } catch (error) {
-        res.status(500).json({ status: "error", message: error.message });
-    }
-});
-
-// recalcule les tailles manquantes des fichiers de portail depuis azure
-app.get('/update_portal_files_sizes', loginRequiredJson, async (req, res) => {
-    try {
-        // lignes renvoyées par la requête sql en cours
-        const result = await pool.query("SELECT id, filename FROM portal_files;");
-        // liste des fichiers préparée pour cette opération
-        const files = result.rows;
-        // nombre calculé pour updated count
-        let updatedCount = 0;
-
-        for (let file of files) {
-            // client azure qui agit sur le blob du fichier courant
-            const blockBlobClient = containerClient.getBlockBlobClient(file.filename);
-            // taille du fichier exprimée en octets
-            let sizeBytes = 0;
-
-            try {
-                // propriétés du blob récupérées depuis azure
-                const props = await blockBlobClient.getProperties();
-                sizeBytes = props.contentLength;
-            } catch (azureErr) {
-                console.error(`Impossible de lire la taille pour ${file.filename}`);
-            }
-            // taille utilisée pour size display
-            const sizeDisplay = formatBytes(sizeBytes);
-
-            await pool.query(
-                "UPDATE portal_files SET size_bytes = $1, size = $2 WHERE id = $3;",
-                [sizeBytes, sizeDisplay, file.id]
-            );
-            updatedCount++;
-        }
-        // données des portails renvoyées par la requête sql
-        const portalsRes = await pool.query("SELECT id FROM portals;");
-        for (let portal of portalsRes.rows) {
-            await updatePortalStats(portal.id);
-        }
-
-        res.json({
-            status: "success",
-            message: `Updated sizes for ${updatedCount} files`
-        });
-    } catch (error) {
-        console.error("Erreur update_portal_files_sizes:", error);
         res.status(500).json({ status: "error", message: error.message });
     }
 });
