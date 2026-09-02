@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Activity logging — PUR Media Library</title>
+  <title>Privacy — PUR Media Library</title>
   <link rel="icon" href="/static/favicon.svg" type="image/x-icon">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; }
     header { background: linear-gradient(120deg, #0d4555 0%, #16677c 100%); color: white; padding: 28px 24px; }
     header h1 { margin: 0 0 6px; font-size: 1.4rem; }
-    header p {color : white; margin: 0; opacity: .8; font-size: 14px; }
+    header p { margin: 0; opacity: .8; font-size: 14px; color : white; }
     main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
     h2 { color: #0d4555; font-size: 1.05rem; margin: 28px 0 8px; }
     p, li { line-height: 1.65; font-size: 14.5px; color: #334155; }
@@ -19,39 +19,44 @@
     .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px 22px; }
     a { color: #16677c; font-weight: 700; }
     .back { display: inline-block; margin-top: 10px; color: white; text-decoration: none; font-weight: 700; font-size: 13px; }
-    code { font-size: 12px; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>How we log activity</h1>
-    <p>PUR Media Library — security and audit only</p>
+    <h1>How we handle activity logs and photos</h1>
+    <p>PUR Media Library — security, access and privacy</p>
+    <a class="back" href="javascript:history.back()">← Back</a>
   </header>
   <main>
     <div class="card">
-      <p style="margin:0;">We keep a technical activity log so the library stays secure and we can see who uploaded, downloaded or changed files. This is <strong>not</strong> advertising, profiling or marketing analytics.</p>
+      <p style="margin:0 0 12px;">We keep a technical activity log so the library stays secure and we can see who uploaded, downloaded or changed files. This is <strong>not</strong> advertising, profiling or employee performance tracking.</p>
+      <p style="margin:0;">The same log is shown in two places: Microsoft Azure (technical monitoring) and the Stats page on this site. We copied it here so administrators do not need to open Azure. It is not a second, separate collection.</p>
     </div>
 
-    <h2>What we collect</h2>
+    <h2>What we collect (logs)</h2>
     <ul>
       <li>The email of the signed-in account (staff or portal client)</li>
       <li>The type of action (login, logout, upload, download, delete, folder or portal changes, page load)</li>
       <li>Technical details tied to that action (file name, page path, duration, portal name)</li>
       <li>Date and time</li>
     </ul>
-    <p>We do not sell this data. In production, the same events may also be sent to Microsoft Azure Application Insights for technical monitoring.</p>
+    <p>We do not sell this data.</p>
 
     <h2>Why</h2>
-    <p>Security, accountability and the proper operation of the service (legitimate interest / performance of the service).</p>
+    <p>Security, accountability and the proper operation of the service.</p>
 
     <h2>How long</h2>
-    <p>Activity logs in the database are kept for <strong>6 months</strong>, then deleted automatically.</p>
+    <p>Activity logs are kept for <strong>6 months</strong>, then deleted automatically.</p>
 
     <h2>Who can see it</h2>
-    <p>Internal administrators and moderators only (Stats page). Portal clients cannot see other people’s logs.</p>
+    <p>Only <strong>full administrators</strong> of the Media Library (the highest internal role). Moderators, other staff and portal clients cannot see these logs.</p>
+
+    <h2>Photos</h2>
+    <p>The Media Library is an internal tool. Clients do not have access to the full collection.</p>
+    <p>Each client only sees a <strong>portal</strong>. PUR chooses which images appear there. Nothing else from the library is shown. What we share in a portal is limited to content for <strong>that client’s brand</strong>.</p>
 
     <h2>Your rights</h2>
-    <p>Under GDPR you may request access, rectification, restriction, objection or erasure, within the limits that apply to security logs. Contact PUR’s DPO or legal team, or a Media Library administrator. You may also lodge a complaint with the <a href="https://www.cnil.fr/en" target="_blank" rel="noopener">CNIL</a>.</p>
+    <p>Under GDPR you may request access, rectification, restriction, objection or erasure, within the limits that apply to security logs. Please contact PUR’s DPO or Legal team at <a href="mailto:legal@pur.co">legal@pur.co</a>. You may also lodge a complaint with the <a href="https://www.cnil.fr/en" target="_blank" rel="noopener">CNIL</a>.</p>
     <p>PUR corporate privacy policy: <a href="https://www.pur.co/privacy-policy" target="_blank" rel="noopener">pur.co/privacy-policy</a></p>
   </main>
 </body>

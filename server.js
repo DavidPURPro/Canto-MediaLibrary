@@ -235,7 +235,8 @@ app.use(session({
     saveUninitialized: false,
     name: 'portal_session',
     rolling: true,
-    cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { secure: true // à mettre à true en prod, false sinon
+        , httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
 
@@ -4874,9 +4875,9 @@ app.post('/api/webhook/canto_sync', express.json(), async (req, res) => {
     }
 });
 
-// affiche les statistiques et les logs filtrés pour les admins
-// calcule les compteurs, la chronologie et les mesures de performance
-app.get('/stats', loginRequiredHtml, basicAdminRequired, async (req, res) => {
+// affiche les statistiques et les logs filtrés
+// réservé au rôle admin (pas basic_admin / moderator)
+app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
     try {
         // événement choisi pour filtrer les statistiques
         const selectedEvent = typeof req.query.event === 'string' ? req.query.event.trim().slice(0, 100) : '';
