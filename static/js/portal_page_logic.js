@@ -2,6 +2,10 @@
 document.addEventListener('DOMContentLoaded', function() {
   const portalId = document.body.getAttribute('data-portal-id');
   const portalEmail = document.body.getAttribute('data-portal-email');
+
+  function getProxyDownloadHref(fileUrl, filename) {
+    return `/proxy_download?url=${encodeURIComponent(fileUrl || '')}&filename=${encodeURIComponent(filename || 'file')}`;
+  }
   
   let currentModalFilename = null;
   let currentModalFileUrl = '';
@@ -190,8 +194,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if(modalCopyBtn) {
       modalCopyBtn.addEventListener('click', function() {
-        if (currentModalFilename && modalDownloadBtn) {
-          const fileUrl = modalDownloadBtn.href;
+        if (currentModalFilename && currentModalFileUrl) {
+          const fileUrl = currentModalFileUrl;
           navigator.clipboard.writeText(fileUrl).then(() => {
             const originalText = modalCopyBtn.textContent;
             modalCopyBtn.textContent = '✓ Copied!';
@@ -438,8 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (portalAccess === 'Public' || canManageFiles) {
       const downloadBtn = document.createElement('a');
       downloadBtn.className = 'download-btn';
-      downloadBtn.href = file.file_url || '#';
-      downloadBtn.target = '_blank';
+      downloadBtn.href = getProxyDownloadHref(file.file_url, file.filename);
       downloadBtn.setAttribute('download', file.filename || '');
       downloadBtn.textContent = 'Download';
       actions.appendChild(downloadBtn);
@@ -940,7 +943,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (field === 'filename') {
           currentModalFilename = value;
           currentModalFieldValues.filename = value;
-          if (modalDownloadBtn) modalDownloadBtn.download = value;
+          if (modalDownloadBtn) {
+            modalDownloadBtn.download = value;
+            modalDownloadBtn.href = getProxyDownloadHref(currentModalFileUrl, value);
+          }
         }
       }
       renderEditableField(element, field, metaKey);
@@ -1186,7 +1192,7 @@ document.addEventListener('DOMContentLoaded', function() {
     Object.entries(fields).forEach(([key, id]) => renderMetadataValue(id, metadataValue(currentModalMetadata, key)));
 
     if (modalDownloadBtn) {
-      modalDownloadBtn.href = fileUrl;
+      modalDownloadBtn.href = getProxyDownloadHref(fileUrl, filename);
       modalDownloadBtn.download = filename;
     }
     renderModalPreview(fileUrl, filename, fileType);

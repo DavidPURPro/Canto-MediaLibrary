@@ -394,6 +394,10 @@ function getFileExtension(filename) {
   return filename.slice(filename.lastIndexOf('.')).toLowerCase();
 }
 
+function getProxyDownloadHref(fileUrl, filename) {
+  return `/proxy_download?url=${encodeURIComponent(fileUrl || '')}&filename=${encodeURIComponent(filename || 'file')}`;
+}
+
 
 /**
  * Retourne une date JJ-MM-AAAA ou un libellé de repli.
@@ -1174,7 +1178,7 @@ function showFileModal(item) {
       modalFavBtn.querySelector('i').className = isFav ? 'fas fa-heart' : 'far fa-heart';
   }
   if (modalTitle) modalTitle.textContent = filename;
-  if (modalDownloadBtn) modalDownloadBtn.href = `/proxy_download?url=${encodeURIComponent(link)}&filename=${encodeURIComponent(filename)}`;
+  if (modalDownloadBtn) modalDownloadBtn.href = getProxyDownloadHref(link, filename);
   if (modalDownloadBtn) modalDownloadBtn.setAttribute('download', filename);
   if (modalCopyBtn) modalCopyBtn.setAttribute('data-link', link);
   
@@ -1729,7 +1733,7 @@ function executeGlobalSearch(query, page = 1) {
                                 <i class="${isFavorited ? 'fas' : 'far'} fa-heart"></i>
                             </button>
                             <button class="copy-link-btn" data-link="${file.url}"><span class="tooltip">Copy Link</span><i class="fas fa-link"></i></button>
-                            <a href="${file.url}" class="download-btn" download="${file.name}"><span class="tooltip">Download</span><i class="fas fa-download"></i></a>
+                            <a href="${getProxyDownloadHref(file.url, file.name)}" class="download-btn" download="${file.name}"><span class="tooltip">Download</span><i class="fas fa-download"></i></a>
                             <button class="exclusive-btn ${isExclusive ? 'exclusive' : ''}" data-filename="${file.name}"><span class="tooltip">${isExclusive ? 'Exclusive' : 'Not Exclusive'}</span><i class="${isExclusive ? 'fas fa-crown' : 'fas fa-crown'}"></i></button>
                         </div>
                     </div>`;
@@ -1990,7 +1994,12 @@ document.querySelectorAll('.filter-dropdown-content button[data-filter]').forEac
       const isExclusive = downloadBtn.closest('.gallery-item')?.getAttribute('data-exclusive') === 'true';
       
       if (isExclusive) {
-        currentDownloadLink = downloadBtn.href;
+        let href = downloadBtn.href;
+        const filename = downloadBtn.getAttribute('download') || downloadBtn.closest('.gallery-item')?.getAttribute('data-filename') || 'file';
+        if (!href.includes('/proxy_download')) {
+          href = getProxyDownloadHref(href, filename);
+        }
+        currentDownloadLink = href;
         confirmModal.classList.add('active');
       } 
       else {

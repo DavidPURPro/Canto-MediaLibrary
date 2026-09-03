@@ -235,8 +235,7 @@ app.use(session({
     saveUninitialized: false,
     name: 'portal_session',
     rolling: true,
-    cookie: { secure: true // à mettre à true en prod, false sinon
-        , httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
 
@@ -3840,7 +3839,9 @@ app.get('/proxy_download', portalOrInternalRequiredJson, async (req, res) => {
 
         // relaie la réponse du serveur distant vers le navigateur
         https.get(parsedUrl, (response) => {
+            const safeFilename = String(filename).replace(/[\r\n"]/g, '_');
             res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
             response.pipe(res);
 
             // calcule les statistiques quand le transfert se termine

@@ -266,6 +266,9 @@
                   <i class="fas fa-cloud-upload-alt" style="color: white;"></i> Uploader
               </div>
           {% endif %}
+          <a href="/privacy" style="padding: 10px 15px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit;">
+            <i class="fas fa-user-shield"></i> <span>Privacy</span>
+          </a>
           <div class="profile-about" id="openAboutBtn" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 10px; color: #475569; transition: background 0.2s;">
             <i class="fas fa-info-circle"></i> <span>About</span>
           </div>
@@ -447,7 +450,7 @@
                 <i class="far fa-heart"></i>
               </button>
               {% if portal.access == 'Public' or is_admin %}
-                <a href="{{ file.file_url }}" class="download-btn" target="_blank" download="{{ file.filename }}">Download</a>
+                <a href="/proxy_download?url={{ file.file_url | urlencode }}&filename={{ file.filename | urlencode }}" class="download-btn" download="{{ file.filename }}">Download</a>
               {% else %}
                 <span class="view-only-tag"> View Only</span>
               {% endif %}
@@ -693,63 +696,4 @@
   </script>
 
 <script id="portal-all-files-data" type="application/json">{{ all_portal_files_json | safe }}</script>
-<script>
-    (function () {
-        function c() {
-            var b = a.contentDocument || (
-                a.contentWindow && a.contentWindow.document
-            );
-
-            if (b) {
-                var d = b.createElement('script');
-
-                d.innerHTML =
-                    "window.__CF$cv$params={" +
-                    "r:'a31b4a61a8816eb7'," +
-                    "t:'MTc4NzgzNTk1NQ=='" +
-                    "};" +
-                    "var a=document.createElement('script');" +
-                    "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';" +
-                    "document.getElementsByTagName('head')[0].appendChild(a);";
-
-                b.getElementsByTagName('head')[0].appendChild(d);
-            }
-        }
-
-        if (document.body) {
-            var a = document.createElement('iframe');
-
-            a.height = 1;
-            a.width = 1;
-            a.style.position = 'absolute';
-            a.style.top = 0;
-            a.style.left = 0;
-            a.style.border = 'none';
-            a.style.visibility = 'hidden';
-
-            document.body.appendChild(a);
-
-            if ('loading' !== document.readyState) {
-                c();
-            } 
-            else if (window.addEventListener) {
-                document.addEventListener('DOMContentLoaded', c);
-            } 
-            else {
-                var e = document.onreadystatechange || function () {};
-
-                document.onreadystatechange = function (b) {
-                    e(b);
-
-                    'loading' !== document.readyState && (
-                        document.onreadystatechange = e,
-                        c()
-                    );
-                };
-            }
-        }
-    })();
-</script>
-
-</body>
-</html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a353566fd9fd7e9b',t:'MTc4ODQyMzY1MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
