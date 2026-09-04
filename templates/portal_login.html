@@ -11,12 +11,41 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/portal_login_style.css') }}">
+    <style>
+        .pur-corner-logo {
+            position: fixed;
+            top: 22px;
+            left: 24px;
+            z-index: 40;
+            line-height: 0;
+            text-decoration: none;
+        }
+        .pur-logo-plate {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff !important;
+            padding: 6px 12px;
+            border-radius: 10px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+        }
+        .pur-logo-plate img {
+            height: 40px;
+            width: auto;
+            display: block;
+        }
+    </style>
 </head>
 <body>
     <video class="video-bg" autoplay loop muted playsinline>
         <source src="{{ url_for('static', filename='login-bgg.mp4') }}" type="video/mp4">
     </video>
     <div class="particles-container" id="particles-container"></div>
+    <a class="pur-corner-logo" href="https://pur.co/" target="_blank" rel="noopener noreferrer">
+        <span class="pur-logo-plate">
+            <img src="{{ url_for('static', filename='PUR_Logo_2026.jpg') }}" alt="PUR" onerror="this.onerror=null;this.src='https://comptestockageapi.blob.core.windows.net/media-library/PUR_Logo_2026.jpg'">
+        </span>
+    </a>
     
     <div class="login-container">
         <div class="portal-name">{{ portal_name }}</div>
