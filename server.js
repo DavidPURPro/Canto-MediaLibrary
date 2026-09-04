@@ -37,6 +37,16 @@ else {
 }
 
 const app = express();
+// Redirection automatique de l'URL par défaut Azure vers le domaine personnalisé
+app.use((req, res, next) => {
+    // Si l'utilisateur utilise l'ancienne adresse Azure
+    if (req.hostname === 'pur-medialibrary.azurewebsites.net') {
+        // On le redirige (301 = définitivement) vers le bon domaine, en gardant la fin de son URL
+        return res.redirect(301, 'https://pur-medialibrary.pur.co' + req.originalUrl);
+    }
+    // Sinon, c'est qu'il est sur le bon domaine, on le laisse continuer normalement
+    next();
+});
 
 const morgan = require('morgan');
 
@@ -235,8 +245,8 @@ app.use(session({
     saveUninitialized: false,
     name: 'portal_session',
     rolling: true,
-    cookie: { secure: true // à mettre à true en prod, false sinon
-        , httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { secure: true, // mettre a true en prod sinon false
+         httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
 
@@ -407,30 +417,52 @@ env.addFilter('date', function(dateObj) {
     return `${day}/${month}/${year} ${hours}:${minutes}`;
 });
 
-// envoie un email avec microsoft graph depuis le compte configuré
+// boîte d’envoi des mails de reset : it-support@pur.co
+const MAIL_FROM = process.env.SMTP_FROM || process.env.SMTP_USERNAME || 'it-support@pur.co';
+const HELP_CENTER_URL = 'https://purprojet.atlassian.net/servicedesk/customer/portals';
+
+function buildResetPasswordEmail(portalName, resetUrl) {
+    return [
+        'Hello,',
+        '',
+        `You have requested to reset your password for the ${portalName} portal.`,
+        '',
+        'Please click the following link to set a new password:',
+        resetUrl,
+        '',
+        'This link will expire in 24 hours.',
+        '',
+        'If you did not request this change, you can ignore this email.',
+        '',
+        'If you have a problem, you can submit a ticket on our Help Center and our technicians will take care of it:',
+        HELP_CENTER_URL,
+        '',
+        'Sincerely,',
+        'The Media Library Team'
+    ].join('\n');
+}
+
+// envoie un email avec microsoft graph depuis it-support@pur.co
 // retourne false si le jeton ou l’envoi échoue
 async function sendEmail(toEmail, subject, body) {
     try {
-        // jeton utilisé pour token response
         const tokenResponse = await cca.acquireTokenByClientCredential({
             scopes: ["https://graph.microsoft.com/.default"],
         });
-        // client microsoft graph utilisé pour les appels de cette opération
         const client = Client.init({
             authProvider: (done) => done(null, tokenResponse.accessToken),
         });
-        // contenu de l’email envoyé à microsoft graph
         const sendMail = {
             message: {
                 subject: subject,
                 body: { contentType: 'Text', content: body },
                 toRecipients: [{ emailAddress: { address: toEmail } }],
-                from: { emailAddress: { address: process.env.SMTP_USERNAME, name: "Media Library" } }
+                from: { emailAddress: { address: MAIL_FROM, name: "PUR Media Library" } }
             },
             saveToSentItems: "true"
         };
 
-        await client.api(`/users/${process.env.SMTP_USERNAME}/sendMail`).post(sendMail);
+        await client.api(`/users/${MAIL_FROM}/sendMail`).post(sendMail);
         return true;
     } catch (error) {
         console.error("Erreur Graph API:", error);
@@ -3390,7 +3422,9 @@ app.post('/portal/:portal_id/login', loginLimiter, upload.none(), async (req, re
                     [token, expiry, reset_email, real_portal_id]);
                 // adresse utilisée pour reset url
                 const resetUrl = `${req.protocol}://${req.get('host')}/portal/${slug}/reset_password/${token}`;
-                await sendEmail(reset_email, "Resetting your password", `Click here: ${resetUrl}`);
+                const subject = `Resetting your password - ${portal.name}`;
+                const body = buildResetPasswordEmail(portal.name, resetUrl);
+                await sendEmail(reset_email, subject, body);
                 return res.render('portal_login.html', { portal_id: slug, portal_name: portal.name, error: "Reset email sent!" });
             }
         }
@@ -3536,21 +3570,7 @@ app.post('/portal/:portal_id/request_reset', loginLimiter, upload.none(), async 
             const resetUrl = `${req.protocol}://${req.get('host')}/portal/${slug}/reset_password/${token}`;
             // objet utilisé pour l’email de réinitialisation
             const subject = `Resetting your password - ${portal.name}`;
-            // données reçues pour body
-            const body = `Hello,
-
-                          You have requested to reset your password for the ${portal.name} portal.
-
-                          Please click the following link to set a new password:
-
-                          ${resetUrl}
-
-                          This link will expire in 24 hours.
-
-                          Sincerely,
-                          The Media Library Team`;
-
-            // adresse email utilisée pour email sent
+            const body = buildResetPasswordEmail(portal.name, resetUrl);
             const emailSent = await sendEmail(email, subject, body);
 
             if (emailSent) {
@@ -3840,7 +3860,9 @@ app.get('/proxy_download', portalOrInternalRequiredJson, async (req, res) => {
 
         // relaie la réponse du serveur distant vers le navigateur
         https.get(parsedUrl, (response) => {
+            const safeFilename = String(filename).replace(/[\r\n"]/g, '_');
             res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
             response.pipe(res);
 
             // calcule les statistiques quand le transfert se termine
@@ -5010,7 +5032,6 @@ app.get('/stats', loginRequiredHtml, adminRequired, async (req, res) => {
         res.status(500).send("Internal Server Error");
     }
 });
-
 
 
 // démarre le serveur express sur le port fourni par l’environnement
